@@ -17,6 +17,8 @@ const HABITS = [
   { key: 'healthyFood', emoji: '🥗', label: 'Healthy food only' },
   { key: 'posted',      emoji: '📤', label: 'Posted content' },
   { key: 'consumed',    emoji: '🧠', label: 'Consumed useful content' },
+  { key: 'hairCare',    emoji: '💇', label: 'Hair care' },
+  { key: 'skinCare',    emoji: '🧴', label: 'Skin care' },
 ];
 
 /* Deep-log sections — the bridge to your full Life Intelligence Tracker.
@@ -49,6 +51,10 @@ const DEEP_SECTIONS = [
   { id: 'growth', title: '🌱 Growth & Insight',
     scales: [{key:'lifeSatisfaction',label:'Life satisfaction'},{key:'purposeClarity',label:'Purpose clarity'}],
     texts: [{key:'keyInsight',label:'Key insight today'},{key:'breakthrough',label:'Breakthrough / aha moment'},{key:'priorities',label:"Tomorrow's top priorities"}] },
+  { id: 'haircare', title: '💇 Hair care',
+    checks: { key: 'hairRoutine', label: 'Tick what you did', options: ['Morning tablet', 'Afternoon tablet', 'Night tablet', 'Weekly shampoo', 'Serum before bed', 'Moisturiser before office'] } },
+  { id: 'skincare', title: '🧴 Skin care',
+    checks: { key: 'skinRoutine', label: 'Tick what you did', options: ['Allergy lotion on shoulder (3h before bath)'] } },
 ];
 
 /* Default gym routine — fully editable in the Gym tab. */

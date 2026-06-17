@@ -21,7 +21,7 @@ var COLUMNS = [
   'tasksDone', 'tasksPlanned',
   // habits (flattened)
   'workout', 'faceWorkout', 'meditation', 'english', 'reading',
-  'projectAI', 'projectSpace', 'healthyFood', 'posted', 'consumed',
+  'projectAI', 'projectSpace', 'healthyFood', 'posted', 'consumed', 'hairCare', 'skinCare',
   // reflection
   'wentWell', 'improve', 'journal',
   // workout summary (from the Gym tab)
@@ -43,6 +43,8 @@ var COLUMNS = [
   'lifeSatisfaction', 'purposeClarity', 'keyInsight', 'breakthrough', 'priorities',
   // weekly
   'weekWins', 'weekFocus',
+  // grooming / care routines (tick lists)
+  'hairRoutine', 'skinRoutine',
   // tasks open on this date (carried until completed)
   'tasks'
 ];
@@ -108,12 +110,18 @@ function ymd_(v) {
 
 // Flatten nested objects (habits, topics) onto the top level
 function flatten_(data) {
+  // habits -> one Yes/'' column per habit key
   if (data.habits && typeof data.habits === 'object') {
     Object.keys(data.habits).forEach(function (k) { data[k] = data.habits[k] ? 'Yes' : ''; });
+    delete data.habits;
   }
-  if (data.topics && typeof data.topics === 'object') {
-    data.topics = Object.keys(data.topics).filter(function (k) { return data.topics[k]; }).join(', ');
-  }
+  // any remaining tick-group object (topics, hairRoutine, skinRoutine, …) -> comma list of ticked items
+  Object.keys(data).forEach(function (k) {
+    var v = data[k];
+    if (v && typeof v === 'object' && !(v instanceof Array)) {
+      data[k] = Object.keys(v).filter(function (x) { return v[x]; }).join(', ');
+    }
+  });
 }
 
 function json_(obj) {
