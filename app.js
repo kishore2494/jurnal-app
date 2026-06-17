@@ -82,6 +82,9 @@ const DB = {
   gymDay(date) { return this.gym()[date] || { done: {}, log: {} }; },
   putGymDay(date, d) { const g = this.gym(); g[date] = d; this.saveGym(g); },
 
+  reminders() { return JSON.parse(localStorage.getItem('dp.reminders') || '[]'); },
+  saveReminders(r) { localStorage.setItem('dp.reminders', JSON.stringify(r)); },
+
   settings() { return Object.assign({ syncUrl: '', reminderTime: '', name: '' }, JSON.parse(localStorage.getItem('dp.settings') || '{}')); },
   saveSettings(s) { localStorage.setItem('dp.settings', JSON.stringify(s)); },
 };
@@ -278,6 +281,7 @@ document.addEventListener('click', async (ev) => {
   if (ev.target.id !== 'save-entry') return;
   if (!draft.mood || !draft.energy) { toast('Mood & energy are required', true); return; }
   draft.updatedAt = new Date().toISOString();
+  draft.tasks = tasksForDate(logDate);
   DB.putEntry(logDate, draft);
   toast('Saved 🎉');
   const synced = await syncEntry(logDate, draft);
@@ -288,6 +292,24 @@ document.addEventListener('click', async (ev) => {
 /* ============================================================
    SCREEN: TASKS
    ============================================================ */
+/* Tasks open on a given date: created on/before D, and not completed before D.
+   On the completion day it's shown as "name ✓done"; from the next day it drops off. */
+function tasksForDate(d) {
+  return DB.tasks()
+    .filter(t => (t.created || todayStr()) <= d && (!t.done || (t.doneDate && t.doneDate >= d)))
+    .map(t => t.text + (t.done && t.doneDate === d ? ' ✓done' : ''))
+    .join(', ');
+}
+/* Keep today's Sheet row's task list fresh when tasks change. */
+async function syncTodayTasks() {
+  if (!DB.settings().syncUrl) return;
+  const d = todayStr();
+  const entry = DB.entry(d) || { habits: {} };
+  entry.tasks = tasksForDate(d);
+  DB.putEntry(d, entry);
+  syncEntry(d, entry);
+}
+
 function renderTasks() {
   document.getElementById('screen-title').textContent = 'Tasks';
   const tasks = DB.tasks();
@@ -318,14 +340,14 @@ function addTask() {
   const text = inp.value.trim(); if (!text) return;
   const tasks = DB.tasks();
   tasks.unshift({ id: 't' + Date.now(), text, done: false, created: todayStr() });
-  DB.saveTasks(tasks); renderTasks();
+  DB.saveTasks(tasks); renderTasks(); syncTodayTasks();
   document.getElementById('task-input').focus();
 }
 document.addEventListener('click', (ev) => {
   if (ev.target.id === 'task-add-btn') return addTask();
   if (ev.target.id === 'clear-done') { DB.saveTasks(DB.tasks().filter(t=>!t.done)); renderTasks(); return; }
   const tg = ev.target.closest('[data-toggle]');
-  if (tg) { const id = tg.dataset.toggle; const ts = DB.tasks(); const t = ts.find(x=>x.id===id); if(t){t.done=!t.done; t.doneDate=t.done?todayStr():null;} DB.saveTasks(ts); renderTasks(); return; }
+  if (tg) { const id = tg.dataset.toggle; const ts = DB.tasks(); const t = ts.find(x=>x.id===id); if(t){t.done=!t.done; t.doneDate=t.done?todayStr():null;} DB.saveTasks(ts); renderTasks(); syncTodayTasks(); return; }
   const dl = ev.target.closest('[data-del]');
   if (dl) { DB.saveTasks(DB.tasks().filter(t=>t.id!==dl.dataset.del)); renderTasks(); return; }
 });
@@ -575,11 +597,25 @@ function renderSettings() {
       </div>
     </div>
     <div class="card">
-      <h2>⏰ Daily reminder</h2>
-      <div class="field"><label>Remind me to log at</label>
-        <input type="time" id="rem-time" value="${s.reminderTime||''}"></div>
-      <button class="btn btn-ghost btn-sm" id="save-rem">Enable reminder</button>
-      <div class="hint" style="margin-top:8px">Works while the app is open/installed. Install to home screen for best results.</div>
+      <h2>⏰ Reminders <span class="hint">${DB.reminders().length} set</span></h2>
+      ${DB.reminders().length ? DB.reminders().map(r => `
+        <div class="rem ${r.enabled?'':'off'}" data-remid="${r.id}">
+          <button class="rem-toggle" data-rem-toggle="${r.id}" title="on/off">${r.enabled?'🔔':'🔕'}</button>
+          <div class="rem-body">
+            <input type="time" data-rem-time="${r.id}" value="${r.time||''}">
+            <input type="text" data-rem-label="${r.id}" value="${escapeHtml(r.label||'')}" placeholder="What for? (e.g. Log my day, Drink water)">
+          </div>
+          <button class="del" data-rem-del="${r.id}">×</button>
+        </div>`).join('') : '<div class="empty">No reminders yet. Add one below 👇</div>'}
+      <div class="task-add">
+        <input type="time" id="rem-new-time" value="21:00" style="max-width:120px">
+        <input type="text" id="rem-new-label" placeholder="Reminder name…">
+        <button class="btn btn-primary btn-sm" id="rem-add">Add</button>
+      </div>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn btn-ghost btn-sm" id="rem-calendar">📅 Add to phone calendar</button>
+      </div>
+      <div class="hint" style="margin-top:8px">In-app reminders fire while the app is open. For alarms even when it's closed, tap <b>Add to phone calendar</b> — it adds them as daily repeating events with alerts.</div>
     </div>
     <div class="card">
       <h2>💾 Your data</h2>
@@ -598,17 +634,32 @@ document.addEventListener('click', async (ev) => {
   const s = DB.settings();
   if (ev.target.id === 'save-sync') { s.syncUrl = document.getElementById('sync-url').value.trim(); DB.saveSettings(s); toast('Sheet link saved'); }
   if (ev.target.id === 'resync') { toast('Syncing…'); resyncAll(); }
-  if (ev.target.id === 'save-rem') {
-    s.reminderTime = document.getElementById('rem-time').value; DB.saveSettings(s);
+  if (ev.target.id === 'rem-add') {
+    const time = document.getElementById('rem-new-time').value;
+    const label = document.getElementById('rem-new-label').value.trim();
+    if (!time) { toast('Pick a time', true); return; }
+    const r = DB.reminders(); r.push({ id: 'r' + Date.now(), time, label: label || 'Reminder', enabled: true });
+    DB.saveReminders(r); renderSettings(); syncReminders();
     if ('Notification' in window && Notification.permission !== 'granted') await Notification.requestPermission();
-    toast(s.reminderTime ? 'Reminder set for ' + s.reminderTime : 'Reminder cleared');
-    setupReminder();
+    setupReminders(); toast('Reminder added');
+    return;
   }
+  const rt = ev.target.closest('[data-rem-toggle]');
+  if (rt) { const r = DB.reminders(); const x = r.find(z => z.id === rt.dataset.remToggle); if (x) x.enabled = !x.enabled; DB.saveReminders(r); renderSettings(); syncReminders(); setupReminders(); return; }
+  const rd = ev.target.closest('[data-rem-del]');
+  if (rd) { DB.saveReminders(DB.reminders().filter(z => z.id !== rd.dataset.remDel)); renderSettings(); syncReminders(); setupReminders(); toast('Reminder deleted'); return; }
+  if (ev.target.id === 'rem-calendar') { exportReminderCalendar(); return; }
   if (ev.target.id === 'export') exportData();
   if (ev.target.id === 'import') document.getElementById('import-file').click();
 });
+// Edit a reminder's time/label inline
+document.addEventListener('input', (ev) => {
+  const t = ev.target.closest('[data-rem-time]'); if (t) { const r = DB.reminders(); const x = r.find(z => z.id === t.dataset.remTime); if (x) { x.time = t.value; DB.saveReminders(r); setupReminders(); } return; }
+  const l = ev.target.closest('[data-rem-label]'); if (l) { const r = DB.reminders(); const x = r.find(z => z.id === l.dataset.remLabel); if (x) { x.label = l.value; DB.saveReminders(r); } return; }
+});
 document.addEventListener('change', (ev) => {
   if (ev.target.id === 'import-file' && ev.target.files[0]) importData(ev.target.files[0]);
+  if (ev.target.closest('[data-rem-time]') || ev.target.closest('[data-rem-label]')) syncReminders();
 });
 function exportData() {
   const blob = new Blob([JSON.stringify({ entries: DB.entries(), tasks: DB.tasks(), settings: DB.settings() }, null, 2)], { type: 'application/json' });
@@ -629,20 +680,51 @@ function importData(file) {
   r.readAsText(file);
 }
 
-/* ---------- Reminders (foreground) ---------- */
+/* ---------- Reminders (multiple, foreground firing) ---------- */
 let reminderInterval;
-function setupReminder() {
+function setupReminders() {
   clearInterval(reminderInterval);
-  const s = DB.settings(); if (!s.reminderTime) return;
+  if (!DB.reminders().some(r => r.enabled)) return;
   reminderInterval = setInterval(() => {
-    const now = new Date(); const hhmm = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-    const flag = 'dp.notified.' + todayStr();
-    if (hhmm === s.reminderTime && !localStorage.getItem(flag) && !DB.entry(todayStr())) {
+    const now = new Date();
+    const hhmm = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    DB.reminders().forEach(r => {
+      if (!r.enabled || r.time !== hhmm) return;
+      const flag = 'dp.notified.' + r.id + '.' + todayStr();
+      if (localStorage.getItem(flag)) return;
       localStorage.setItem(flag, '1');
       if ('Notification' in window && Notification.permission === 'granted')
-        new Notification('Daily Pulse 🔥', { body: "Time for your 60-second log. Keep the streak alive!" });
-    }
-  }, 30000);
+        new Notification('⏰ ' + (r.label || 'Daily Pulse'), { body: r.label ? 'Reminder: ' + r.label : 'Time for your daily log 🔥', tag: r.id });
+    });
+  }, 20000);
+}
+// Push the reminders list to the Sheet (a "Reminders" tab)
+function syncReminders() {
+  const url = DB.settings().syncUrl; if (!url) return;
+  fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ type: 'reminders', items: DB.reminders() }) }).catch(() => {});
+}
+// Download an .ics so the phone calendar alarms even when the app is closed
+function exportReminderCalendar() {
+  const rs = DB.reminders().filter(r => r.enabled && r.time);
+  if (!rs.length) { toast('Add a reminder first', true); return; }
+  const pad = n => String(n).padStart(2, '0');
+  let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Daily Pulse//EN\r\nCALSCALE:GREGORIAN\r\n';
+  rs.forEach((r, i) => {
+    const [h, m] = r.time.split(':');
+    ics += 'BEGIN:VEVENT\r\n' +
+      'UID:dailypulse-' + r.id + '@jurnal\r\n' +
+      'DTSTART:20260101T' + pad(h) + pad(m) + '00\r\n' +
+      'RRULE:FREQ=DAILY\r\n' +
+      'SUMMARY:' + (r.label || 'Daily Pulse reminder') + '\r\n' +
+      'BEGIN:VALARM\r\nTRIGGER:PT0M\r\nACTION:DISPLAY\r\nDESCRIPTION:' + (r.label || 'Daily Pulse') + '\r\nEND:VALARM\r\n' +
+      'END:VEVENT\r\n';
+  });
+  ics += 'END:VCALENDAR\r\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  a.download = 'daily-pulse-reminders.ics'; a.click();
+  toast('Calendar file ready — open it to add');
 }
 
 /* ---------- Navigation ---------- */
@@ -667,7 +749,7 @@ function escapeHtml(s) { return (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<
 /* ---------- Init ---------- */
 refreshStreak();
 show('today');
-setupReminder();
+setupReminders();
 if ('serviceWorker' in navigator) {
   // If a service worker already controls this page, auto-reload once when a new
   // version takes over — so app updates appear immediately, no manual refresh.

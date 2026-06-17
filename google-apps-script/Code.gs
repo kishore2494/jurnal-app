@@ -42,12 +42,15 @@ var COLUMNS = [
   // deep log — growth
   'lifeSatisfaction', 'purposeClarity', 'keyInsight', 'breakthrough', 'priorities',
   // weekly
-  'weekWins', 'weekFocus'
+  'weekWins', 'weekFocus',
+  // tasks open on this date (carried until completed)
+  'tasks'
 ];
 
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
+    if (data.type === 'reminders') return saveReminders_(data.items || []);
     var sheet = getSheet_();
     flatten_(data);
     var row = COLUMNS.map(function (k) { return data[k] !== undefined && data[k] !== null ? data[k] : ''; });
@@ -71,6 +74,17 @@ function doPost(e) {
 }
 
 function doGet() { return json_({ ok: true, msg: 'Daily Pulse sync is live.' }); }
+
+// Reminders → a dedicated "Reminders" tab (rewritten each time)
+function saveReminders_(items) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('Reminders') || ss.insertSheet('Reminders');
+  sh.clear();
+  sh.appendRow(['time', 'label', 'enabled']);
+  sh.setFrozenRows(1);
+  items.forEach(function (r) { sh.appendRow([r.time || '', r.label || '', r.enabled ? 'Yes' : 'No']); });
+  return json_({ ok: true, count: items.length });
+}
 
 function getSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
