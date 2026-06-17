@@ -365,6 +365,7 @@ document.addEventListener('keydown', (ev) => { if (ev.target.id === 'task-input'
 let gymDate = todayStr();
 let gymDraft = { done: {}, log: {} };
 let gymDayId = 'day1';
+let gymView = 'home';
 let openExr = new Set();
 
 function gymStreak() {
@@ -377,6 +378,7 @@ function gymStreak() {
 function openGym() {
   const d = DB.gymDay(gymDate);
   gymDraft = { done: Object.assign({}, d.done), log: Object.assign({}, d.log) };
+  gymView = 'home';
   renderGym();
 }
 function exRow(ex) {
@@ -408,45 +410,64 @@ function renderGym() {
   const isToday = gymDate === todayStr();
   document.getElementById('screen-title').textContent = 'Gym';
   document.getElementById('screen-sub').textContent = isToday ? prettyDate(gymDate) + " · today's workout" : 'Editing ' + prettyDate(gymDate);
-
-  const day = WORKOUT_DAYS.find(d => d.id === gymDayId) || WORKOUT_DAYS[0];
-  const blocks = dayBlocks(day);
-  const dayEx = dayExercises(day);
-  const totalDone = dayEx.filter(e => gymDraft.done[e.id]).length;
-
-  const chips = WORKOUT_DAYS.map(d => {
-    const dn = dayExercises(d).filter(e => gymDraft.done[e.id]).length;
-    const tot = dayExercises(d).length;
-    const on = d.id === gymDayId;
-    const mainG = WORKOUT_PLAN.find(g => g.id === d.main);
-    const col = mainG ? mainG.color : 'var(--accent)';
-    return `<button class="grp-chip ${on?'on':''}" data-day="${d.id}" style="${on?`background:${col}`:''}">
-      <span class="dot" style="background:${on?'#fff':col}"></span>${d.name} · ${d.label}<span class="cnt">${dn}/${tot}</span></button>`;
+  document.getElementById('s-gym').innerHTML = (gymView === 'day') ? gymDayHTML() : gymHomeHTML();
+}
+// HOME: 6 day labels (history-list style)
+function gymHomeHTML() {
+  const rows = WORKOUT_DAYS.map(d => {
+    const ex = dayExercises(d);
+    const done = ex.filter(e => gymDraft.done[e.id]).length;
+    const main = dayMain(d);
+    const ab = groupById(d.ab);
+    return `<div class="day-row" data-day="${d.id}">
+      <div class="day-dot" style="background:${main.color}">${main.emoji}</div>
+      <div class="day-info">
+        <div class="day-name">${d.name} · ${main.name}</div>
+        <div class="day-sub">🏃 Cardio · ${ab.emoji} ${ab.name}</div>
+      </div>
+      <div class="day-cnt">${done}/${ex.length}</div>
+      <div class="day-go">›</div>
+    </div>`;
   }).join('');
-
+  return `
+    <div class="card">
+      <div class="field"><label>Date</label><input type="date" id="gym-date" value="${gymDate}" max="${todayStr()}"></div>
+      <div class="progress-ring">
+        <div class="big">🔥 ${gymStreak()}</div>
+        <div><div style="font-weight:600">day gym streak</div><div class="hint">Tap a day to start 👇</div></div>
+      </div>
+    </div>
+    <div class="card" style="padding:4px 16px">${rows}</div>
+    <div style="height:14px"></div>`;
+}
+// DAY: that day's workouts on the next page
+function gymDayHTML() {
+  const day = WORKOUT_DAYS.find(d => d.id === gymDayId) || WORKOUT_DAYS[0];
+  const main = dayMain(day);
+  const blocks = dayBlocks(day);
+  const ex = dayExercises(day);
+  const done = ex.filter(e => gymDraft.done[e.id]).length;
   const blockCards = blocks.map(b => `
     <div class="card">
       <h2><span style="color:${b.color}">${b.title}</span> <span class="hint">${b.exercises.filter(e=>gymDraft.done[e.id]).length}/${b.exercises.length} · tap for how-to</span></h2>
       ${b.exercises.map(exRow).join('')}
     </div>`).join('');
-
-  document.getElementById('s-gym').innerHTML = `
+  return `
+    <button class="back-btn" id="gym-back">← All workouts</button>
     <div class="card">
-      <div class="field"><label>Date</label><input type="date" id="gym-date" value="${gymDate}" max="${todayStr()}"></div>
       <div class="progress-ring">
-        <div class="big">${totalDone}/${dayEx.length}</div>
-        <div><div style="font-weight:600">${day.name} · ${escapeHtml(day.label)} done</div><div class="hint">🔥 ${gymStreak()} day gym streak</div></div>
+        <div class="big">${done}/${ex.length}</div>
+        <div><div style="font-weight:600">${day.name} · ${escapeHtml(main.name)}</div><div class="hint">🔥 ${gymStreak()} day streak · ${prettyDate(gymDate)}</div></div>
       </div>
     </div>
-    <div class="grp-row">${chips}</div>
     ${blockCards}
     <button class="btn btn-primary" id="gym-save">Save workout</button>
-    <div style="height:14px"></div>
-  `;
+    <div style="height:14px"></div>`;
 }
 document.addEventListener('click', async (ev) => {
   const grp = ev.target.closest('[data-day]');
-  if (grp) { gymDayId = grp.dataset.day; renderGym(); window.scrollTo(0, 0); return; }
+  if (grp) { gymDayId = grp.dataset.day; gymView = 'day'; renderGym(); window.scrollTo(0, 0); return; }
+  if (ev.target.id === 'gym-back') { gymView = 'home'; renderGym(); window.scrollTo(0, 0); return; }
   const tg = ev.target.closest('[data-ex-toggle]');
   if (tg) { const id = tg.dataset.exToggle; gymDraft.done[id] = !gymDraft.done[id]; renderGym(); return; }
   const op = ev.target.closest('[data-ex-open]');
@@ -519,9 +540,15 @@ function lineChart(values, color) {
     <path d="${d}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
     ${pts}</svg>`;
 }
+function longestLoggedStreak() {
+  const ds = Object.keys(DB.entries()).sort();
+  let best = 0, cur = 0, prev = null;
+  ds.forEach(d => { cur = (prev && addDays(prev, 1) === d) ? cur + 1 : 1; best = Math.max(best, cur); prev = d; });
+  return best;
+}
 function renderDash() {
   document.getElementById('screen-title').textContent = 'Stats';
-  document.getElementById('screen-sub').textContent = 'Your trends';
+  document.getElementById('screen-sub').textContent = 'Your trends & analysis';
   const e = DB.entries();
   const N = 14;
   const days = []; for (let i = N - 1; i >= 0; i--) days.push(addDays(todayStr(), -i));
@@ -530,7 +557,6 @@ function renderDash() {
   const allDates = Object.keys(e);
   const avg = key => { const v = allDates.map(d=>e[d][key]).filter(x=>x!=null&&x!==''); return v.length ? (v.reduce((a,b)=>a+ +b,0)/v.length).toFixed(1) : '–'; };
 
-  // habit completion over last 30 days
   const last30 = []; for (let i = 29; i >= 0; i--) last30.push(addDays(todayStr(), -i));
   const habitBars = HABITS.map(h => {
     const hits = last30.filter(d => e[d] && e[d].habits && e[d].habits[h.key]).length;
@@ -540,14 +566,42 @@ function renderDash() {
       <span class="pct">${pct}%</span></div>`;
   }).join('');
 
+  // ---- Gym analysis: how many sessions per muscle group / cardio / abs-sides-core ----
+  const gym = DB.gym(); const gymDates = Object.keys(gym);
+  const groupSessions = g => gymDates.filter(d => { const dn = gym[d].done || {}; return g.exercises.some(x => dn[x.id]); }).length;
+  const gymOrder = ['cardio','chest','triceps','shoulder','biceps','back','legs','abs','side','core'];
+  const gymStats = gymOrder.map(id => { const g = groupById(id); return { g, n: groupSessions(g) }; }).filter(x => x.g);
+  const gymMax = Math.max(1, ...gymStats.map(x => x.n));
+  const totalWorkouts = gymDates.filter(d => Object.values(gym[d].done||{}).some(Boolean)).length;
+  const gymBars = gymStats.map(x => `<div class="bar-row"><span class="name">${x.g.emoji} ${x.g.name}</span>
+      <span class="bar-track"><span class="bar-fill" style="width:${Math.round(x.n/gymMax*100)}%;background:${x.g.color}"></span></span>
+      <span class="pct">${x.n}</span></div>`).join('');
+
+  // ---- Wellbeing / deep-log averages (only those you've logged) ----
+  const scaleDefs = [
+    {k:'focus',l:'🎯 Focus'},{k:'productivity',l:'⚡ Productivity'},{k:'stress',l:'😰 Stress'},
+    {k:'happiness',l:'😊 Happiness'},{k:'sleepQuality',l:'😴 Sleep quality'},{k:'lifeSatisfaction',l:'🌱 Life satisfaction'}
+  ];
+  const scaleBars = scaleDefs.map(s => ({ s, a: avg(s.k) })).filter(x => x.a !== '–')
+    .map(x => `<div class="bar-row"><span class="name">${x.s.l}</span>
+      <span class="bar-track"><span class="bar-fill" style="width:${x.a/10*100}%"></span></span>
+      <span class="pct">${x.a}</span></div>`).join('');
+
+  // ---- Tasks ----
+  const tasks = DB.tasks(); const tDone = tasks.filter(t=>t.done).length; const tOpen = tasks.length - tDone;
+  const tRate = tasks.length ? Math.round(tDone/tasks.length*100) : 0;
+
   document.getElementById('s-dash').innerHTML = `
     <div class="card"><div class="stat-grid">
       <div class="stat"><div class="v">${loggedStreak()}</div><div class="l">🔥 day streak</div></div>
+      <div class="stat"><div class="v">${longestLoggedStreak()}</div><div class="l">best streak</div></div>
       <div class="stat"><div class="v">${allDates.length}</div><div class="l">days logged</div></div>
       <div class="stat"><div class="v">${avg('mood')}</div><div class="l">avg mood</div></div>
       <div class="stat"><div class="v">${avg('energy')}</div><div class="l">avg energy</div></div>
+      <div class="stat"><div class="v">${avg('sleepHours')}</div><div class="l">avg sleep h</div></div>
+      <div class="stat"><div class="v">${avg('deepWorkHours')}</div><div class="l">avg deep wk</div></div>
       <div class="stat"><div class="v">${gymStreak()}</div><div class="l">💪 gym streak</div></div>
-      <div class="stat"><div class="v">${last30.filter(d=>e[d]&&e[d].workoutsDone>0).length}</div><div class="l">workouts/30d</div></div>
+      <div class="stat"><div class="v">${totalWorkouts}</div><div class="l">workouts</div></div>
     </div></div>
 
     <div class="card"><h2>Mood &amp; Energy <span class="hint">last ${N} days</span></h2>
@@ -561,6 +615,18 @@ function renderDash() {
       <div style="margin-top:-6px">${lineChart(series('deepWorkHours'), '#fbbf24')}</div>
       <div class="legend"><span><span class="dot" style="background:#a78bfa"></span>Sleep (h)</span>
         <span><span class="dot" style="background:#fbbf24"></span>Deep work (h)</span></div></div>
+
+    <div class="card"><h2>💪 Gym breakdown <span class="hint">sessions per group · ${totalWorkouts} total</span></h2>
+      ${gymBars || '<div class="empty">No workouts logged yet.</div>'}</div>
+
+    ${scaleBars ? `<div class="card"><h2>🧠 Wellbeing averages <span class="hint">out of 10</span></h2>${scaleBars}</div>` : ''}
+
+    <div class="card"><h2>✅ Tasks <span class="hint">${tRate}% completed</span></h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="v">${tOpen}</div><div class="l">open</div></div>
+        <div class="stat"><div class="v">${tDone}</div><div class="l">done</div></div>
+        <div class="stat"><div class="v">${tRate}%</div><div class="l">rate</div></div>
+      </div></div>
 
     <div class="card"><h2>Habit consistency <span class="hint">last 30 days</span></h2>${habitBars}</div>
   `;

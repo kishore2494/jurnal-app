@@ -17,12 +17,16 @@ const WORKOUT_PLAN = [
     { name: 'Sprint',        sets: '3 × 25',   anim: 'sprint' },
     { name: 'Skipping',      sets: '3 × 50',   anim: 'skip' },
   ]},
-  { id: 'core', name: 'Abs · Sides · Core', emoji: '🔥', color: '#f59e0b', exercises: [
-    { name: 'Crunches',      sets: '3 × 15',     anim: 'crunch',    tip: 'Lift shoulders, not neck. Exhale up.' },
-    { name: 'Leg Raise',     sets: '3 × 30',     anim: 'legraise',  tip: 'Lower back stays glued to floor.' },
-    { name: 'DB Side Bend',  sets: '3 × 30',     anim: 'sidebend',  tip: 'One dumbbell, bend sideways only.' },
-    { name: 'Side Planks',   sets: '3 × 30 sec', anim: 'sideplank', tip: 'Straight line from head to feet.' },
-    { name: 'Planks',        sets: '3 × 30 sec', anim: 'plank',     tip: "Squeeze glutes, don't sag hips." },
+  { id: 'abs', name: 'Abs', emoji: '🔥', color: '#f59e0b', exercises: [
+    { name: 'Crunches',  sets: '3 × 15', anim: 'crunch',   tip: 'Lift shoulders, not neck. Exhale up.' },
+    { name: 'Leg Raise', sets: '3 × 15', anim: 'legraise', tip: 'Lower back stays glued to floor.' },
+  ]},
+  { id: 'side', name: 'Sides', emoji: '🌀', color: '#f59e0b', exercises: [
+    { name: 'DB Side Bend', sets: '3 × 30', anim: 'sidebend', tip: 'One dumbbell, bend sideways only.' },
+  ]},
+  { id: 'core', name: 'Core', emoji: '🪨', color: '#f59e0b', exercises: [
+    { name: 'Planks',      sets: '3 × 30 sec', anim: 'plank',     tip: "Squeeze glutes, don't sag hips." },
+    { name: 'Side Planks', sets: '3 × 30 sec', anim: 'sideplank', tip: 'Straight line from head to feet.' },
   ]},
   { id: 'chest', name: 'Chest', emoji: '💪', color: '#3b82f6', exercises: [
     { name: 'Push Up',                     sets: '3 × 15', anim: 'pushup',   tip: 'Body straight, elbows ~45°.' },
@@ -73,29 +77,33 @@ WORKOUT_PLAN.forEach(g => g.exercises.forEach((ex, i) => {
 }));
 
 /* ---------------------------------------------------------------
-   6-DAY SPLIT — edit this to match your gym chart exactly.
-   Each day = Cardio (every day) + that day's main muscle group +
-   3 rotating Abs/Core moves.
-     main : a group id  (chest | back | shoulder | biceps | triceps | legs)
-     core : 3 core exercise ids — core-0 Crunches · core-1 Leg Raise ·
-            core-2 DB Side Bend · core-3 Side Planks · core-4 Planks
+   6-DAY SPLIT (from the Fitness Zone card).
+   Each day = mandatory Cardio + that day's muscle workout + the rotating
+   Abs/Sides/Core group:  Day1 Abs · Day2 Sides · Day3 Core · Day4 Abs ·
+   Day5 Sides · Day6 Core.
+     main : muscle group id  (chest | triceps | shoulder | biceps | back | legs)
+     ab   : 'abs' | 'side' | 'core'
    --------------------------------------------------------------- */
 const WORKOUT_DAYS = [
-  { id: 'day1', name: 'Day 1', label: 'Chest',    main: 'chest',    core: ['core-0', 'core-1', 'core-4'] },
-  { id: 'day2', name: 'Day 2', label: 'Back',     main: 'back',     core: ['core-1', 'core-2', 'core-3'] },
-  { id: 'day3', name: 'Day 3', label: 'Shoulder', main: 'shoulder', core: ['core-0', 'core-3', 'core-4'] },
-  { id: 'day4', name: 'Day 4', label: 'Biceps',   main: 'biceps',   core: ['core-1', 'core-2', 'core-4'] },
-  { id: 'day5', name: 'Day 5', label: 'Triceps',  main: 'triceps',  core: ['core-0', 'core-2', 'core-3'] },
-  { id: 'day6', name: 'Day 6', label: 'Legs',     main: 'legs',     core: ['core-0', 'core-1', 'core-4'] },
+  { id: 'day1', name: 'Day 1', main: 'chest',    ab: 'abs'  },
+  { id: 'day2', name: 'Day 2', main: 'triceps',  ab: 'side' },
+  { id: 'day3', name: 'Day 3', main: 'shoulder', ab: 'core' },
+  { id: 'day4', name: 'Day 4', main: 'biceps',   ab: 'abs'  },
+  { id: 'day5', name: 'Day 5', main: 'back',     ab: 'side' },
+  { id: 'day6', name: 'Day 6', main: 'legs',     ab: 'core' },
 ];
-const CARDIO_GROUP = WORKOUT_PLAN.find(g => g.id === 'cardio');
-// Compose a day's blocks: Cardio (always) + main group + the 3 chosen core moves.
+const groupById = id => WORKOUT_PLAN.find(g => g.id === id) || WORKOUT_PLAN[0];
+const CARDIO_GROUP = groupById('cardio');
+// A day's main muscle group (used for the card label/color).
+function dayMain(day) { return groupById(day.main); }
+// Compose a day's blocks: Cardio (always) + muscle group + the rotating ab group.
 function dayBlocks(day) {
-  const main = WORKOUT_PLAN.find(g => g.id === day.main) || WORKOUT_PLAN[0];
+  const main = groupById(day.main);
+  const ab = groupById(day.ab);
   return [
-    { title: '🏃 Cardio', color: '#ef4444', exercises: CARDIO_GROUP ? CARDIO_GROUP.exercises : [] },
-    { title: main.emoji + ' ' + main.name, color: main.color, exercises: main.exercises },
-    { title: '🔥 Abs · Core', color: '#f59e0b', exercises: day.core.map(id => WORKOUT_BY_ID[id]).filter(Boolean) },
+    { title: '🏃 Cardio',                  color: CARDIO_GROUP.color, exercises: CARDIO_GROUP.exercises },
+    { title: main.emoji + ' ' + main.name, color: main.color,        exercises: main.exercises },
+    { title: ab.emoji + ' ' + ab.name,     color: ab.color,          exercises: ab.exercises },
   ];
 }
 function dayExercises(day) { return dayBlocks(day).reduce((a, b) => a.concat(b.exercises), []); }
