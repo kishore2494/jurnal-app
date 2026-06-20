@@ -466,7 +466,7 @@ function taskRow(t, drag) {
       ${drag ? '<span class="drag-handle" data-drag>⠿</span>' : '<span class="drag-handle ghost"></span>'}
       <div class="check" data-toggle="${t.id}">✓</div>
       <div class="txt">${escapeHtml(t.text)} ${(!t.done && t.created && t.created!==todayStr())?'<span class="carry">carried</span>':''}</div>
-      <button class="pal" data-palette="${t.id}">🎨</button>
+      <button class="pal" data-palette="${t.id}" title="highlight color"${t.color?` style="background:${colorHex(t.color)};border-color:${colorHex(t.color)}"`:''}></button>
       <button class="del" data-del="${t.id}">×</button>
     </div>
     ${openColorId===t.id ? swatchStrip(t.id) : ''}
@@ -481,7 +481,7 @@ function renderTasks() {
 
   document.getElementById('s-tasks').innerHTML = `
     <div class="card">
-      <h2>To-do <span class="hint">drag ⠿ to set priority</span></h2>
+      <h2>To-do <span class="hint">drag ⠿ priority · tap ◌ to color</span></h2>
       <div id="task-list">${open.length ? open.map(t=>taskRow(t,true)).join('') : '<div class="empty">No open tasks. Add one below 👇</div>'}</div>
       <div class="task-add">
         <input type="text" id="task-input" placeholder="Add a task…" autocomplete="off">
@@ -543,7 +543,7 @@ function renderNotes() {
     <div class="lrow-main">
       <span class="drag-handle" data-drag>⠿</span>
       <textarea class="note-text" data-note="${n.id}" rows="1" placeholder="Note…">${escapeHtml(n.text)}</textarea>
-      <button class="pal" data-palette="${n.id}">🎨</button>
+      <button class="pal" data-palette="${n.id}" title="highlight color"${n.color?` style="background:${colorHex(n.color)};border-color:${colorHex(n.color)}"`:''}></button>
       <button class="del" data-delnote="${n.id}">×</button>
     </div>
     ${openColorId===n.id ? swatchStrip(n.id) : ''}
@@ -554,7 +554,7 @@ function renderNotes() {
         <input type="text" id="note-input" placeholder="Add a note…" autocomplete="off">
         <button class="btn btn-primary btn-sm" id="note-add-btn">Add</button>
       </div>
-      <div class="hint" style="margin-top:8px">Drag ⠿ to reorder · 🎨 to highlight</div>
+      <div class="hint" style="margin-top:8px">Drag ⠿ to reorder · tap ◌ to color</div>
     </div>
     <div class="card" id="note-list" style="padding:4px 16px">
       ${notes.length ? notes.map(item).join('') : '<div class="empty">No notes yet. Add one above 👆</div>'}

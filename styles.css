@@ -202,9 +202,8 @@ textarea { resize: vertical; min-height: 64px; }
 .lrow .txt { flex: 1; font-size: 14.5px; min-width: 0; }
 .lrow .check { width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--text-faint); flex: 0 0 auto; display: grid; place-items: center; cursor: pointer; color: transparent; }
 .lrow.done .check { background: var(--good); border-color: var(--good); color: #06291d; }
-.lrow .pal, .lrow .del { background: none; border: none; cursor: pointer; flex: 0 0 auto; padding: 2px 3px; }
-.lrow .pal { font-size: 14px; opacity: .7; }
-.lrow .del { color: var(--text-faint); font-size: 18px; }
+.lrow .del { background: none; border: none; cursor: pointer; flex: 0 0 auto; padding: 2px 3px; color: var(--text-faint); font-size: 18px; }
+.lrow .pal { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; border: 2px dashed var(--text-faint); background: transparent; cursor: pointer; padding: 0; }
 .lrow.dragging { background: var(--bg-elev); border-radius: 10px; box-shadow: var(--shadow); position: relative; }
 .drag-handle { flex: 0 0 auto; color: var(--text-faint); font-size: 17px; cursor: grab; padding: 2px 4px; user-select: none; line-height: 1; }
 .drag-handle.ghost { visibility: hidden; }
