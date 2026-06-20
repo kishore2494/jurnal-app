@@ -1001,7 +1001,7 @@ function renderDash() {
 
     ${(() => { const r = coachReview(); return r ? `<div class="card"><h2>🧑‍🏫 Weekly review <span class="hint">last 7 days</span></h2>${r.map(l => `<div class="rev rev-${l.k}">${l.t}</div>`).join('')}</div>` : ''; })()}
 
-    <div class="card"><h2>🕸️ Connections <span class="hint">your journal graph</span></h2>${graphSVG()}</div>
+    <div class="card"><h2>🕸️ Connections <span class="hint">your journal graph</span></h2><div id="graph-wrap">${graphSVG()}</div></div>
 
     <div class="card"><div class="stat-grid">
       <div class="stat"><div class="v">${loggedStreak()}</div><div class="l">🔥 day streak</div></div>
@@ -1255,9 +1255,9 @@ function show(name) {
 document.addEventListener('click', (ev) => {
   const gn = ev.target.closest('[data-node]');
   if (gn && document.getElementById('s-dash').classList.contains('on')) {
-    const y = window.scrollY;
-    graphFocus = (graphFocus === gn.dataset.node) ? null : gn.dataset.node; renderDash();
-    window.scrollTo(0, y);   // stay exactly where you tapped
+    graphFocus = (graphFocus === gn.dataset.node) ? null : gn.dataset.node;
+    const w = document.getElementById('graph-wrap');   // update ONLY the graph — page doesn't move
+    if (w) w.innerHTML = graphSVG();
     return;
   }
   const rb = ev.target.closest('[data-range]');
