@@ -809,6 +809,51 @@ function exportCSV() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = 'daily-pulse-' + todayStr() + '.csv'; a.click(); toast('CSV exported');
 }
+/* ---------- Obsidian-style connections graph ----------
+   Nodes: days, topics, habits. Edges link each day to its topics + habits done,
+   so shared topics/habits become hubs that connect your days. */
+let graphFocus = null;
+function buildGraph() {
+  const e = DB.entries();
+  const days = Object.keys(e).sort().slice(-21);
+  const nodes = {}; const links = [];
+  const add = (id, type, label) => { if (!nodes[id]) nodes[id] = { id, type, label, deg: 0 }; };
+  days.forEach(d => {
+    add('d:' + d, 'day', prettyDate(d).replace(/^[A-Za-z]+,\s*/, ''));
+    const en = e[d];
+    if (en.topics) Object.keys(en.topics).filter(k => en.topics[k]).forEach(t => { add('t:' + t, 'topic', t); links.push(['d:' + d, 't:' + t]); });
+    if (en.habits) HABITS.forEach(h => { if (en.habits[h.key]) { add('h:' + h.key, 'habit', h.label); links.push(['d:' + d, 'h:' + h.key]); } });
+  });
+  const ns = nodes; links.forEach(([a, b]) => { if (ns[a]) ns[a].deg++; if (ns[b]) ns[b].deg++; });
+  return { nodes: Object.values(nodes), links: links.filter(([a, b]) => ns[a] && ns[b]) };
+}
+function layoutGraph(g, W, H) {
+  const N = g.nodes.length; if (!N) return;
+  const idx = {}; g.nodes.forEach((n, i) => { idx[n.id] = i; const a = 2 * Math.PI * i / N; n.x = W / 2 + Math.cos(a) * W * 0.32; n.y = H / 2 + Math.sin(a) * H * 0.32; n.vx = 0; n.vy = 0; });
+  const L = g.links.map(([a, b]) => [idx[a], idx[b]]);
+  for (let it = 0; it < 220; it++) {
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+      const a = g.nodes[i], b = g.nodes[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + 0.01; const d = Math.sqrt(d2); const f = 1400 / d2; dx /= d; dy /= d; a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
+    }
+    L.forEach(([i, j]) => { const a = g.nodes[i], b = g.nodes[j]; let dx = b.x - a.x, dy = b.y - a.y; const d = Math.sqrt(dx * dx + dy * dy) + 0.01; const f = (d - 58) * 0.02; dx /= d; dy /= d; a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f; });
+    g.nodes.forEach(n => { n.vx += (W / 2 - n.x) * 0.003; n.vy += (H / 2 - n.y) * 0.003; n.x += Math.max(-7, Math.min(7, n.vx)); n.y += Math.max(-7, Math.min(7, n.vy)); n.vx *= 0.86; n.vy *= 0.86; n.x = Math.max(12, Math.min(W - 12, n.x)); n.y = Math.max(14, Math.min(H - 8, n.y)); });
+  }
+}
+function graphSVG() {
+  const g = buildGraph();
+  if (g.nodes.length < 2) return '<div class="empty">Log a few days with topics &amp; habits — your graph grows here.</div>';
+  const W = 340, H = 300; layoutGraph(g, W, H);
+  const pos = {}; g.nodes.forEach(n => pos[n.id] = n);
+  const col = t => t === 'day' ? '#6d8cff' : t === 'topic' ? '#fbbf24' : '#34d399';
+  const focus = (graphFocus && pos[graphFocus]) ? graphFocus : null;
+  const near = new Set(); if (focus) { near.add(focus); g.links.forEach(([a, b]) => { if (a === focus) near.add(b); if (b === focus) near.add(a); }); }
+  const edges = g.links.map(([a, b]) => { const on = focus && (a === focus || b === focus); return `<line x1="${pos[a].x.toFixed(1)}" y1="${pos[a].y.toFixed(1)}" x2="${pos[b].x.toFixed(1)}" y2="${pos[b].y.toFixed(1)}" stroke="${on ? '#6d8cff' : '#2a3550'}" stroke-width="${on ? 1.6 : 0.7}" opacity="${focus && !on ? 0.12 : 0.55}"/>`; }).join('');
+  const circ = g.nodes.map(n => { const r = Math.min(12, 4 + n.deg * 0.8); const dim = focus && !near.has(n.id); const showLabel = n.id === focus || (n.type !== 'day' && n.deg >= 2);
+    return `<g opacity="${dim ? 0.18 : 1}"><circle data-node="${escapeHtml(n.id)}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${r}" fill="${col(n.type)}" stroke="${n.id === focus ? '#fff' : 'none'}" stroke-width="2"/>${showLabel ? `<text x="${n.x.toFixed(1)}" y="${(n.y - r - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${escapeHtml(n.label)}</text>` : ''}</g>`; }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;touch-action:none" id="graph-svg">${edges}${circ}</svg>
+    <div class="legend"><span><span class="dot" style="background:#6d8cff"></span>Day</span><span><span class="dot" style="background:#fbbf24"></span>Topic</span><span><span class="dot" style="background:#34d399"></span>Habit</span></div>
+    <div class="hint" style="margin-top:4px">${focus ? `Connections for <b style="color:var(--text)">${escapeHtml(pos[focus].label)}</b> · tap it again to reset` : 'Tap a node to highlight its connections'}</div>`;
+}
 function longestLoggedStreak() {
   const ds = Object.keys(DB.entries()).sort();
   let best = 0, cur = 0, prev = null;
@@ -918,6 +963,8 @@ function renderDash() {
     </div>
 
     ${(() => { const r = coachReview(); return r ? `<div class="card"><h2>🧑‍🏫 Weekly review <span class="hint">last 7 days</span></h2>${r.map(l => `<div class="rev rev-${l.k}">${l.t}</div>`).join('')}</div>` : ''; })()}
+
+    <div class="card"><h2>🕸️ Connections <span class="hint">your journal graph</span></h2>${graphSVG()}</div>
 
     <div class="card"><div class="stat-grid">
       <div class="stat"><div class="v">${loggedStreak()}</div><div class="l">🔥 day streak</div></div>
@@ -1168,6 +1215,12 @@ function show(name) {
   (RENDER[name] || (()=>{}))();
   window.scrollTo(0, 0);
 }
+document.addEventListener('click', (ev) => {
+  const gn = ev.target.closest('[data-node]');
+  if (gn && document.getElementById('s-dash').classList.contains('on')) {
+    graphFocus = (graphFocus === gn.dataset.node) ? null : gn.dataset.node; renderDash(); window.scrollTo(0, document.documentElement.scrollHeight);
+  }
+});
 document.getElementById('nav').addEventListener('click', (ev) => {
   const b = ev.target.closest('button'); if (!b) return;
   if (b.dataset.screen === 'today') logDate = todayStr();   // Log tab always opens today
