@@ -155,14 +155,15 @@ function prettyDate(str) {
 function isSunday(str) { return new Date(str + 'T00:00:00').getDay() === 0; }
 
 /* ---------- Voice dictation (speak → journal) ---------- */
-let _recog = null, _recogOn = false;
-function dictateInto(key, btn) {
+let _recog = null, _recogOn = false, _recogBtn = null;
+// sel = a CSS selector for the input/textarea to dictate into
+function dictateInto(sel, btn) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { toast('Voice input needs Chrome / Android', true); return; }
-  if (_recogOn) { _recog && _recog.stop(); return; }
-  const ta = document.querySelector(`[data-txt="${key}"]`); if (!ta) return;
+  if (_recogOn) { _recog && _recog.stop(); return; }   // tapping again stops
+  const ta = document.querySelector(sel); if (!ta) return;
   _recog = new SR(); _recog.lang = 'en-IN'; _recog.continuous = true; _recog.interimResults = false;
-  _recogOn = true; btn.classList.add('rec'); btn.textContent = '● Listening… tap to stop';
+  _recogOn = true; _recogBtn = btn; btn.classList.add('rec');
   _recog.onresult = (ev) => {
     let txt = '';
     for (let i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) txt += ev.results[i][0].transcript;
@@ -170,10 +171,10 @@ function dictateInto(key, btn) {
     if (txt) { ta.value = (ta.value ? ta.value + ' ' : '') + txt; ta.dispatchEvent(new Event('input', { bubbles: true })); }
   };
   _recog.onerror = (e) => { toast(e.error === 'not-allowed' ? 'Mic permission blocked' : 'Mic error', true); };
-  _recog.onend = () => { _recogOn = false; btn.classList.remove('rec'); btn.textContent = '🎤 Speak'; };
-  try { _recog.start(); toast('Listening… speak now 🎤'); } catch (e) { _recogOn = false; }
+  _recog.onend = () => { _recogOn = false; if (_recogBtn) _recogBtn.classList.remove('rec'); };
+  try { _recog.start(); toast('Listening… speak now 🎤'); } catch (e) { _recogOn = false; btn.classList.remove('rec'); }
 }
-document.addEventListener('click', (ev) => { const m = ev.target.closest('[data-mic]'); if (m) dictateInto(m.dataset.mic, m); });
+document.addEventListener('click', (ev) => { const m = ev.target.closest('[data-mic]'); if (m) { ev.preventDefault(); dictateInto(m.dataset.mic, m); } });
 
 /* ---------- Toast ---------- */
 let toastTimer;
@@ -392,7 +393,7 @@ function renderToday() {
         <textarea data-txt="improve" placeholder="...">${draft.improve||''}</textarea></div>
       <div class="field"><label>Journal entry 📓 <span class="hint">type or speak · use #tags to link</span></label>
         <textarea data-txt="journal" placeholder="How was your day?" style="min-height:110px">${draft.journal||''}</textarea>
-        <button type="button" class="mic-btn" data-mic="journal">🎤 Speak</button></div>
+        <button type="button" class="mic-btn" data-mic="[data-txt=journal]">🎤 Speak</button></div>
     </div>
 
     <h2 style="margin:22px 4px 10px;font-size:13px;color:var(--text-dim);font-weight:600;letter-spacing:.3px;text-transform:uppercase">Deep log <span class="hint" style="text-transform:none">optional · the polymath metrics</span></h2>
@@ -485,6 +486,7 @@ function renderTasks() {
       <div id="task-list">${open.length ? open.map(t=>taskRow(t,true)).join('') : '<div class="empty">No open tasks. Add one below 👇</div>'}</div>
       <div class="task-add">
         <input type="text" id="task-input" placeholder="Add a task…" autocomplete="off">
+        <button class="mic-ic" data-mic="#task-input" title="speak">🎤</button>
         <button class="btn btn-primary btn-sm" id="task-add-btn">Add</button>
       </div>
     </div>
@@ -552,9 +554,10 @@ function renderNotes() {
     <div class="card">
       <div class="task-add">
         <input type="text" id="note-input" placeholder="Add a note…" autocomplete="off">
+        <button class="mic-ic" data-mic="#note-input" title="speak">🎤</button>
         <button class="btn btn-primary btn-sm" id="note-add-btn">Add</button>
       </div>
-      <div class="hint" style="margin-top:8px">Drag ⠿ to reorder · tap ◌ to color</div>
+      <div class="hint" style="margin-top:8px">Drag ⠿ to reorder · tap ◌ to color · 🎤 to speak</div>
     </div>
     <div class="card" id="note-list" style="padding:4px 16px">
       ${notes.length ? notes.map(item).join('') : '<div class="empty">No notes yet. Add one above 👆</div>'}
