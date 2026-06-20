@@ -229,20 +229,48 @@ function pullState(done) {
   script.src = url + (url.includes('?') ? '&' : '?') + 'type=pull&callback=' + cb + '&t=' + Date.now();
   document.body.appendChild(script);
 }
+// Merge remote into local so NOTHING is lost on either device:
+//  entries  -> by date, newest updatedAt wins
+//  gym      -> by date, union of done/log
+//  tasks/notes/reminders -> union by id (adds anything this device is missing)
 function applyRemoteState(remote) {
   if (!remote || !remote.touched) return;            // nothing in the cloud yet
-  const localTouched = +(localStorage.getItem('dp.touched') || 0);
-  if (remote.touched <= localTouched) return;         // local is newer/equal — keep it
-  if (remote.entries)   localStorage.setItem('dp.entries', JSON.stringify(remote.entries));
-  if (remote.tasks)     localStorage.setItem('dp.tasks', JSON.stringify(remote.tasks));
-  if (remote.notes)     localStorage.setItem('dp.notes', JSON.stringify(remote.notes));
-  if (remote.reminders) localStorage.setItem('dp.reminders', JSON.stringify(remote.reminders));
-  if (remote.gym)       localStorage.setItem('dp.gym', JSON.stringify(remote.gym));
-  if (remote.exercises) localStorage.setItem('dp.exercises', JSON.stringify(remote.exercises));
-  localStorage.setItem('dp.touched', String(remote.touched));
-  refreshStreak(); setupReminders();
-  const cur = document.querySelector('.nav button.on'); if (cur) show(cur.dataset.screen);
-  toast('Synced from your other device ⬇️');
+  let changed = false;
+
+  if (remote.entries) {
+    const local = DB.entries();
+    Object.keys(remote.entries).forEach(d => {
+      const r = remote.entries[d], l = local[d];
+      if (!l || (r.updatedAt || '') > (l.updatedAt || '')) { local[d] = r; changed = true; }
+    });
+    localStorage.setItem('dp.entries', JSON.stringify(local));
+  }
+  if (remote.gym) {
+    const local = DB.gym();
+    Object.keys(remote.gym).forEach(d => {
+      if (!local[d]) { local[d] = remote.gym[d]; changed = true; return; }
+      const ld = local[d], rd = remote.gym[d];
+      Object.keys(rd.done || {}).forEach(k => { if (rd.done[k] && !ld.done[k]) { ld.done[k] = true; changed = true; } });
+      Object.keys(rd.log || {}).forEach(k => { if (rd.log[k] && !ld.log[k]) { ld.log[k] = rd.log[k]; changed = true; } });
+    });
+    localStorage.setItem('dp.gym', JSON.stringify(local));
+  }
+  [['tasks', 'dp.tasks'], ['notes', 'dp.notes'], ['reminders', 'dp.reminders']].forEach(([key, store]) => {
+    if (!remote[key]) return;
+    const local = JSON.parse(localStorage.getItem(store) || '[]');
+    const ids = new Set(local.map(x => x.id));
+    const add = remote[key].filter(x => !ids.has(x.id));
+    if (add.length) { localStorage.setItem(store, JSON.stringify(local.concat(add))); changed = true; }
+  });
+  if (remote.exercises && !localStorage.getItem('dp.exercises')) localStorage.setItem('dp.exercises', JSON.stringify(remote.exercises));
+
+  if (changed) {
+    localStorage.setItem('dp.touched', String(Date.now()));
+    pushState(true);            // push the merged superset back so all devices converge
+    refreshStreak(); setupReminders();
+    const cur = document.querySelector('.nav button.on'); if (cur) show(cur.dataset.screen);
+    toast('Synced from your other device ⬇️');
+  }
 }
 
 /* ============================================================
