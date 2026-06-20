@@ -8,9 +8,9 @@
 /* ---------- Config: your habits (from the Daily Pulse form) ---------- */
 const HABITS = [
   { key: 'workout',     emoji: '🏋️', label: 'Workout' },
-  { key: 'faceWorkout', emoji: '😊', label: 'Face workout', color: '#a78bfa' },
+  { key: 'faceWorkout', emoji: '😊', label: 'Face workout', color: '#fb923c' },
   { key: 'meditation',  emoji: '🧘', label: 'Meditation' },
-  { key: 'english',     emoji: '🗣️', label: 'English practice', color: '#60a5fa' },
+  { key: 'english',     emoji: '🗣️', label: 'English practice', color: '#fb923c' },
   { key: 'reading',     emoji: '📚', label: 'Books / Reading' },
   { key: 'projectAI',   emoji: '🤖', label: 'Project — AI' },
   { key: 'projectSpace',emoji: '🚀', label: 'Project — Space tech' },
