@@ -768,6 +768,47 @@ function polymath(e) {
   const total = mean([body, mind, work, learning, discipline]);
   return total == null ? null : { total: Math.round(total), body, mind, work, learning, discipline };
 }
+// Auto-written weekly review from the last 7 days (no AI needed — pure analysis).
+function coachReview() {
+  const e = DB.entries();
+  const win = start => { const a = []; for (let i = start; i < start + 7; i++) a.push(addDays(todayStr(), -i)); return a; };
+  const thisW = win(0), lastW = win(7);
+  const logged = thisW.filter(d => e[d]).length;
+  if (!logged) return null;
+  const pmAvg = ds => { const v = ds.map(d => e[d] ? polymath(e[d]) : null).filter(Boolean).map(p => p.total); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+  const avgOf = (ds, k) => { const v = ds.map(d => e[d] && e[d][k] != null && e[d][k] !== '' ? +e[d][k] : null).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const lines = [];
+  const pmT = pmAvg(thisW), pmL = pmAvg(lastW);
+  let head = `Polymath averaged <b>${pmT ?? '–'}/100</b> this week`;
+  if (pmT != null && pmL != null) { const d = pmT - pmL; head += ` <span style="color:${d>=0?'var(--good)':'var(--bad)'}">${d>=0?'▲ +':'▼ '}${d}</span> vs last week`; }
+  lines.push({ t: head, k: 'head' });
+  lines.push({ t: `Logged <b>${logged}/7</b> days · 🔥 ${loggedStreak()}-day streak`, k: 'ok' });
+  let best = null; thisW.forEach(d => { const p = e[d] ? polymath(e[d]) : null; if (p && (!best || p.total > best.s)) best = { d, s: p.total }; });
+  if (best) lines.push({ t: `Best day: <b>${prettyDate(best.d)}</b> (${best.s}/100)`, k: 'ok' });
+  const sl = avgOf(thisW, 'sleepHours');
+  if (sl != null) lines.push({ t: `😴 Sleep averaged <b>${sl.toFixed(1)}h</b>${sl < 7 ? ' — aim for 7h+' : ' — solid'}`, k: sl < 7 ? 'warn' : 'ok' });
+  const wo = thisW.filter(d => e[d] && e[d].workoutsDone > 0).length;
+  lines.push({ t: `💪 Worked out <b>${wo}/7</b> days`, k: wo >= 3 ? 'ok' : 'warn' });
+  let strong = null, weak = null;
+  HABITS.forEach(h => { const c = thisW.filter(d => e[d] && e[d].habits && e[d].habits[h.key]).length;
+    if (!strong || c > strong.c) strong = { h, c }; if (!weak || c < weak.c) weak = { h, c }; });
+  if (strong && strong.c > 0) lines.push({ t: `Most consistent: <b>${strong.h.emoji} ${strong.h.label}</b> (${strong.c}/7)`, k: 'ok' });
+  if (weak && weak.c < logged) lines.push({ t: `Needs love: <b>${weak.h.emoji} ${weak.h.label}</b> (${weak.c}/7)`, k: 'warn' });
+  const mWo = avgOf(thisW.filter(d => e[d] && e[d].workoutsDone > 0), 'mood');
+  const mNo = avgOf(thisW.filter(d => e[d] && !(e[d].workoutsDone > 0)), 'mood');
+  if (mWo != null && mNo != null && mWo - mNo >= 0.5) lines.push({ t: `💡 Your mood is <b>+${(mWo - mNo).toFixed(1)}</b> higher on workout days — keep moving.`, k: 'tip' });
+  return lines;
+}
+function exportCSV() {
+  const e = DB.entries(); const dates = Object.keys(e).sort();
+  if (!dates.length) { toast('Nothing to export yet', true); return; }
+  const cols = ['date', 'mood', 'energy', 'sleepHours', 'deepWorkHours', 'tasksDone', 'tasksPlanned', 'workoutsDone', 'workoutDetail', 'wentWell', 'improve', 'journal', 'tasks'];
+  const esc = v => { v = String(v == null ? '' : v).replace(/"/g, '""'); return /[",\n]/.test(v) ? `"${v}"` : v; };
+  let csv = cols.join(',') + '\n';
+  dates.forEach(d => csv += cols.map(c => esc(c === 'date' ? d : e[d][c])).join(',') + '\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'daily-pulse-' + todayStr() + '.csv'; a.click(); toast('CSV exported');
+}
 function longestLoggedStreak() {
   const ds = Object.keys(DB.entries()).sort();
   let best = 0, cur = 0, prev = null;
@@ -875,6 +916,8 @@ function renderDash() {
       ${lineChart(pmSeries, '#8b9dff')}
       <div style="margin-top:10px">${pmBars}</div>
     </div>
+
+    ${(() => { const r = coachReview(); return r ? `<div class="card"><h2>🧑‍🏫 Weekly review <span class="hint">last 7 days</span></h2>${r.map(l => `<div class="rev rev-${l.k}">${l.t}</div>`).join('')}</div>` : ''; })()}
 
     <div class="card"><div class="stat-grid">
       <div class="stat"><div class="v">${loggedStreak()}</div><div class="l">🔥 day streak</div></div>
@@ -1003,6 +1046,9 @@ function renderSettings() {
         <button class="btn btn-ghost btn-sm" id="export">Export backup</button>
         <button class="btn btn-ghost btn-sm" id="import">Import backup</button>
       </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-ghost btn-sm" id="export-csv">⬇ Export CSV (for Excel/AI)</button>
+      </div>
       <input type="file" id="import-file" accept="application/json" style="display:none">
     </div>
     <div class="card"><h2>ℹ️ About</h2>
@@ -1035,6 +1081,7 @@ document.addEventListener('click', async (ev) => {
   if (rd) { DB.saveReminders(DB.reminders().filter(z => z.id !== rd.dataset.remDel)); renderSettings(); syncReminders(); setupReminders(); toast('Reminder deleted'); return; }
   if (ev.target.id === 'rem-calendar') { exportReminderCalendar(); return; }
   if (ev.target.id === 'export') exportData();
+  if (ev.target.id === 'export-csv') exportCSV();
   if (ev.target.id === 'import') document.getElementById('import-file').click();
 });
 // Edit a reminder's time/label inline

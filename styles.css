@@ -145,6 +145,13 @@ textarea { resize: vertical; min-height: 64px; }
 .pm-score { font-size: 46px; font-weight: 780; letter-spacing: -2px; line-height: 1; color: #fff; }
 .pm-out { font-size: 17px; font-weight: 600; color: var(--text-dim); letter-spacing: 0; }
 .pm-meta { font-size: 13px; font-weight: 600; }
+.rev { font-size: 13.5px; color: var(--text-dim); padding: 9px 0 9px 12px; border-bottom: 1px solid var(--border); line-height: 1.5; border-left: 3px solid transparent; }
+.rev:last-child { border-bottom: none; }
+.rev b { color: var(--text); }
+.rev-head { font-size: 15px; color: var(--text); border-left-color: var(--accent); }
+.rev-ok { border-left-color: var(--good); }
+.rev-warn { border-left-color: var(--warn); }
+.rev-tip { border-left-color: var(--accent-2); background: rgba(74,214,192,.06); }
 .stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
 .stat { background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; padding: 13px; text-align: center; }
 .stat .v { font-size: 23px; font-weight: 720; letter-spacing: -.5px; }
