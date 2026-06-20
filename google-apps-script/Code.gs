@@ -53,6 +53,7 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     if (data.type === 'reminders') return saveReminders_(data.items || []);
+    if (data.type === 'notes') return saveList_('Notes', ['text', 'color', 'created'], data.items || []);
     var sheet = getSheet_();
     flatten_(data);
     var row = COLUMNS.map(function (k) { return data[k] !== undefined && data[k] !== null ? data[k] : ''; });
@@ -85,6 +86,17 @@ function saveReminders_(items) {
   sh.appendRow(['time', 'label', 'enabled']);
   sh.setFrozenRows(1);
   items.forEach(function (r) { sh.appendRow([r.time || '', r.label || '', r.enabled ? 'Yes' : 'No']); });
+  return json_({ ok: true, count: items.length });
+}
+
+// Generic: rewrite a tab from a list of objects (used by Notes).
+function saveList_(sheetName, cols, items) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+  sh.clear();
+  sh.appendRow(cols);
+  sh.setFrozenRows(1);
+  items.forEach(function (it) { sh.appendRow(cols.map(function (c) { return it[c] !== undefined && it[c] !== null ? it[c] : ''; })); });
   return json_({ ok: true, count: items.length });
 }
 

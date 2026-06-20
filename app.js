@@ -71,6 +71,53 @@ const DEFAULT_EXERCISES = [
   { id: 'ex_stretch',  name: 'Stretching',   target: '10 min' },
 ];
 
+/* ---------- Highlight colors (Tasks & Notes) ---------- */
+const COLORS = [
+  { id: '',       hex: '' },          // none / normal
+  { id: 'red',    hex: '#f87171' },
+  { id: 'orange', hex: '#fb923c' },
+  { id: 'yellow', hex: '#fbbf24' },
+  { id: 'green',  hex: '#34d399' },
+  { id: 'blue',   hex: '#60a5fa' },
+  { id: 'purple', hex: '#a78bfa' },
+];
+const colorHex = id => { const c = COLORS.find(c => c.id === id); return c ? c.hex : ''; };
+let openColorId = null; // which task/note's color swatches are showing
+
+/* A reusable swatch strip (shown under an item when its 🎨 is tapped). */
+function swatchStrip(id) {
+  return `<div class="swatches">${COLORS.map(c => `<button class="sw ${c.id?'':'sw-none'}" data-setcolor="${id}" data-color="${c.id}"
+    style="${c.hex?`background:${c.hex}`:''}" title="${c.id||'none'}">${c.id?'':'✕'}</button>`).join('')}</div>`;
+}
+
+/* ---------- Touch-friendly drag-to-reorder ---------- */
+function enableDrag(listEl, onReorder) {
+  if (!listEl) return;
+  listEl.querySelectorAll('[data-drag]').forEach(handle => {
+    handle.style.touchAction = 'none';
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const row = handle.closest('[data-id]'); if (!row) return;
+      const id = row.dataset.id, startY = e.clientY; let lastY = startY;
+      row.classList.add('dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+      const move = (ev) => { lastY = ev.clientY; row.style.transform = `translateY(${ev.clientY - startY}px)`; };
+      const up = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        const others = Array.from(listEl.querySelectorAll('[data-id]')).filter(r => r !== row);
+        let target = others.length;
+        for (let i = 0; i < others.length; i++) { const r = others[i].getBoundingClientRect(); if (lastY < r.top + r.height / 2) { target = i; break; } }
+        const ids = others.map(r => r.dataset.id); ids.splice(target, 0, id);
+        row.classList.remove('dragging'); row.style.transform = '';
+        onReorder(ids);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+    });
+  });
+}
+
 /* ---------- Storage ---------- */
 const DB = {
   entries() { return JSON.parse(localStorage.getItem('dp.entries') || '{}'); },
@@ -90,6 +137,9 @@ const DB = {
 
   reminders() { return JSON.parse(localStorage.getItem('dp.reminders') || '[]'); },
   saveReminders(r) { localStorage.setItem('dp.reminders', JSON.stringify(r)); },
+
+  notes() { return JSON.parse(localStorage.getItem('dp.notes') || '[]'); },
+  saveNotes(n) { localStorage.setItem('dp.notes', JSON.stringify(n)); },
 
   settings() { return Object.assign({ syncUrl: '', reminderTime: '', name: '' }, JSON.parse(localStorage.getItem('dp.settings') || '{}')); },
   saveSettings(s) { localStorage.setItem('dp.settings', JSON.stringify(s)); },
@@ -316,6 +366,18 @@ async function syncTodayTasks() {
   syncEntry(d, entry);
 }
 
+function taskRow(t, drag) {
+  return `<div class="lrow ${t.done?'done':''}" data-id="${t.id}" style="${t.color?`border-left:3px solid ${colorHex(t.color)}`:''}">
+    <div class="lrow-main">
+      ${drag ? '<span class="drag-handle" data-drag>⠿</span>' : '<span class="drag-handle ghost"></span>'}
+      <div class="check" data-toggle="${t.id}">✓</div>
+      <div class="txt">${escapeHtml(t.text)} ${(!t.done && t.created && t.created!==todayStr())?'<span class="carry">carried</span>':''}</div>
+      <button class="pal" data-palette="${t.id}">🎨</button>
+      <button class="del" data-del="${t.id}">×</button>
+    </div>
+    ${openColorId===t.id ? swatchStrip(t.id) : ''}
+  </div>`;
+}
 function renderTasks() {
   document.getElementById('screen-title').textContent = 'Tasks';
   const tasks = DB.tasks();
@@ -323,31 +385,38 @@ function renderTasks() {
   const done = tasks.filter(t => t.done);
   document.getElementById('screen-sub').textContent = `${open.length} open · ${done.length} done`;
 
-  const item = t => `<div class="task ${t.done?'done':''}" data-task="${t.id}">
-    <div class="check" data-toggle="${t.id}">✓</div>
-    <div class="txt">${escapeHtml(t.text)} ${(!t.done && t.created && t.created!==todayStr())?'<span class="carry">carried</span>':''}</div>
-    <button class="del" data-del="${t.id}">×</button></div>`;
-
   document.getElementById('s-tasks').innerHTML = `
     <div class="card">
-      <h2>To-do</h2>
-      ${open.length ? open.map(item).join('') : '<div class="empty">No open tasks. Add one below 👇</div>'}
+      <h2>To-do <span class="hint">drag ⠿ to set priority</span></h2>
+      <div id="task-list">${open.length ? open.map(t=>taskRow(t,true)).join('') : '<div class="empty">No open tasks. Add one below 👇</div>'}</div>
       <div class="task-add">
         <input type="text" id="task-input" placeholder="Add a task…" autocomplete="off">
         <button class="btn btn-primary btn-sm" id="task-add-btn">Add</button>
       </div>
     </div>
-    ${done.length ? `<div class="card"><h2>Done <span class="hint">${done.length}</span></h2>${done.map(item).join('')}
+    ${done.length ? `<div class="card"><h2>Done <span class="hint">${done.length}</span></h2>${done.map(t=>taskRow(t,false)).join('')}
       <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" id="clear-done">Clear completed</button></div></div>` : ''}
   `;
+  enableDrag(document.getElementById('task-list'), ids => {
+    const all = DB.tasks();
+    const openR = ids.map(id => all.find(t => t.id === id)).filter(Boolean);
+    DB.saveTasks([...openR, ...all.filter(t => t.done)]); renderTasks();
+  });
 }
 function addTask() {
   const inp = document.getElementById('task-input');
   const text = inp.value.trim(); if (!text) return;
   const tasks = DB.tasks();
-  tasks.unshift({ id: 't' + Date.now(), text, done: false, created: todayStr() });
+  tasks.unshift({ id: 't' + Date.now(), text, done: false, created: todayStr(), color: '' });
   DB.saveTasks(tasks); renderTasks(); syncTodayTasks();
   document.getElementById('task-input').focus();
+}
+function rerenderList() { if (document.getElementById('s-notes').classList.contains('on')) renderNotes(); else renderTasks(); }
+function setColor(id, col) {
+  const ts = DB.tasks(); const t = ts.find(x => x.id === id);
+  if (t) { t.color = col; DB.saveTasks(ts); openColorId = null; renderTasks(); return; }
+  const ns = DB.notes(); const n = ns.find(x => x.id === id);
+  if (n) { n.color = col; DB.saveNotes(ns); openColorId = null; renderNotes(); syncNotes(); }
 }
 document.addEventListener('click', (ev) => {
   if (ev.target.id === 'task-add-btn') return addTask();
@@ -355,9 +424,69 @@ document.addEventListener('click', (ev) => {
   const tg = ev.target.closest('[data-toggle]');
   if (tg) { const id = tg.dataset.toggle; const ts = DB.tasks(); const t = ts.find(x=>x.id===id); if(t){t.done=!t.done; t.doneDate=t.done?todayStr():null;} DB.saveTasks(ts); renderTasks(); syncTodayTasks(); return; }
   const dl = ev.target.closest('[data-del]');
-  if (dl) { DB.saveTasks(DB.tasks().filter(t=>t.id!==dl.dataset.del)); renderTasks(); return; }
+  if (dl) { DB.saveTasks(DB.tasks().filter(t=>t.id!==dl.dataset.del)); renderTasks(); syncTodayTasks(); return; }
+  const pal = ev.target.closest('[data-palette]');
+  if (pal) { const id = pal.dataset.palette; openColorId = (openColorId === id) ? null : id; rerenderList(); return; }
+  const sc = ev.target.closest('[data-setcolor]');
+  if (sc) { setColor(sc.dataset.setcolor, sc.dataset.color); return; }
+  if (ev.target.id === 'note-add-btn') return addNote();
+  const dn = ev.target.closest('[data-delnote]');
+  if (dn) { DB.saveNotes(DB.notes().filter(n=>n.id!==dn.dataset.delnote)); renderNotes(); syncNotes(); return; }
 });
-document.addEventListener('keydown', (ev) => { if (ev.target.id === 'task-input' && ev.key === 'Enter') addTask(); });
+document.addEventListener('keydown', (ev) => {
+  if (ev.target.id === 'task-input' && ev.key === 'Enter') addTask();
+  if (ev.target.id === 'note-input' && ev.key === 'Enter') addNote();
+});
+
+/* ============================================================
+   SCREEN: NOTES
+   ============================================================ */
+function renderNotes() {
+  document.getElementById('screen-title').textContent = 'Notes';
+  const notes = DB.notes();
+  document.getElementById('screen-sub').textContent = `${notes.length} note${notes.length===1?'':'s'}`;
+  const item = n => `<div class="lrow note" data-id="${n.id}" style="${n.color?`border-left:3px solid ${colorHex(n.color)}`:''}">
+    <div class="lrow-main">
+      <span class="drag-handle" data-drag>⠿</span>
+      <textarea class="note-text" data-note="${n.id}" rows="1" placeholder="Note…">${escapeHtml(n.text)}</textarea>
+      <button class="pal" data-palette="${n.id}">🎨</button>
+      <button class="del" data-delnote="${n.id}">×</button>
+    </div>
+    ${openColorId===n.id ? swatchStrip(n.id) : ''}
+  </div>`;
+  document.getElementById('s-notes').innerHTML = `
+    <div class="card">
+      <div class="task-add">
+        <input type="text" id="note-input" placeholder="Add a note…" autocomplete="off">
+        <button class="btn btn-primary btn-sm" id="note-add-btn">Add</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Drag ⠿ to reorder · 🎨 to highlight</div>
+    </div>
+    <div class="card" id="note-list" style="padding:4px 16px">
+      ${notes.length ? notes.map(item).join('') : '<div class="empty">No notes yet. Add one above 👆</div>'}
+    </div>`;
+  // auto-size textareas
+  document.querySelectorAll('#note-list .note-text').forEach(t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; });
+  enableDrag(document.getElementById('note-list'), ids => {
+    const ns = DB.notes(); DB.saveNotes(ids.map(id => ns.find(n => n.id === id)).filter(Boolean)); renderNotes(); syncNotes();
+  });
+}
+function addNote() {
+  const inp = document.getElementById('note-input'); const text = inp.value.trim(); if (!text) return;
+  const ns = DB.notes(); ns.unshift({ id: 'n' + Date.now(), text, color: '', created: todayStr() });
+  DB.saveNotes(ns); renderNotes(); syncNotes();
+  document.getElementById('note-input').focus();
+}
+function syncNotes() {
+  const url = DB.settings().syncUrl; if (!url) return;
+  fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ type: 'notes', items: DB.notes() }) }).catch(() => {});
+}
+document.addEventListener('input', (ev) => {
+  const nt = ev.target.closest('[data-note]');
+  if (nt) { const ns = DB.notes(); const n = ns.find(x => x.id === nt.dataset.note); if (n) { n.text = nt.value; DB.saveNotes(ns); } nt.style.height = 'auto'; nt.style.height = nt.scrollHeight + 'px'; }
+});
+document.addEventListener('change', (ev) => { if (ev.target.closest('[data-note]')) syncNotes(); });
 
 /* ============================================================
    SCREEN: GYM
@@ -854,7 +983,7 @@ function exportReminderCalendar() {
 }
 
 /* ---------- Navigation ---------- */
-const RENDER = { today: openToday, tasks: renderTasks, gym: openGym, habits: renderHabits, dash: renderDash, history: renderHistory, settings: renderSettings };
+const RENDER = { today: openToday, tasks: renderTasks, notes: renderNotes, gym: openGym, habits: renderHabits, dash: renderDash, history: renderHistory, settings: renderSettings };
 function show(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
   document.getElementById('s-' + name).classList.add('on');

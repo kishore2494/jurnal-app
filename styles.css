@@ -172,9 +172,28 @@ textarea { resize: vertical; min-height: 64px; }
   display: flex; justify-content: space-around;
   padding: 8px 0 calc(8px + var(--safe-bottom));
 }
-.nav button { background: none; border: none; color: var(--text-faint); font-size: 10.5px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; font-family: inherit; padding: 4px 6px; flex: 1 1 0; min-width: 0; }
-.nav button .ico { font-size: 20px; line-height: 1; }
+.nav button { background: none; border: none; color: var(--text-faint); font-size: 9.5px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; font-family: inherit; padding: 4px 1px; flex: 1 1 0; min-width: 0; overflow: hidden; }
+.nav button .ico { font-size: 18px; line-height: 1; }
 .nav button.on { color: var(--accent); }
+
+/* List rows shared by Tasks & Notes (drag + color) */
+.lrow { border-bottom: 1px solid var(--border); padding-left: 0; }
+.lrow:last-child { border-bottom: none; }
+.lrow-main { display: flex; align-items: center; gap: 9px; padding: 11px 2px; }
+.lrow.done .txt { text-decoration: line-through; color: var(--text-faint); }
+.lrow .txt { flex: 1; font-size: 14.5px; min-width: 0; }
+.lrow .check { width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--text-faint); flex: 0 0 auto; display: grid; place-items: center; cursor: pointer; color: transparent; }
+.lrow.done .check { background: var(--good); border-color: var(--good); color: #06291d; }
+.lrow .pal, .lrow .del { background: none; border: none; cursor: pointer; flex: 0 0 auto; padding: 2px 3px; }
+.lrow .pal { font-size: 14px; opacity: .7; }
+.lrow .del { color: var(--text-faint); font-size: 18px; }
+.lrow.dragging { background: var(--bg-elev); border-radius: 10px; box-shadow: var(--shadow); position: relative; }
+.drag-handle { flex: 0 0 auto; color: var(--text-faint); font-size: 17px; cursor: grab; padding: 2px 4px; user-select: none; line-height: 1; }
+.drag-handle.ghost { visibility: hidden; }
+.note-text { flex: 1; min-width: 0; background: var(--bg-input); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 11px; font-size: 14px; font-family: inherit; resize: none; overflow: hidden; line-height: 1.4; }
+.swatches { display: flex; gap: 8px; padding: 4px 2px 12px 30px; flex-wrap: wrap; }
+.sw { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; flex: 0 0 auto; }
+.sw-none { background: var(--bg-input); color: var(--text-faint); font-size: 12px; display: grid; place-items: center; }
 
 /* Gym / exercises */
 .ex { display: flex; align-items: center; gap: 11px; padding: 13px 4px; border-bottom: 1px solid var(--border); }
