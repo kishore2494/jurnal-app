@@ -8,13 +8,13 @@
 /* ---------- Config: your habits (from the Daily Pulse form) ---------- */
 const HABITS = [
   { key: 'workout',     emoji: '🏋️', label: 'Workout' },
-  { key: 'faceWorkout', emoji: '😊', label: 'Face workout' },
+  { key: 'faceWorkout', emoji: '😊', label: 'Face workout', color: '#a78bfa' },
   { key: 'meditation',  emoji: '🧘', label: 'Meditation' },
-  { key: 'english',     emoji: '🗣️', label: 'English practice' },
+  { key: 'english',     emoji: '🗣️', label: 'English practice', color: '#60a5fa' },
   { key: 'reading',     emoji: '📚', label: 'Books / Reading' },
   { key: 'projectAI',   emoji: '🤖', label: 'Project — AI' },
   { key: 'projectSpace',emoji: '🚀', label: 'Project — Space tech' },
-  { key: 'healthyFood', emoji: '🥗', label: 'Healthy food only' },
+  { key: 'healthyFood', emoji: '🥗', label: 'Healthy food only', color: '#fb923c' },
   { key: 'posted',      emoji: '📤', label: 'Posted content' },
   { key: 'consumed',    emoji: '🧠', label: 'Consumed useful content' },
   { key: 'hairCare',    emoji: '💇', label: 'Hair care' },
@@ -353,7 +353,8 @@ function renderToday() {
   const habitChips = HABITS.map(h => {
     const on = !!draft.habits[h.key];
     const st = habitStreak(h.key);
-    return `<div class="habit ${on?'on':''}" data-habit="${h.key}">
+    const style = h.color ? `box-shadow: inset 4px 0 0 ${h.color}${on ? `; background:${h.color}1f; border-color:${h.color}` : ''}` : '';
+    return `<div class="habit ${on?'on':''}" data-habit="${h.key}" style="${style}">
       <span class="check">✓</span><span class="emoji">${h.emoji}</span>
       <span>${h.label}</span>${st>1?`<span class="streak">🔥${st}</span>`:''}</div>`;
   }).join('');
@@ -1254,7 +1255,9 @@ function show(name) {
 document.addEventListener('click', (ev) => {
   const gn = ev.target.closest('[data-node]');
   if (gn && document.getElementById('s-dash').classList.contains('on')) {
-    graphFocus = (graphFocus === gn.dataset.node) ? null : gn.dataset.node; renderDash(); window.scrollTo(0, document.documentElement.scrollHeight);
+    const y = window.scrollY;
+    graphFocus = (graphFocus === gn.dataset.node) ? null : gn.dataset.node; renderDash();
+    window.scrollTo(0, y);   // stay exactly where you tapped
     return;
   }
   const rb = ev.target.closest('[data-range]');
