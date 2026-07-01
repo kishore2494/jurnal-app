@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v30';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v31';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ---------- */
 const HABITS = [
@@ -1268,6 +1268,7 @@ function setupReminders() {
     reminderTimeouts.push(setTimeout(() => checkReminders(true), Math.max(0, ms) + 300));
   });
   checkReminders(true);   // check immediately too (catches an already-due one)
+  scheduleBackgroundNotifications();   // + OS-level alarms even when the app is closed (where supported)
 }
 
 /* ---------- Loud in-app alarm (Web Audio siren + vibration + full-screen) ---------- */
@@ -1314,27 +1315,67 @@ function syncReminders() {
   fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ type: 'reminders', items: DB.reminders() }) }).catch(() => {});
 }
-// Download an .ics so the phone calendar alarms even when the app is closed
+// Download an .ics so the phone calendar alarms even when the app is closed.
+// RFC5545-valid: includes DTSTAMP + DURATION (Google/Apple reject events without them).
 function exportReminderCalendar() {
   const rs = DB.reminders().filter(r => r.enabled && r.time);
   if (!rs.length) { toast('Add a reminder first', true); return; }
   const pad = n => String(n).padStart(2, '0');
-  let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Daily Pulse//EN\r\nCALSCALE:GREGORIAN\r\n';
-  rs.forEach((r, i) => {
+  const now = new Date();
+  const stamp = now.getUTCFullYear() + pad(now.getUTCMonth() + 1) + pad(now.getUTCDate()) +
+    'T' + pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds()) + 'Z';
+  const start = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate());   // start recurring today (local)
+  const esc = s => String(s).replace(/([,;\\])/g, '\\$1').replace(/\n/g, '\\n');
+  let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Daily Pulse//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n';
+  rs.forEach((r) => {
     const [h, m] = r.time.split(':');
+    const label = esc(r.label || 'Daily Pulse reminder');
     ics += 'BEGIN:VEVENT\r\n' +
       'UID:dailypulse-' + r.id + '@jurnal\r\n' +
-      'DTSTART:20260101T' + pad(h) + pad(m) + '00\r\n' +
+      'DTSTAMP:' + stamp + '\r\n' +
+      'DTSTART:' + start + 'T' + pad(h) + pad(m) + '00\r\n' +
+      'DURATION:PT5M\r\n' +
       'RRULE:FREQ=DAILY\r\n' +
-      'SUMMARY:' + (r.label || 'Daily Pulse reminder') + '\r\n' +
-      'BEGIN:VALARM\r\nTRIGGER:PT0M\r\nACTION:DISPLAY\r\nDESCRIPTION:' + (r.label || 'Daily Pulse') + '\r\nEND:VALARM\r\n' +
+      'SUMMARY:' + label + '\r\n' +
+      'BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT0M\r\nDESCRIPTION:' + label + '\r\nEND:VALARM\r\n' +
       'END:VEVENT\r\n';
   });
   ics += 'END:VCALENDAR\r\n';
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
   a.download = 'daily-pulse-reminders.ics'; a.click();
   toast('Calendar file ready — open it to add');
+}
+
+// Progressive enhancement: on phones that support Notification Triggers (Chrome/Android),
+// schedule OS-level notifications that fire even when the app is fully closed. Silently
+// no-ops where unsupported (e.g. iOS) — the in-app alarm + calendar remain the fallbacks.
+async function scheduleBackgroundNotifications() {
+  try {
+    if (!('serviceWorker' in navigator) || !('showTrigger' in Notification.prototype)) return false;
+    if (Notification.permission !== 'granted') return false;
+    const reg = await navigator.serviceWorker.ready;
+    // Clear our previously-scheduled triggers so we don't stack duplicates.
+    const existing = await reg.getNotifications({ includeTriggered: true });
+    existing.forEach(n => { if (n.tag && n.tag.indexOf('dp-rem-') === 0) n.close(); });
+    const rs = DB.reminders().filter(r => r.enabled && r.time);
+    const now = new Date();
+    for (const r of rs) {
+      const [h, m] = r.time.split(':').map(Number);
+      // schedule the next 14 daily occurrences
+      for (let d = 0; d < 14; d++) {
+        const t = new Date(now); t.setDate(t.getDate() + d); t.setHours(h, m, 0, 0);
+        if (t.getTime() <= now.getTime()) continue;
+        await reg.showNotification('⏰ ' + (r.label || 'Daily Pulse'), {
+          tag: 'dp-rem-' + r.id + '-' + d,
+          body: r.label ? 'Reminder: ' + r.label : 'Time for your daily log 🔥',
+          showTrigger: new TimestampTrigger(t.getTime()),
+          requireInteraction: true,
+        });
+      }
+    }
+    return true;
+  } catch (e) { return false; }
 }
 
 /* ---------- Navigation ---------- */
