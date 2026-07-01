@@ -292,6 +292,18 @@ textarea { resize: vertical; min-height: 64px; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
 .toast.err { background: var(--bad); color: #2a0a0a; }
 
+/* Full-screen alarm */
+.alarm-overlay { display: none; position: fixed; inset: 0; z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 24px; color: #fff; animation: alarmflash 0.9s steps(1) infinite; }
+.alarm-overlay.on { display: flex; }
+@keyframes alarmflash { 0%,100% { background: #b91c1c; } 50% { background: #7f1d1d; } }
+.alarm-bell { font-size: 84px; animation: alarmshake 0.5s ease-in-out infinite; }
+@keyframes alarmshake { 0%,100% { transform: rotate(-12deg); } 50% { transform: rotate(12deg); } }
+.alarm-label { font-size: 30px; font-weight: 780; letter-spacing: -.5px; max-width: 90%; }
+.alarm-sub { font-size: 15px; opacity: .85; text-transform: uppercase; letter-spacing: 1px; }
+.alarm-btns { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 300px; margin-top: 18px; }
+.alarm-btns .btn-primary { background: #fff; color: #b91c1c; }
+.alarm-btns .btn-ghost { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.4); }
+
 .empty { text-align: center; color: var(--text-faint); padding: 30px 10px; font-size: 14px; }
 .screen { display: none; animation: fade .2s; }
 .screen.on { display: block; }

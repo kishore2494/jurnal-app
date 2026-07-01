@@ -1215,22 +1215,68 @@ function importData(file) {
 
 /* ---------- Reminders (multiple, foreground firing) ---------- */
 let reminderInterval;
+function checkReminders(catchUp) {
+  const now = new Date();
+  const curMin = now.getHours() * 60 + now.getMinutes();
+  DB.reminders().forEach(r => {
+    if (!r.enabled || !r.time) return;
+    const [h, m] = r.time.split(':').map(Number);
+    const remMin = h * 60 + m;
+    const flag = 'dp.notified.' + r.id + '.' + todayStr();
+    if (localStorage.getItem(flag)) return;
+    // exact minute when open; on reopen, catch anything due in the last 60 min
+    const due = catchUp ? (curMin >= remMin && curMin - remMin <= 60) : (curMin === remMin);
+    if (!due) return;
+    localStorage.setItem(flag, '1');
+    if ('Notification' in window && Notification.permission === 'granted')
+      new Notification('⏰ ' + (r.label || 'Daily Pulse'), { body: r.label ? 'Reminder: ' + r.label : 'Time for your daily log 🔥', tag: r.id });
+    fireAlarm(r.label || 'Reminder', r.time, catchUp && curMin !== remMin);
+  });
+}
 function setupReminders() {
   clearInterval(reminderInterval);
   if (!DB.reminders().some(r => r.enabled)) return;
-  reminderInterval = setInterval(() => {
-    const now = new Date();
-    const hhmm = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-    DB.reminders().forEach(r => {
-      if (!r.enabled || r.time !== hhmm) return;
-      const flag = 'dp.notified.' + r.id + '.' + todayStr();
-      if (localStorage.getItem(flag)) return;
-      localStorage.setItem(flag, '1');
-      if ('Notification' in window && Notification.permission === 'granted')
-        new Notification('⏰ ' + (r.label || 'Daily Pulse'), { body: r.label ? 'Reminder: ' + r.label : 'Time for your daily log 🔥', tag: r.id });
-    });
-  }, 20000);
+  reminderInterval = setInterval(() => checkReminders(false), 15000);
 }
+
+/* ---------- Loud in-app alarm (Web Audio siren + vibration + full-screen) ---------- */
+let _ac = null, _alarmTimer = null;
+function unlockAudio() { try { if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); if (_ac.state === 'suspended') _ac.resume(); } catch (e) {} }
+document.addEventListener('pointerdown', unlockAudio);
+function beep(freq) {
+  if (!_ac) return;
+  const o = _ac.createOscillator(), g = _ac.createGain(), t = _ac.currentTime;
+  o.type = 'square'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.6, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+  o.connect(g); g.connect(_ac.destination); o.start(t); o.stop(t + 0.47);
+}
+function fireAlarm(label, time, missed) {
+  const el = document.getElementById('alarm'); if (!el || el.classList.contains('on')) return;
+  el.dataset.label = label; el.dataset.time = time || '';
+  document.getElementById('alarm-label').textContent = label;
+  document.getElementById('alarm-sub').textContent = (missed ? 'missed · ' : '') + (time || '') + ' reminder';
+  el.classList.add('on');
+  unlockAudio();
+  let hi = true; beep(880);
+  _alarmTimer = setInterval(() => { beep(hi ? 988 : 740); hi = !hi; if (navigator.vibrate) navigator.vibrate(300); }, 700);
+  if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
+}
+function stopAlarm() {
+  const el = document.getElementById('alarm'); if (el) el.classList.remove('on');
+  clearInterval(_alarmTimer); _alarmTimer = null;
+  if (navigator.vibrate) navigator.vibrate(0);
+}
+document.addEventListener('click', (ev) => {
+  if (ev.target.id === 'alarm-dismiss') { stopAlarm(); return; }
+  if (ev.target.id === 'alarm-snooze') {
+    const el = document.getElementById('alarm'); const label = el.dataset.label;
+    stopAlarm();
+    toast('Snoozed 5 min'); setTimeout(() => fireAlarm(label, '', true), 5 * 60000);
+  }
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(true); });
 // Push the reminders list to the Sheet (a "Reminders" tab)
 function syncReminders() {
   const url = DB.settings().syncUrl; if (!url) return;
@@ -1294,6 +1340,7 @@ function escapeHtml(s) { return (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<
 refreshStreak();
 show('today');
 setupReminders();
+setTimeout(() => checkReminders(true), 1000);   // catch a reminder you missed while the app was closed
 pullState();   // multi-device: pull latest from your Sheet on open
 if ('serviceWorker' in navigator) {
   // If a service worker already controls this page, auto-reload once when a new
