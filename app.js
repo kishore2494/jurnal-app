@@ -1243,7 +1243,10 @@ function checkReminders(catchUp) {
 function setupReminders() {
   clearInterval(reminderInterval);
   if (!DB.reminders().some(r => r.enabled)) return;
-  reminderInterval = setInterval(() => checkReminders(false), 15000);
+  // Fire the moment a reminder's time is reached (or just after) — not only on the exact
+  // minute. `true` = "due and not yet acknowledged today", so a missed tick self-heals.
+  reminderInterval = setInterval(() => checkReminders(true), 10000);
+  checkReminders(true);   // check immediately too
 }
 
 /* ---------- Loud in-app alarm (Web Audio siren + vibration + full-screen) ---------- */
