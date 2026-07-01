@@ -5,6 +5,8 @@
 
 'use strict';
 
+const APP_VERSION = 'v30';   // shown in More ▸ About so you can confirm the build on each device
+
 /* ---------- Config: your habits (from the Daily Pulse form) ---------- */
 const HABITS = [
   { key: 'workout',     emoji: '🏋️', label: 'Workout' },
@@ -1138,6 +1140,7 @@ function renderSettings() {
       </div>
       <div class="btn-row" style="margin-top:10px">
         <button class="btn btn-primary btn-sm" id="rem-test">🔔 Test alarm</button>
+        <button class="btn btn-ghost btn-sm" id="rem-test15">⏱ Test in 15 sec</button>
         <button class="btn btn-ghost btn-sm" id="rem-calendar">📅 Add to phone calendar</button>
       </div>
       <div class="hint" style="margin-top:8px">The full-screen alarm fires while the app is open, and catches missed ones when you reopen. For alarms even when the app is fully closed, tap <b>Add to phone calendar</b> (adds daily repeating alerts your phone rings natively).</div>
@@ -1154,7 +1157,7 @@ function renderSettings() {
       <input type="file" id="import-file" accept="application/json" style="display:none">
     </div>
     <div class="card"><h2>ℹ️ About</h2>
-      <div class="hint">Daily Pulse · local-first. Your data stays on this device${s.syncUrl?' and syncs to your Google Sheet':''}.
+      <div class="hint">Daily Pulse · <b>${APP_VERSION}</b> · local-first. Your data stays on this device${s.syncUrl?' and syncs to your Google Sheet':''}.
       Add to Home Screen to use it like a native app, offline.</div></div>
   `;
 }
@@ -1185,6 +1188,13 @@ document.addEventListener('click', async (ev) => {
     unlockAudio();
     if ('Notification' in window && Notification.permission !== 'granted') Notification.requestPermission();
     fireAlarm('Test alarm ✅', '', false);
+    return;
+  }
+  if (ev.target.id === 'rem-test15') {
+    unlockAudio();
+    if ('Notification' in window && Notification.permission !== 'granted') await Notification.requestPermission();
+    toast('Alarm in 15s — keep this screen open 👀');
+    setTimeout(() => fireAlarm('Scheduled test 🔔 (15s)', '', false), 15000);
     return;
   }
   if (ev.target.id === 'rem-calendar') { exportReminderCalendar(); return; }
@@ -1221,7 +1231,7 @@ function importData(file) {
 }
 
 /* ---------- Reminders (multiple, foreground firing) ---------- */
-let reminderInterval;
+let reminderInterval, reminderTimeouts = [];
 function checkReminders(catchUp) {
   const now = new Date();
   const curMin = now.getHours() * 60 + now.getMinutes();
@@ -1242,11 +1252,22 @@ function checkReminders(catchUp) {
 }
 function setupReminders() {
   clearInterval(reminderInterval);
-  if (!DB.reminders().some(r => r.enabled)) return;
-  // Fire the moment a reminder's time is reached (or just after) — not only on the exact
-  // minute. `true` = "due and not yet acknowledged today", so a missed tick self-heals.
+  reminderTimeouts.forEach(clearTimeout); reminderTimeouts = [];
+  const rems = DB.reminders().filter(r => r.enabled && r.time);
+  if (!rems.length) return;
+  // 1) Polling backup every 10s — self-heals a missed/late tick (`true` = due & unacknowledged).
   reminderInterval = setInterval(() => checkReminders(true), 10000);
-  checkReminders(true);   // check immediately too
+  // 2) Precise per-reminder timer to the exact next occurrence today. A setTimeout aimed at the
+  //    exact moment is far more reliable than waiting for a poll tick to land on the right minute.
+  const now = new Date();
+  rems.forEach(r => {
+    const [h, m] = r.time.split(':').map(Number);
+    const target = new Date(now); target.setHours(h, m, 0, 0);
+    const ms = target - now;
+    if (ms < -60000 || ms > 12 * 3600 * 1000) return;   // long past → poll/catch-up; too far → skip
+    reminderTimeouts.push(setTimeout(() => checkReminders(true), Math.max(0, ms) + 300));
+  });
+  checkReminders(true);   // check immediately too (catches an already-due one)
 }
 
 /* ---------- Loud in-app alarm (Web Audio siren + vibration + full-screen) ---------- */
