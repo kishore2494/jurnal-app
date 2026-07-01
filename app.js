@@ -1137,9 +1137,10 @@ function renderSettings() {
         <button class="btn btn-primary btn-sm" id="rem-add">Add</button>
       </div>
       <div class="btn-row" style="margin-top:10px">
+        <button class="btn btn-primary btn-sm" id="rem-test">🔔 Test alarm</button>
         <button class="btn btn-ghost btn-sm" id="rem-calendar">📅 Add to phone calendar</button>
       </div>
-      <div class="hint" style="margin-top:8px">In-app reminders fire while the app is open. For alarms even when it's closed, tap <b>Add to phone calendar</b> — it adds them as daily repeating events with alerts.</div>
+      <div class="hint" style="margin-top:8px">The full-screen alarm fires while the app is open, and catches missed ones when you reopen. For alarms even when the app is fully closed, tap <b>Add to phone calendar</b> (adds daily repeating alerts your phone rings natively).</div>
     </div>
     <div class="card">
       <h2>💾 Your data</h2>
@@ -1180,6 +1181,12 @@ document.addEventListener('click', async (ev) => {
   if (rt) { const r = DB.reminders(); const x = r.find(z => z.id === rt.dataset.remToggle); if (x) x.enabled = !x.enabled; DB.saveReminders(r); renderSettings(); syncReminders(); setupReminders(); return; }
   const rd = ev.target.closest('[data-rem-del]');
   if (rd) { DB.saveReminders(DB.reminders().filter(z => z.id !== rd.dataset.remDel)); renderSettings(); syncReminders(); setupReminders(); toast('Reminder deleted'); return; }
+  if (ev.target.id === 'rem-test') {
+    unlockAudio();
+    if ('Notification' in window && Notification.permission !== 'granted') Notification.requestPermission();
+    fireAlarm('Test alarm ✅', '', false);
+    return;
+  }
   if (ev.target.id === 'rem-calendar') { exportReminderCalendar(); return; }
   if (ev.target.id === 'export') exportData();
   if (ev.target.id === 'export-csv') exportCSV();
@@ -1224,8 +1231,8 @@ function checkReminders(catchUp) {
     const remMin = h * 60 + m;
     const flag = 'dp.notified.' + r.id + '.' + todayStr();
     if (localStorage.getItem(flag)) return;
-    // exact minute when open; on reopen, catch anything due in the last 60 min
-    const due = catchUp ? (curMin >= remMin && curMin - remMin <= 60) : (curMin === remMin);
+    // when open: fire at the exact minute. on reopen: fire anything due earlier today (still unacknowledged).
+    const due = catchUp ? (curMin >= remMin) : (curMin === remMin);
     if (!due) return;
     localStorage.setItem(flag, '1');
     if ('Notification' in window && Notification.permission === 'granted')
