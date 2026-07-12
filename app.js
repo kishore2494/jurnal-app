@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v32';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v33';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ---------- */
 const HABITS = [
@@ -1246,6 +1246,7 @@ function renderSettings() {
   document.getElementById('screen-title').textContent = 'More';
   document.getElementById('screen-sub').textContent = 'Sync, reminders, data';
   const s = DB.settings();
+  if (!s.ntfyTopic) { s.ntfyTopic = 'dp-' + randomToken(); DB.saveSettings(s); }   // one secret topic per user
   document.getElementById('s-settings').innerHTML = `
     <div class="card">
       <h2>☁️ Sync &amp; login <span class="hint">${s.syncUrl ? 'connected ●' : 'not connected'}</span></h2>
@@ -1282,6 +1283,20 @@ function renderSettings() {
         <button class="btn btn-ghost btn-sm" id="rem-calendar">📅 Add to phone calendar</button>
       </div>
       <div class="hint" style="margin-top:8px">The full-screen alarm fires while the app is open, and catches missed ones when you reopen. For alarms even when the app is fully closed, tap <b>Add to phone calendar</b> (adds daily repeating alerts your phone rings natively).</div>
+    </div>
+    <div class="card">
+      <h2>🔔 Background alarms · ntfy <span class="hint">${s.ntfyOn ? 'ON ●' : 'off'}</span></h2>
+      <div class="hint">Rings even when this app is <b>closed & your phone is locked</b>. One-time setup with the free <b>ntfy</b> app.</div>
+      <div class="task-add" style="margin-top:8px">
+        <input type="text" id="ntfy-topic" value="${escapeHtml(s.ntfyTopic || '')}" placeholder="your-secret-topic" style="flex:1" spellcheck="false" autocapitalize="off">
+        <button class="btn btn-ghost btn-sm" id="ntfy-copy">Copy</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn ${s.ntfyOn ? 'btn-ghost' : 'btn-primary'} btn-sm" id="ntfy-enable">${s.ntfyOn ? 'Turn OFF' : 'Turn ON'}</button>
+        <button class="btn btn-ghost btn-sm" id="ntfy-open">Open ntfy</button>
+        <button class="btn btn-ghost btn-sm" id="ntfy-test">Test push</button>
+      </div>
+      <div class="hint" style="margin-top:8px"><b>Setup:</b> ① Install <b>ntfy</b> (Play Store / App&nbsp;Store). ② In ntfy tap ➕ and subscribe to the topic <b>${escapeHtml(s.ntfyTopic || '—')}</b>. ③ Come back, tap <b>Turn ON</b>, then <b>Test push</b> — your phone should buzz. Reminders are sent up to 3 days ahead, so open this app at least every few days.</div>
     </div>
     <div class="card">
       <h2>💾 Your data</h2>
@@ -1336,6 +1351,32 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (ev.target.id === 'rem-calendar') { exportReminderCalendar(); return; }
+  if (ev.target.id === 'ntfy-enable') {
+    s.ntfyOn = !s.ntfyOn;
+    if (s.ntfyOn && !s.ntfyTopic) s.ntfyTopic = 'dp-' + randomToken();
+    DB.saveSettings(s); renderSettings();
+    if (s.ntfyOn) { scheduleNtfy(); toast('Background alarms ON — subscribe to the topic in the ntfy app'); }
+    else toast('Background alarms off');
+    return;
+  }
+  if (ev.target.id === 'ntfy-copy') {
+    const t = (document.getElementById('ntfy-topic') || {}).value || s.ntfyTopic || '';
+    try { await navigator.clipboard.writeText(t); toast('Topic copied'); } catch (_) { toast(t); }
+    return;
+  }
+  if (ev.target.id === 'ntfy-open') {
+    const t = (document.getElementById('ntfy-topic') || {}).value || s.ntfyTopic || '';
+    window.open('https://ntfy.sh/' + encodeURIComponent(t), '_blank');
+    return;
+  }
+  if (ev.target.id === 'ntfy-test') {
+    const t = (document.getElementById('ntfy-topic') || {}).value || s.ntfyTopic || '';
+    if (!t) { toast('Set a topic first', true); return; }
+    toast('Sending test push…');
+    const ok = await ntfyPublish(t, 'Test push ✅ — ntfy works!', null);
+    toast(ok ? 'Sent ✅ — check your phone / ntfy app' : 'Failed — check the topic & connection', !ok);
+    return;
+  }
   if (ev.target.id === 'export') exportData();
   if (ev.target.id === 'export-csv') exportCSV();
   if (ev.target.id === 'import') document.getElementById('import-file').click();
@@ -1344,6 +1385,7 @@ document.addEventListener('click', async (ev) => {
 document.addEventListener('input', (ev) => {
   const t = ev.target.closest('[data-rem-time]'); if (t) { const r = DB.reminders(); const x = r.find(z => z.id === t.dataset.remTime); if (x) { x.time = t.value; DB.saveReminders(r); setupReminders(); } return; }
   const l = ev.target.closest('[data-rem-label]'); if (l) { const r = DB.reminders(); const x = r.find(z => z.id === l.dataset.remLabel); if (x) { x.label = l.value; DB.saveReminders(r); } return; }
+  if (ev.target.id === 'ntfy-topic') { const s = DB.settings(); s.ntfyTopic = ev.target.value.trim(); DB.saveSettings(s); return; }
 });
 document.addEventListener('change', (ev) => {
   if (ev.target.id === 'import-file' && ev.target.files[0]) importData(ev.target.files[0]);
@@ -1407,6 +1449,7 @@ function setupReminders() {
   });
   checkReminders(true);   // check immediately too (catches an already-due one)
   scheduleBackgroundNotifications();   // + OS-level alarms even when the app is closed (where supported)
+  scheduleNtfy();                      // + ntfy push (rings via the ntfy app even when this app is closed)
 }
 
 /* ---------- Loud in-app alarm (Web Audio siren + vibration + full-screen) ---------- */
@@ -1446,7 +1489,7 @@ document.addEventListener('click', (ev) => {
     toast('Snoozed 5 min'); setTimeout(() => fireAlarm(label, '', true), 5 * 60000);
   }
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(true); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkReminders(true); scheduleNtfy(); } });
 // Push the reminders list to the Sheet (a "Reminders" tab)
 function syncReminders() {
   const url = DB.settings().syncUrl; if (!url) return;
@@ -1483,6 +1526,59 @@ function exportReminderCalendar() {
   a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
   a.download = 'daily-pulse-reminders.ics'; a.click();
   toast('Calendar file ready — open it to add');
+}
+
+/* ---------- ntfy: real background push (rings even when the app is closed) ----------
+   Uses ntfy.sh scheduled delivery: we POST each upcoming reminder occurrence with a
+   future delivery time (up to ntfy.sh's 3-day limit). The ntfy phone app, subscribed
+   to your secret topic, then rings natively at that time — no app-open needed. */
+function randomToken() {
+  const a = new Uint8Array(9);
+  (crypto || window.crypto).getRandomValues(a);
+  return Array.from(a, b => b.toString(36)).join('').slice(0, 12);
+}
+async function ntfyPublish(topic, message, atEpochSec) {
+  if (!topic) return false;
+  try {
+    const body = {
+      topic: topic,
+      title: '⏰ ' + (message || 'Daily Pulse'),
+      message: message || 'Time for your daily log 🔥',
+      priority: 5,                       // max = loud + heads-up pop-up on the lock screen
+      tags: ['alarm_clock'],
+    };
+    if (atEpochSec) body.delay = String(atEpochSec);   // schedule for a future unix time
+    const res = await fetch('https://ntfy.sh/', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    return res.ok;
+  } catch (e) { return false; }
+}
+// Schedule the next ~3 days of reminder occurrences to ntfy, de-duped so re-opening the
+// app doesn't stack duplicate pushes.
+async function scheduleNtfy() {
+  const s = DB.settings();
+  if (!s.ntfyOn || !s.ntfyTopic) return;
+  const rs = DB.reminders().filter(r => r.enabled && r.time);
+  if (!rs.length) return;
+  let sent = {};
+  try { sent = JSON.parse(localStorage.getItem('dp.ntfy.sent') || '{}'); } catch (_) {}
+  const now = Date.now();
+  const horizon = now + 3 * 24 * 3600 * 1000 - 5 * 60000;   // just under ntfy.sh's 3-day cap
+  for (const r of rs) {
+    const [h, m] = r.time.split(':').map(Number);
+    for (let d = 0; d < 3; d++) {
+      const t = new Date(); t.setDate(t.getDate() + d); t.setHours(h, m, 0, 0);
+      const ts = t.getTime();
+      if (ts <= now + 30000 || ts > horizon) continue;       // must be ≥10s out and within 3 days
+      const key = r.id + '@' + ts;
+      if (sent[key]) continue;
+      const ok = await ntfyPublish(s.ntfyTopic, r.label || 'Daily Pulse reminder', Math.floor(ts / 1000));
+      if (ok) sent[key] = 1;
+    }
+  }
+  Object.keys(sent).forEach(k => { const ts = +String(k).split('@')[1]; if (ts && ts < now - 3600000) delete sent[k]; });
+  localStorage.setItem('dp.ntfy.sent', JSON.stringify(sent));
 }
 
 // Progressive enhancement: on phones that support Notification Triggers (Chrome/Android),
