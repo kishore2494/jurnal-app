@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v33';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v34';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ---------- */
 const HABITS = [
@@ -1540,12 +1540,17 @@ function randomToken() {
 async function ntfyPublish(topic, message, atEpochSec) {
   if (!topic) return false;
   try {
+    // Tapping the push opens the app straight into the loud full-screen alarm (?alarm=<label>).
+    const appUrl = location.href.split('#')[0].split('?')[0];
+    const clickUrl = appUrl + '?alarm=' + encodeURIComponent(message || 'Reminder');
     const body = {
       topic: topic,
       title: '⏰ ' + (message || 'Daily Pulse'),
       message: message || 'Time for your daily log 🔥',
       priority: 5,                       // max = loud + heads-up pop-up on the lock screen
       tags: ['alarm_clock'],
+      click: clickUrl,                   // tap the notification → full-screen alarm in the app
+      actions: [{ action: 'view', label: '⏰ Open alarm', url: clickUrl, clear: false }],
     };
     if (atEpochSec) body.delay = String(atEpochSec);   // schedule for a future unix time
     const res = await fetch('https://ntfy.sh/', {
@@ -1648,6 +1653,18 @@ refreshStreak();
 show('today');
 setupReminders();
 setTimeout(() => checkReminders(true), 1000);   // catch a reminder you missed while the app was closed
+// Opened by tapping an ntfy push (?alarm=<label>) → go straight into the loud full-screen alarm.
+(function () {
+  try {
+    const p = new URLSearchParams(location.search);
+    if (p.has('alarm')) {
+      const label = p.get('alarm') || 'Reminder';
+      history.replaceState(null, '', location.pathname);   // clean URL so a refresh won't re-fire
+      unlockAudio();
+      setTimeout(() => fireAlarm(label, '', false), 400);
+    }
+  } catch (e) {}
+})();
 pullState();   // multi-device: pull latest from your Sheet on open
 if ('serviceWorker' in navigator) {
   // If a service worker already controls this page, auto-reload once when a new
