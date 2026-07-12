@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v34';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v35';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ---------- */
 const HABITS = [
@@ -1269,6 +1269,7 @@ function renderSettings() {
           <div class="rem-body">
             <input type="time" data-rem-time="${r.id}" value="${r.time||''}">
             <input type="text" data-rem-label="${r.id}" value="${escapeHtml(r.label||'')}" placeholder="What for? (e.g. Log my day, Drink water)">
+            <button class="rem-mode" data-rem-mode="${r.id}" title="tap to switch">${(r.mode||'alarm')==='alarm'?'⏰ Full-screen alarm':'🔔 Just a notification'}</button>
           </div>
           <button class="del" data-rem-del="${r.id}">×</button>
         </div>`).join('') : '<div class="empty">No reminders yet. Add one below 👇</div>'}
@@ -1335,6 +1336,8 @@ document.addEventListener('click', async (ev) => {
   }
   const rt = ev.target.closest('[data-rem-toggle]');
   if (rt) { const r = DB.reminders(); const x = r.find(z => z.id === rt.dataset.remToggle); if (x) x.enabled = !x.enabled; DB.saveReminders(r); renderSettings(); syncReminders(); setupReminders(); return; }
+  const rm = ev.target.closest('[data-rem-mode]');
+  if (rm) { const r = DB.reminders(); const x = r.find(z => z.id === rm.dataset.remMode); if (x) { x.mode = (x.mode || 'alarm') === 'alarm' ? 'notify' : 'alarm'; DB.saveReminders(r); renderSettings(); syncReminders(); setupReminders(); toast(x.mode === 'alarm' ? 'Full-screen alarm ⏰' : 'Just a notification 🔔'); } return; }
   const rd = ev.target.closest('[data-rem-del]');
   if (rd) { DB.saveReminders(DB.reminders().filter(z => z.id !== rd.dataset.remDel)); renderSettings(); syncReminders(); setupReminders(); toast('Reminder deleted'); return; }
   if (ev.target.id === 'rem-test') {
@@ -1427,7 +1430,8 @@ function checkReminders(catchUp) {
     localStorage.setItem(flag, '1');
     if ('Notification' in window && Notification.permission === 'granted')
       new Notification('⏰ ' + (r.label || 'Daily Pulse'), { body: r.label ? 'Reminder: ' + r.label : 'Time for your daily log 🔥', tag: r.id });
-    fireAlarm(r.label || 'Reminder', r.time, catchUp && curMin !== remMin);
+    if ((r.mode || 'alarm') === 'alarm') fireAlarm(r.label || 'Reminder', r.time, catchUp && curMin !== remMin);
+    else toast('🔔 ' + (r.label || 'Reminder'));   // "just a notification" mode — no full-screen alarm
   });
 }
 function setupReminders() {
@@ -1537,21 +1541,22 @@ function randomToken() {
   (crypto || window.crypto).getRandomValues(a);
   return Array.from(a, b => b.toString(36)).join('').slice(0, 12);
 }
-async function ntfyPublish(topic, message, atEpochSec) {
+async function ntfyPublish(topic, message, atEpochSec, mode) {
   if (!topic) return false;
   try {
-    // Tapping the push opens the app straight into the loud full-screen alarm (?alarm=<label>).
+    const alarm = (mode || 'alarm') === 'alarm';
     const appUrl = location.href.split('#')[0].split('?')[0];
-    const clickUrl = appUrl + '?alarm=' + encodeURIComponent(message || 'Reminder');
+    // Alarm mode → tapping opens the loud full-screen alarm. Notify mode → just opens the app.
+    const clickUrl = alarm ? appUrl + '?alarm=' + encodeURIComponent(message || 'Reminder') : appUrl;
     const body = {
       topic: topic,
       title: '⏰ ' + (message || 'Daily Pulse'),
       message: message || 'Time for your daily log 🔥',
-      priority: 5,                       // max = loud + heads-up pop-up on the lock screen
-      tags: ['alarm_clock'],
-      click: clickUrl,                   // tap the notification → full-screen alarm in the app
-      actions: [{ action: 'view', label: '⏰ Open alarm', url: clickUrl, clear: false }],
+      priority: alarm ? 5 : 3,           // 5 = max/loud heads-up; 3 = normal notification
+      tags: [alarm ? 'alarm_clock' : 'bell'],
+      click: clickUrl,
     };
+    if (alarm) body.actions = [{ action: 'view', label: '⏰ Open alarm', url: clickUrl, clear: false }];
     if (atEpochSec) body.delay = String(atEpochSec);   // schedule for a future unix time
     const res = await fetch('https://ntfy.sh/', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -1578,7 +1583,7 @@ async function scheduleNtfy() {
       if (ts <= now + 30000 || ts > horizon) continue;       // must be ≥10s out and within 3 days
       const key = r.id + '@' + ts;
       if (sent[key]) continue;
-      const ok = await ntfyPublish(s.ntfyTopic, r.label || 'Daily Pulse reminder', Math.floor(ts / 1000));
+      const ok = await ntfyPublish(s.ntfyTopic, r.label || 'Daily Pulse reminder', Math.floor(ts / 1000), r.mode);
       if (ok) sent[key] = 1;
     }
   }

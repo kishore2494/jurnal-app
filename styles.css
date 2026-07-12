@@ -135,9 +135,13 @@ textarea { resize: vertical; min-height: 64px; }
 .rem { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--border); }
 .rem.off { opacity: .5; }
 .rem-toggle { background: none; border: none; font-size: 20px; cursor: pointer; flex: 0 0 auto; padding: 0; }
-.rem-body { flex: 1; display: flex; gap: 8px; min-width: 0; }
+.rem-body { flex: 1; display: flex; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .rem-body input[type=time] { max-width: 112px; flex: 0 0 auto; }
 .rem-body input[type=text] { flex: 1; min-width: 0; }
+.rem-mode { flex: 1 0 100%; text-align: left; background: var(--surface2, rgba(255,255,255,.05));
+  border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px;
+  font-size: 12.5px; cursor: pointer; }
+.rem-mode:hover { border-color: var(--accent, #fb923c); }
 
 /* Dashboard */
 .range-row { display: flex; gap: 7px; margin-bottom: 14px; }
