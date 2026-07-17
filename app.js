@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v42';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v43';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ----------
    DEFAULT_HABITS is only the starting point — the Customize screen
@@ -31,12 +31,13 @@ let HABITS = habitCfg().filter(h => !h.hidden);
 function reloadCfg() {
   HABITS = habitCfg().filter(h => !h.hidden);
   if (typeof actCfg === 'function') TIME_ACTS_ALL = actCfg();
+  if (typeof deepCfg === 'function') DEEP_SECTIONS = cookDeep(deepCfg());
 }
 
 /* Deep-log sections — the bridge to your full Life Intelligence Tracker.
    Data-driven: add fields here and they appear in the form AND sync to your Sheet
    (also add the new keys to COLUMNS in google-apps-script/Code.gs). */
-const DEEP_SECTIONS = [
+const DEFAULT_DEEP_SECTIONS = [
   { id: 'mind', title: '🧠 Mind & Focus',
     scales: [{key:'focus',label:'Focus quality'},{key:'productivity',label:'Productivity'},{key:'clarity',label:'Clarity of mind'},{key:'motivation',label:'Motivation'}] },
   { id: 'wellbeing', title: '😌 Wellbeing',
@@ -68,6 +69,20 @@ const DEEP_SECTIONS = [
   { id: 'skincare', title: '🧴 Skin care',
     checks: { key: 'skinRoutine', label: 'Tick what you did', options: ['Allergy lotion on shoulder (3h before bath)'] } },
 ];
+/* Deep-log customization: dp.deepcfg stores the user's edited copy of the
+   sections (titles, hidden flags, renamed/hidden/added fields). DEEP_SECTIONS
+   is the cooked, visible-only view the Today screen renders. */
+function deepCfg() { const s = localStorage.getItem('dp.deepcfg'); return s ? JSON.parse(s) : JSON.parse(JSON.stringify(DEFAULT_DEEP_SECTIONS)); }
+function saveDeepCfg(cfg) { localStorage.setItem('dp.deepcfg', JSON.stringify(cfg)); reloadCfg(); pushState(); }
+function cookDeep(cfg) {
+  return cfg.filter(sec => !sec.hidden).map(sec => Object.assign({}, sec, {
+    scales: (sec.scales || []).filter(f => !f.hidden),
+    nums: (sec.nums || []).filter(f => !f.hidden),
+    texts: (sec.texts || []).filter(f => !f.hidden),
+    checks: sec.checks && !sec.checks.hidden ? sec.checks : undefined,
+  }));
+}
+let DEEP_SECTIONS = cookDeep(deepCfg());
 
 /* Default gym routine — fully editable in the Gym tab. */
 const DEFAULT_EXERCISES = [
@@ -272,7 +287,7 @@ function pushState(now) {
       entries: DB.entries(), tasks: DB.tasks(), notes: DB.notes(), plans: DB.plans(),
       reminders: DB.reminders(), gym: DB.gym(), exercises: DB.exercises(),
       timelog: DB.timelog(), timeacts: DB.timeacts(), events: DB.events(),
-      docs: DB.docs(), habitcfg: habitCfg(), actcfg: actCfg() };
+      docs: DB.docs(), habitcfg: habitCfg(), actcfg: actCfg(), deepcfg: deepCfg(), gymcfg: gymCfg() };
     fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) }).catch(() => {});
   };
   now ? send() : (pushTimer = setTimeout(send, 1200));
@@ -342,7 +357,7 @@ function applyRemoteState(remote) {
   // a union-of-ids would never propagate those. So when the other device changed more recently,
   // adopt its whole list (so done/edit/reorder/delete all sync). Local-newer keeps local.
   if (remoteNewer) {
-    [['tasks', 'dp.tasks'], ['notes', 'dp.notes'], ['plans', 'dp.plans'], ['reminders', 'dp.reminders'], ['exercises', 'dp.exercises'], ['timeacts', 'dp.timeacts'], ['events', 'dp.events'], ['docs', 'dp.docs'], ['habitcfg', 'dp.habitcfg'], ['actcfg', 'dp.actcfg']].forEach(([key, store]) => {
+    [['tasks', 'dp.tasks'], ['notes', 'dp.notes'], ['plans', 'dp.plans'], ['reminders', 'dp.reminders'], ['exercises', 'dp.exercises'], ['timeacts', 'dp.timeacts'], ['events', 'dp.events'], ['docs', 'dp.docs'], ['habitcfg', 'dp.habitcfg'], ['actcfg', 'dp.actcfg'], ['deepcfg', 'dp.deepcfg'], ['gymcfg', 'dp.gymcfg']].forEach(([key, store]) => {
       if (!remote[key]) return;
       if (JSON.stringify(remote[key]) !== (localStorage.getItem(store) || 'null')) {
         localStorage.setItem(store, JSON.stringify(remote[key])); changed = true;
@@ -793,6 +808,34 @@ let gymDayId = 'day1';
 let gymView = 'home';
 let openExr = new Set();
 
+/* Gym customization: dp.gymcfg = { ex: {exId: {name?, sets?, tip?, hidden?}},
+   custom: {groupId: [{id:'cx…', name, sets, tip}]} }. The cooked* helpers apply
+   overrides + customs on top of WORKOUT_PLAN, so the plan file stays pristine. */
+function gymCfg() { const s = localStorage.getItem('dp.gymcfg'); return s ? JSON.parse(s) : { ex: {}, custom: {} }; }
+function saveGymCfg(c) { localStorage.setItem('dp.gymcfg', JSON.stringify(c)); pushState(); }
+function cookedGroupById(id) {
+  const g = groupById(id); const cfg = gymCfg();
+  const own = g.exercises.map(e => Object.assign({}, e, cfg.ex[e.id] || {}));
+  const extra = (cfg.custom[g.id] || []).map(e => Object.assign({ group: g.id, anim: '' }, e, cfg.ex[e.id] || {}));
+  return Object.assign({}, g, { exercises: own.concat(extra).filter(e => !e.hidden) });
+}
+function cookedBlocks(day) {
+  const cardio = cookedGroupById('cardio'), main = cookedGroupById(day.main), ab = cookedGroupById(day.ab);
+  return [
+    { title: '🏃 Cardio', color: cardio.color, exercises: cardio.exercises },
+    { title: main.emoji + ' ' + main.name, color: main.color, exercises: main.exercises },
+    { title: ab.emoji + ' ' + ab.name, color: ab.color, exercises: ab.exercises },
+  ];
+}
+function cookedDayEx(day) { return cookedBlocks(day).reduce((a, b) => a.concat(b.exercises), []); }
+function exName(id) {
+  const cfg = gymCfg();
+  const e = WORKOUT_BY_ID[id];
+  if (e) return (cfg.ex[id] && cfg.ex[id].name) || e.name;
+  for (const gid in cfg.custom) { const c = cfg.custom[gid].find(x => x.id === id); if (c) return (cfg.ex[id] && cfg.ex[id].name) || c.name; }
+  return id;
+}
+
 function gymStreak() {
   const g = DB.gym(); let n = 0; let cur = todayStr();
   const has = d => g[d] && g[d].done && Object.values(g[d].done).some(Boolean);
@@ -843,10 +886,10 @@ function renderGym() {
 // HOME: 6 day labels (history-list style)
 function gymHomeHTML() {
   const rows = WORKOUT_DAYS.map(d => {
-    const ex = dayExercises(d);
+    const ex = cookedDayEx(d);
     const done = ex.filter(e => gymDraft.done[dkey(d.id, e.id)]).length;
-    const main = dayMain(d);
-    const ab = groupById(d.ab);
+    const main = cookedGroupById(d.main);
+    const ab = cookedGroupById(d.ab);
     return `<div class="day-row" data-day="${d.id}">
       <div class="day-dot" style="background:${main.color}">${main.emoji}</div>
       <div class="day-info">
@@ -871,9 +914,9 @@ function gymHomeHTML() {
 // DAY: that day's workouts on the next page
 function gymDayHTML() {
   const day = WORKOUT_DAYS.find(d => d.id === gymDayId) || WORKOUT_DAYS[0];
-  const main = dayMain(day);
-  const blocks = dayBlocks(day);
-  const ex = dayExercises(day);
+  const main = cookedGroupById(day.main);
+  const blocks = cookedBlocks(day);
+  const ex = cookedDayEx(day);
   const done = ex.filter(e => gymDraft.done[dkey(day.id, e.id)]).length;
   const blockCards = blocks.map(b => `
     <div class="card">
@@ -903,7 +946,7 @@ document.addEventListener('click', async (ev) => {
   if (ev.target.id === 'gym-save') {
     DB.putGymDay(gymDate, gymDraft);
     const doneIds = Object.keys(gymDraft.done).filter(k => gymDraft.done[k]);
-    const detail = doneIds.map(k => { const exId = k.split('/').pop(); const e = WORKOUT_BY_ID[exId]; const nm = e ? e.name : exId; return nm + (gymDraft.log[k] ? ` (${gymDraft.log[k]})` : ''); }).join('; ');
+    const detail = doneIds.map(k => { const nm = exName(k.split('/').pop()); return nm + (gymDraft.log[k] ? ` (${gymDraft.log[k]})` : ''); }).join('; ');
     const entry = DB.entry(gymDate) || { habits: {} };
     entry.workoutsDone = doneIds.length; entry.workoutDetail = detail;
     entry.updatedAt = new Date().toISOString();
@@ -1508,18 +1551,18 @@ function renderDash() {
   const doneExIdsOn = d => new Set(Object.keys(gym[d].done || {}).filter(k => gym[d].done[k]).map(k => k.split('/').pop()));
   const groupSessions = g => gymDates.filter(d => { const s = doneExIdsOn(d); return g.exercises.some(x => s.has(x.id)); }).length;
   const gymOrder = ['cardio','chest','triceps','shoulder','biceps','back','legs','abs','side','core'];
-  const gymStats = gymOrder.map(id => { const g = groupById(id); return { g, n: groupSessions(g) }; }).filter(x => x.g);
+  const gymStats = gymOrder.map(id => { const g = cookedGroupById(id); return { g, n: groupSessions(g) }; }).filter(x => x.g);
   const gymMax = Math.max(1, ...gymStats.map(x => x.n));
   const totalWorkouts = gymDates.filter(d => Object.values(gym[d].done||{}).some(Boolean)).length;
   const gymBars = gymStats.map(x => `<div class="bar-row"><span class="name">${x.g.emoji} ${x.g.name}</span>
       <span class="bar-track"><span class="bar-fill" style="width:${Math.round(x.n/gymMax*100)}%;background:${x.g.color}"></span></span>
       <span class="pct">${x.n}</span></div>`).join('');
 
-  // ---- Wellbeing / deep-log averages (only those you've logged) ----
-  const scaleDefs = [
-    {k:'focus',l:'🎯 Focus'},{k:'productivity',l:'⚡ Productivity'},{k:'stress',l:'😰 Stress'},
-    {k:'happiness',l:'😊 Happiness'},{k:'sleepQuality',l:'😴 Sleep quality'},{k:'lifeSatisfaction',l:'🌱 Life satisfaction'}
-  ];
+  // ---- Wellbeing / deep-log averages — DYNAMIC: every visible 1-10 field
+  // (including ones you add in Customize) shows here once you've logged it ----
+  const scaleDefs = [];
+  deepCfg().forEach(sec => { if (sec.hidden) return;
+    (sec.scales || []).forEach(f => { if (!f.hidden) scaleDefs.push({ k: f.key, l: f.label }); }); });
   const scaleBars = scaleDefs.map(s => ({ s, a: avg(s.k) })).filter(x => x.a !== '–')
     .map(x => `<div class="bar-row"><span class="name">${x.s.l}</span>
       <span class="bar-track"><span class="bar-fill" style="width:${x.a/10*100}%"></span></span>
@@ -1863,11 +1906,77 @@ function renderCustom() {
         <input type="text" id="cfg-new-act" placeholder="New activity… (e.g. Cooking)" autocomplete="off">
         <button class="btn btn-primary btn-sm" id="cfg-add-act">Add</button>
       </div>
+    </div>
+    <div class="card">
+      <h2>🧠 Deep log sections <span class="hint">rename · hide · add your own fields</span></h2>
+      ${deepCfg().map(sec => deepSecEditor(sec)).join('')}
+      <div class="hint" style="margin-top:8px">New fields show up on the Log screen and in Stats averages automatically. The Google-Sheet Log columns stay fixed — custom fields live in the app + device sync.</div>
+    </div>
+    <div class="card">
+      <h2>🏋️ Gym workouts <span class="hint">rename · sets · hide · add exercises</span></h2>
+      ${WORKOUT_PLAN.map(g => gymGroupEditor(g)).join('')}
     </div>`;
   enableDrag(document.getElementById('cfg-habits'), ids => {
     const cfg = habitCfg();
     saveHabitCfg(ids.map(id => cfg.find(h => h.key === id)).filter(Boolean)); renderCustom();
   });
+}
+/* --- Deep-log section editor (one collapsible <details> per section) --- */
+const DFIELD_LISTS = [['scales', 'scale 1-10'], ['nums', 'number'], ['texts', 'text']];
+function deepSecEditor(sec) {
+  const fieldRow = (list, f) => `<div class="cfg-row ${f.hidden ? 'hid' : ''}">
+      <span class="cfg-type">${list === 'scales' ? '1-10' : list === 'nums' ? '123' : 'Aa'}</span>
+      <input class="cfg-name" data-dfield-label="${sec.id}:${list}:${f.key}" value="${escapeHtml(f.label)}">
+      <button class="cfg-hide" data-dfield-hide="${sec.id}:${list}:${f.key}">${f.hidden ? '🙈' : '👁'}</button>
+      ${f.custom ? `<button class="del" data-dfield-del="${sec.id}:${list}:${f.key}">×</button>` : '<span style="width:23px"></span>'}
+    </div>`;
+  const fields = DFIELD_LISTS.map(([list]) => (sec[list] || []).map(f => fieldRow(list, f)).join('')).join('');
+  const checks = sec.checks ? `<div class="cfg-row ${sec.checks.hidden ? 'hid' : ''}">
+      <span class="cfg-type">☑</span>
+      <input class="cfg-name" data-dchecks-opts="${sec.id}" value="${escapeHtml((sec.checks.options || []).join(', '))}" title="tick options, comma separated">
+      <button class="cfg-hide" data-dchecks-hide="${sec.id}">${sec.checks.hidden ? '🙈' : '👁'}</button>
+      <span style="width:23px"></span>
+    </div>` : '';
+  return `<details class="cfg-sec" data-cfgsec="deep:${sec.id}" ${openCfgSecs.has('deep:' + sec.id) ? 'open' : ''}>
+    <summary><span>${escapeHtml(sec.title)}</span><button class="cfg-hide" data-dsec-hide="${sec.id}">${sec.hidden ? '🙈' : '👁'}</button></summary>
+    <div class="cfg-sec-body">
+      <input class="cfg-name" style="margin-bottom:8px" data-dsec-title="${sec.id}" value="${escapeHtml(sec.title)}" placeholder="Section title…">
+      ${fields}${checks}
+      <div class="task-add" style="margin-top:8px">
+        <select id="dfield-type-${sec.id}" style="max-width:104px">${DFIELD_LISTS.map(([l, n]) => `<option value="${l}">${n}</option>`).join('')}</select>
+        <input type="text" id="dfield-name-${sec.id}" placeholder="New field…" autocomplete="off">
+        <button class="btn btn-primary btn-sm" data-dfield-add="${sec.id}">Add</button>
+      </div>
+    </div>
+  </details>`;
+}
+/* --- Gym group editor --- */
+function gymGroupEditor(g) {
+  const cfg = gymCfg();
+  const row = (e, custom) => { const o = Object.assign({}, e, cfg.ex[e.id] || {});
+    return `<div class="cfg-row ${o.hidden ? 'hid' : ''}">
+      <input class="cfg-name" data-gx-name="${e.id}" value="${escapeHtml(o.name)}">
+      <input class="cfg-name" style="flex:0 0 84px" data-gx-sets="${e.id}" value="${escapeHtml(o.sets || '')}" placeholder="sets">
+      <button class="cfg-hide" data-gx-hide="${e.id}">${o.hidden ? '🙈' : '👁'}</button>
+      ${custom ? `<button class="del" data-gx-del="${g.id}:${e.id}">×</button>` : '<span style="width:23px"></span>'}
+    </div>`; };
+  const customs = (cfg.custom[g.id] || []);
+  return `<details class="cfg-sec" data-cfgsec="gym:${g.id}" ${openCfgSecs.has('gym:' + g.id) ? 'open' : ''}>
+    <summary><span style="color:${g.color}">${g.emoji} ${escapeHtml(g.name)}</span><span class="hint">${cookedGroupById(g.id).exercises.length} shown</span></summary>
+    <div class="cfg-sec-body">
+      ${g.exercises.map(e => row(e, false)).join('')}${customs.map(e => row(e, true)).join('')}
+      <div class="task-add" style="margin-top:8px">
+        <input type="text" id="gx-new-${g.id}" placeholder="New exercise… (e.g. Dips 3 × 12)" autocomplete="off">
+        <button class="btn btn-primary btn-sm" data-gx-add="${g.id}">Add</button>
+      </div>
+    </div>
+  </details>`;
+}
+function dfieldFind(ref) {   // "secId:list:key" → {cfg, sec, list, f}
+  const [secId, list, key] = ref.split(':');
+  const cfg = deepCfg(); const sec = cfg.find(s => s.id === secId);
+  const f = sec && (sec[list] || []).find(x => x.key === key);
+  return { cfg, sec, list, f };
 }
 function cfgFind(kind, id) {
   if (kind === 'h') { const cfg = habitCfg(); return { list: cfg, item: cfg.find(h => h.key === id), save: () => saveHabitCfg(cfg) }; }
@@ -1903,13 +2012,75 @@ document.addEventListener('click', (ev) => {
     if (k === 'h') saveHabitCfg(habitCfg().filter(h => h.key !== id));
     else DB.saveTimeacts(DB.timeacts().filter(a => a.id !== id));
     renderCustom(); return; }
+
+  // ---- deep-log section / field controls ----
+  const dsh = ev.target.closest('[data-dsec-hide]');
+  if (dsh) { ev.preventDefault(); const cfg = deepCfg(); const sec = cfg.find(s => s.id === dsh.dataset.dsecHide);
+    if (sec) { sec.hidden = !sec.hidden; saveDeepCfg(cfg); renderCustom(); } return; }
+  const dfh = ev.target.closest('[data-dfield-hide]');
+  if (dfh) { const r = dfieldFind(dfh.dataset.dfieldHide);
+    if (r.f) { r.f.hidden = !r.f.hidden; saveDeepCfg(r.cfg); renderCustom(); } return; }
+  const dfd = ev.target.closest('[data-dfield-del]');
+  if (dfd) { const [secId, list, key] = dfd.dataset.dfieldDel.split(':');
+    const cfg = deepCfg(); const sec = cfg.find(s => s.id === secId);
+    if (sec) { sec[list] = (sec[list] || []).filter(x => x.key !== key); saveDeepCfg(cfg); renderCustom(); } return; }
+  const dch = ev.target.closest('[data-dchecks-hide]');
+  if (dch) { const cfg = deepCfg(); const sec = cfg.find(s => s.id === dch.dataset.dchecksHide);
+    if (sec && sec.checks) { sec.checks.hidden = !sec.checks.hidden; saveDeepCfg(cfg); renderCustom(); } return; }
+  const dfa = ev.target.closest('[data-dfield-add]');
+  if (dfa) { const secId = dfa.dataset.dfieldAdd;
+    const list = document.getElementById('dfield-type-' + secId).value;
+    const label = document.getElementById('dfield-name-' + secId).value.trim(); if (!label) return;
+    const cfg = deepCfg(); const sec = cfg.find(s => s.id === secId); if (!sec) return;
+    sec[list] = sec[list] || [];
+    sec[list].push({ key: 'cf' + Date.now(), label, custom: true });
+    saveDeepCfg(cfg); renderCustom(); toast('Field added'); return; }
+
+  // ---- gym exercise controls ----
+  const gxh = ev.target.closest('[data-gx-hide]');
+  if (gxh) { const id = gxh.dataset.gxHide; const cfg = gymCfg();
+    cfg.ex[id] = Object.assign({}, cfg.ex[id], { hidden: !(cfg.ex[id] && cfg.ex[id].hidden) });
+    saveGymCfg(cfg); renderCustom(); return; }
+  const gxd = ev.target.closest('[data-gx-del]');
+  if (gxd) { const [gid, id] = gxd.dataset.gxDel.split(':');
+    if (!confirm('Delete this exercise?')) return;
+    const cfg = gymCfg(); cfg.custom[gid] = (cfg.custom[gid] || []).filter(x => x.id !== id); delete cfg.ex[id];
+    saveGymCfg(cfg); renderCustom(); return; }
+  const gxa = ev.target.closest('[data-gx-add]');
+  if (gxa) { const gid = gxa.dataset.gxAdd;
+    const raw = document.getElementById('gx-new-' + gid).value.trim(); if (!raw) return;
+    const m = raw.match(/^(.*?)\s+(\d+\s*[×x].*|\d+\s*min.*)$/i);
+    const cfg = gymCfg(); cfg.custom[gid] = cfg.custom[gid] || [];
+    cfg.custom[gid].push({ id: 'cx' + Date.now(), name: m ? m[1] : raw, sets: m ? m[2].replace(/x/i, '×') : '3 × 15' });
+    saveGymCfg(cfg); renderCustom(); toast('Exercise added'); return; }
 });
+/* keep <details> sections open across re-renders */
+let openCfgSecs = new Set();
+document.addEventListener('toggle', (ev) => {
+  const d = ev.target.closest && ev.target.closest('details[data-cfgsec]');
+  if (d) { if (d.open) openCfgSecs.add(d.dataset.cfgsec); else openCfgSecs.delete(d.dataset.cfgsec); }
+}, true);
 document.addEventListener('input', (ev) => {
   const ce = ev.target.closest('[data-cfg-emoji]');
   if (ce) { const [k, id] = ce.dataset.cfgEmoji.split(':'); const f = cfgFind(k, id); if (f.item) { f.item.emoji = ce.value; f.save(); } return; }
   const cn = ev.target.closest('[data-cfg-name]');
   if (cn) { const [k, id] = cn.dataset.cfgName.split(':'); const f = cfgFind(k, id);
     if (f.item) { if (f.item.label !== undefined || k === 'h') f.item.label = cn.value; else f.item.name = cn.value; f.save(); } return; }
+  // deep-log renames
+  const dst = ev.target.closest('[data-dsec-title]');
+  if (dst) { const cfg = deepCfg(); const sec = cfg.find(s => s.id === dst.dataset.dsecTitle);
+    if (sec) { sec.title = dst.value; saveDeepCfg(cfg); } return; }
+  const dfl = ev.target.closest('[data-dfield-label]');
+  if (dfl) { const r = dfieldFind(dfl.dataset.dfieldLabel);
+    if (r.f) { r.f.label = dfl.value; saveDeepCfg(r.cfg); } return; }
+  const dco = ev.target.closest('[data-dchecks-opts]');
+  if (dco) { const cfg = deepCfg(); const sec = cfg.find(s => s.id === dco.dataset.dchecksOpts);
+    if (sec && sec.checks) { sec.checks.options = dco.value.split(',').map(x => x.trim()).filter(Boolean); saveDeepCfg(cfg); } return; }
+  // gym renames / sets
+  const gxn = ev.target.closest('[data-gx-name]');
+  if (gxn) { const cfg = gymCfg(); cfg.ex[gxn.dataset.gxName] = Object.assign({}, cfg.ex[gxn.dataset.gxName], { name: gxn.value }); saveGymCfg(cfg); return; }
+  const gxs = ev.target.closest('[data-gx-sets]');
+  if (gxs) { const cfg = gymCfg(); cfg.ex[gxs.dataset.gxSets] = Object.assign({}, cfg.ex[gxs.dataset.gxSets], { sets: gxs.value }); saveGymCfg(cfg); return; }
 });
 
 /* ============================================================
@@ -2199,7 +2370,7 @@ document.addEventListener('change', (ev) => {
   if (ev.target.closest('[data-rem-time]') || ev.target.closest('[data-rem-label]')) syncReminders();
 });
 /* Everything the app stores, for a COMPLETE backup/restore. */
-const BACKUP_KEYS = ['entries', 'tasks', 'notes', 'plans', 'gym', 'exercises', 'reminders', 'timelog', 'timeacts', 'events', 'docs', 'habitcfg', 'actcfg'];
+const BACKUP_KEYS = ['entries', 'tasks', 'notes', 'plans', 'gym', 'exercises', 'reminders', 'timelog', 'timeacts', 'events', 'docs', 'habitcfg', 'actcfg', 'deepcfg', 'gymcfg'];
 function exportData() {
   const out = { settings: DB.settings() };
   BACKUP_KEYS.forEach(k => { const raw = localStorage.getItem('dp.' + k); if (raw) out[k] = JSON.parse(raw); });
