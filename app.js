@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v45';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v46';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ----------
    DEFAULT_HABITS is only the starting point — the Customize screen
@@ -2356,6 +2356,22 @@ function renderSettings() {
         <button class="btn btn-ghost btn-sm" id="open-history">🕘 History</button>
       </div>
     </div>
+    <div class="card" style="border-color:rgba(251,191,36,.4)">
+      <h2>📦 Your data lives on this device</h2>
+      <div class="hint">Daily Pulse is fully private — nothing is uploaded anywhere. The flip side: <b>uninstalling the app or clearing its storage erases everything.</b> Export a backup file regularly and keep it somewhere safe (Drive, email to yourself…).</div>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn btn-primary btn-sm" id="export-quick">⬇ Export backup now</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Last backup: <b>${(() => { const t = +localStorage.getItem('dp.lastBackup') || 0; if (!t) return 'never ⚠️'; const d = Math.floor((Date.now() - t) / 86400000); return d === 0 ? 'today ✅' : d + ' day' + (d === 1 ? '' : 's') + ' ago' + (d > 7 ? ' ⚠️' : ''); })()}</b></div>
+    </div>
+    <div class="card">
+      <h2>💬 Feedback <span class="hint">30 seconds, no sign-in</span></h2>
+      <div class="field"><textarea id="fb-text" placeholder="What's confusing? What's missing? What do you love?" style="min-height:70px"></textarea></div>
+      <div class="task-add">
+        <input type="text" id="fb-contact" placeholder="Email (optional, only if you want a reply)" autocomplete="off">
+        <button class="btn btn-primary btn-sm" id="fb-send">Send</button>
+      </div>
+    </div>
     <div class="card">
       <h2>☁️ Sync &amp; login <span class="hint">${s.syncUrl ? 'connected ●' : 'not connected'}</span></h2>
       <div class="field"><label>Your sheet link = your login key <span class="hint">paste it on any device to load your data</span></label>
@@ -2490,6 +2506,14 @@ document.addEventListener('click', async (ev) => {
   }
   if (ev.target.id === 'open-custom') { show('custom'); return; }
   if (ev.target.id === 'open-history') { show('history'); return; }
+  if (ev.target.id === 'export-quick') { exportData(); renderSettings(); return; }
+  if (ev.target.id === 'fb-send') {
+    const text = (document.getElementById('fb-text').value || '').trim();
+    if (!text) { toast('Write something first 🙂', true); return; }
+    const contact = (document.getElementById('fb-contact').value || '').trim();
+    sendFeedback(text, contact);
+    return;
+  }
   if (ev.target.id === 'export') exportData();
   if (ev.target.id === 'export-csv') exportCSV();
   if (ev.target.id === 'import') document.getElementById('import-file').click();
@@ -2504,6 +2528,23 @@ document.addEventListener('change', (ev) => {
   if (ev.target.id === 'import-file' && ev.target.files[0]) importData(ev.target.files[0]);
   if (ev.target.closest('[data-rem-time]') || ev.target.closest('[data-rem-label]')) syncReminders();
 });
+/* ---------- Feedback (frictionless, no sign-in) ----------
+   Goes to a tiny Apps Script endpoint (google-apps-script/Feedback.gs)
+   that appends rows to a private "Feedback" sheet. Empty URL = not yet
+   deployed; falls back to opening a GitHub issue. */
+const FEEDBACK_URL = '';   // paste the Feedback.gs web-app URL after deploying
+function sendFeedback(text, contact) {
+  if (!FEEDBACK_URL) {
+    window.open('https://github.com/kishore2494/daily-pulse/issues/new?title=' + encodeURIComponent('Feedback') + '&body=' + encodeURIComponent(text), '_blank');
+    return;
+  }
+  fetch(FEEDBACK_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ text, contact, version: APP_VERSION, ua: navigator.userAgent.slice(0, 120) }) }).catch(() => {});
+  document.getElementById('fb-text').value = '';
+  document.getElementById('fb-contact').value = '';
+  toast('Thank you! Feedback sent 💛');
+}
+
 /* Everything the app stores, for a COMPLETE backup/restore. */
 const BACKUP_KEYS = ['entries', 'tasks', 'notes', 'plans', 'gym', 'exercises', 'reminders', 'timelog', 'timeacts', 'events', 'docs', 'habitcfg', 'actcfg', 'deepcfg', 'gymcfg', 'corecfg', 'daycfg', 'gymgroups', 'navcfg'];
 function exportData() {
@@ -2512,6 +2553,7 @@ function exportData() {
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'daily-pulse-backup-' + todayStr() + '.json'; a.click();
+  localStorage.setItem('dp.lastBackup', String(Date.now()));
   toast('Full backup downloaded');
 }
 function importData(file) {
@@ -2878,6 +2920,7 @@ function renderOnboard() {
       <div>🔒 <b>Private by design</b> — everything stays on your phone. No account, no cloud, no tracking.</div>
       <div>⏱ <b>Track anything</b> — habits, mood, your day hour-by-hour, gym, journal, plans.</div>
       <div>🎨 <b>Make it yours</b> — every habit, field, workout and tab is customizable.</div>
+      <div>📦 <b>One thing to know</b> — because it's fully private, your data lives ONLY on this phone. Export a backup now and then (More ▸ Your data) — uninstalling the app erases everything.</div>
     </div>
     <button class="btn btn-primary" data-ob-next>Get started</button>`;
   if (obStep === 1) body = `
