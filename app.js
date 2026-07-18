@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v47';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v48';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ----------
    DEFAULT_HABITS is only the starting point — the Customize screen
@@ -2406,6 +2406,7 @@ function renderSettings() {
         <button class="btn btn-primary btn-sm" id="rem-test">🔔 Test alarm</button>
         <button class="btn btn-ghost btn-sm" id="rem-test15">⏱ Test in 15 sec</button>
         <button class="btn btn-ghost btn-sm" id="rem-calendar">📅 Add to phone calendar</button>
+        ${nativeShell() ? '<button class="btn btn-primary btn-sm" id="rem-native-test">📴 Test alarm in 1 min — then close the app!</button>' : ''}
       </div>
       <div class="hint" style="margin-top:8px">The full-screen alarm fires while the app is open, and catches missed ones when you reopen. For alarms even when the app is fully closed, tap <b>Add to phone calendar</b> (adds daily repeating alerts your phone rings natively).</div>
     </div>
@@ -2478,6 +2479,18 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (ev.target.id === 'rem-calendar') { exportReminderCalendar(); return; }
+  if (ev.target.id === 'rem-native-test') {
+    const LN = window.Capacitor.Plugins.LocalNotifications;
+    (async () => {
+      const perm = await LN.requestPermissions();
+      if (perm.display !== 'granted') { toast('Allow notifications first', true); return; }
+      await LN.schedule({ notifications: [{ id: 424242, title: '⏰ Daily Pulse native alarm',
+        body: 'It works — this rang even with the app closed! 🎉',
+        schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true }, sound: 'default' }] });
+      toast('Scheduled for 1 min — now swipe the app away and wait 📴');
+    })();
+    return;
+  }
   if (ev.target.id === 'ntfy-enable') {
     s.ntfyOn = !s.ntfyOn;
     if (s.ntfyOn && !s.ntfyTopic) s.ntfyTopic = 'dp-' + randomToken();
