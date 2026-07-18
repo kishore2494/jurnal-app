@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.kishore2494.dailypulse",
+    "sha256_cert_fingerprints": ["14:4D:1F:76:46:FD:61:81:2F:FA:D9:AC:E9:58:66:18:9C:D1:33:49:B0:55:88:77:9F:58:4D:8D:6D:4A:D7:28"]
+  }
+}]
