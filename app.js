@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v48';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v49';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ----------
    DEFAULT_HABITS is only the starting point — the Customize screen
@@ -2406,7 +2406,8 @@ function renderSettings() {
         <button class="btn btn-primary btn-sm" id="rem-test">🔔 Test alarm</button>
         <button class="btn btn-ghost btn-sm" id="rem-test15">⏱ Test in 15 sec</button>
         <button class="btn btn-ghost btn-sm" id="rem-calendar">📅 Add to phone calendar</button>
-        ${nativeShell() ? '<button class="btn btn-primary btn-sm" id="rem-native-test">📴 Test alarm in 1 min — then close the app!</button>' : ''}
+        ${nativeShell() ? '<button class="btn btn-ghost btn-sm" id="rem-native-test">🔔 Test notification (1 min)</button>' : ''}
+        ${fullScreenPlugin() ? '<button class="btn btn-primary btn-sm" id="rem-fs-test">⏰ Test full-screen alarm (1 min)</button>' : ''}
       </div>
       <div class="hint" style="margin-top:8px">The full-screen alarm fires while the app is open, and catches missed ones when you reopen. For alarms even when the app is fully closed, tap <b>Add to phone calendar</b> (adds daily repeating alerts your phone rings natively).</div>
     </div>
@@ -2489,6 +2490,14 @@ document.addEventListener('click', async (ev) => {
         schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true }, sound: 'default' }] });
       toast('Scheduled for 1 min — now swipe the app away and wait 📴');
     })();
+    return;
+  }
+  if (ev.target.id === 'rem-fs-test') {
+    const FS = fullScreenPlugin();
+    if (!FS) { toast('Full-screen alarm needs the app update', true); return; }
+    FS.schedule({ alarms: [{ id: 399, at: Date.now() + 60000,
+      title: 'Daily Pulse alarm ⏰', body: 'Full-screen alarm — it works even when locked! 🎉' }] });
+    toast('Full-screen alarm in 1 min — lock your phone & wait 🔔');
     return;
   }
   if (ev.target.id === 'ntfy-enable') {
@@ -2598,6 +2607,7 @@ function cleanNotifiedFlags() {
 /* ---------- Reminders (multiple, foreground firing) ---------- */
 let reminderInterval, reminderTimeouts = [];
 function checkReminders(catchUp) {
+  if (nativeShell()) return;   // native app: AlarmManager + LocalNotifications own firing (no web double-ring)
   const now = new Date();
   const curMin = now.getHours() * 60 + now.getMinutes();
   DB.reminders().forEach(r => {
@@ -2738,36 +2748,49 @@ function exportReminderCalendar() {
    no-ops. Reminder n uses ids n*1000+day, events use hash ids — cancelled
    and rescheduled wholesale on every setupReminders(). */
 function nativeShell() { return !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications); }
+function fullScreenPlugin() { return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FullScreenAlarm) || null; }
+// Each reminder/event carries mode 'alarm' (loud full-screen takeover) or 'notify' (plain heads-up).
+// Alarm-mode → the native FullScreenAlarm plugin (rings over the lock screen). Notify-mode, and
+// everything when the full-screen plugin is absent, → ordinary LocalNotifications.
 async function scheduleNativeAlarms() {
   if (!nativeShell()) return false;
   const LN = window.Capacitor.Plugins.LocalNotifications;
+  const FS = fullScreenPlugin();
+  const now = Date.now();
   try {
     const perm = await LN.requestPermissions();
-    if (perm.display !== 'granted') return false;
-    // wipe our previously scheduled ones, then schedule the next 7 days
-    const pending = await LN.getPending();
-    if (pending.notifications && pending.notifications.length)
-      await LN.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
-    const toSchedule = [];
-    const now = Date.now();
+    const notifOk = perm.display === 'granted';
+    // wipe previously scheduled LocalNotifications
+    if (notifOk) {
+      const pending = await LN.getPending();
+      if (pending.notifications && pending.notifications.length)
+        await LN.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
+    }
+    const notifs = [];   // LocalNotifications (notify mode / fallback)
+    const alarms = [];   // native full-screen (alarm mode)
     let seq = 1;
+    const wantsAlarm = m => (m || 'alarm') === 'alarm';
+    const add = (t, title, body, alarm) => {
+      if (alarm && FS) alarms.push({ id: seq++, at: t.getTime(), title, body });
+      else notifs.push({ id: seq++, title, body, schedule: { at: t, allowWhileIdle: true },
+        sound: alarm ? 'default' : undefined });
+    };
     DB.reminders().filter(r => r.enabled && r.time).forEach(r => {
       const [h, m] = r.time.split(':').map(Number);
       for (let d = 0; d < 7; d++) {
         const t = new Date(); t.setDate(t.getDate() + d); t.setHours(h, m, 0, 0);
         if (t.getTime() <= now) continue;
-        toSchedule.push({ id: seq++, title: '⏰ ' + (r.label || 'Daily Pulse'),
-          body: r.label ? 'Reminder: ' + r.label : 'Time for your daily log 🔥',
-          schedule: { at: t, allowWhileIdle: true }, sound: r.mode === 'notify' ? undefined : 'default' });
+        add(t, '⏰ ' + (r.label || 'Daily Pulse'),
+          r.label ? 'Reminder: ' + r.label : 'Time for your daily log 🔥', wantsAlarm(r.mode));
       }
     });
     DB.events().filter(x => x.time && x.date >= todayStr()).forEach(x => {
       const t = new Date(x.date + 'T' + x.time + ':00');
       if (isNaN(t.getTime()) || t.getTime() <= now) return;
-      toSchedule.push({ id: seq++, title: '📌 ' + x.label, body: x.time + ' · ' + x.label,
-        schedule: { at: t, allowWhileIdle: true }, sound: 'default' });
+      add(t, '📌 ' + x.label, x.time + ' · ' + x.label, !!x.alarm);
     });
-    if (toSchedule.length) await LN.schedule({ notifications: toSchedule });
+    if (notifOk && notifs.length) await LN.schedule({ notifications: notifs });
+    if (FS) await FS.schedule({ alarms });   // always call so it clears old ones when list is empty
     return true;
   } catch (e) { return false; }
 }
