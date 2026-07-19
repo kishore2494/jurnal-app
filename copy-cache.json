@@ -120,23 +120,117 @@
     "_model": "nvidia/nemotron-3-super-120b-a12b:free"
   },
   "workout-log-for-students": {
-    "intro": "Between back‑to‑back lectures and a looming essay deadline, you barely find five minutes to stretch, and you often forget to log your workout while juggling assignments. Daily Pulse logs it in one tap. It syncs privately on your device, ready whenever you have a break.",
-    "why": "Students juggle lectures, labs, and looming deadlines, leaving little mental space for tracking fitness. Forgetting a workout breaks momentum and makes it hard to see progress. A quick tap log removes that barrier, lets you stay consistent, and turns scattered effort into visible streaks that motivate continued effort even during hectic weeks.",
-    "quickAnswer": "Daily Pulse is a free offline habit tracker that lets students log workouts in one tap, view animated demos for 42 exercises, track gym streaks, and keep data private on their device with optional Sheet sync for smarter routine building."
+    "intro": "After a 90‑minute lecture, Maya has ten minutes before lab to hit the gym for dumbbell curls, but she often skips logging the reps while rushing to her next class. Daily Pulse lets her log that workout in one tap.",
+    "why": "Students squeeze workouts between tight class blocks, lab sessions, and late‑night study bursts, so any logging step that feels like extra work gets dropped. A one‑tap log that captures reps, weight, and demo links fits into those micro‑breaks, keeps the gym streak visible, and turns sporadic effort into a trackable habit without stealing revision time.",
+    "quickAnswer": "Daily Pulse is an offline habit tracker that gives students an 8‑group, 42‑exercise gym plan with animated how‑to demos, lets them log reps and weight in one tap, and shows a live gym streak to reinforce consistency for busy schedules.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
   },
   "workout-log-for-software-developers": {
-    "intro": "You finish a six‑hour debugging sprint, shoulders tight, and realize you haven’t logged today’s lift because opening another app feels like extra work. Daily Pulse lets you tap once to record the set, weight, and rep, right from your keyboard break.",
-    "why": "During crunch weeks, your calendar fills with back‑to‑back code reviews and you skip the gym because tracking feels like another ticket. A quick log keeps the streak alive, reminds you to move, and the animated demos prevent bad form when fatigue clouds your judgment. It also syncs optional to Google Sheets for quick trend checks.",
-    "quickAnswer": "Daily Pulse is a workout log built for developers: an eight‑group, forty‑two‑exercise plan with animated demos, simple rep/weight taps, and a visible gym streak that stays alive even during long coding sprints and works offline on your phone or laptop."
+    "intro": "You've just wrapped a 90-minute debugging sprint, eyes tired, and you notice you haven't left your chair all morning. Fitting a workout into those fractured focus blocks feels impossible, but Daily Pulse lets you log every set with a single tap.",
+    "why": "Developers spend hours locked in deep work, then crash with irregular sleep, making it easy to skip exercise when deadlines loom. A workout log that fits into broken-up moments, tracks reps and weight, and shows a gym streak helps turn intention into action without extra friction and syncs optionally to Google Sheets for backup.",
+    "quickAnswer": "Daily Pulse is a private on-device habit tracker that lets software developers log workouts in one tap, view animated demos for 42 exercises, track reps, weight, and maintain a gym streak, all without leaving the app and optional Google sync.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
   },
   "workout-log-for-remote-workers": {
-    "intro": "You finish your morning Zoom call, stare at the same kitchen table for hours, and feel the stiffness creep into your shoulders before lunch. Logging a workout feels like another chore you keep postponing, but Daily Pulse lets you log each set in one tap.",
-    "why": "Without a commute to mark the start and end of work, remote workers’ days blur into one long sitting session, making it easy to skip movement and lose track of fitness goals. A dedicated workout log gives them a clear, repeatable cue to exercise, track progress, and rebuild the rhythm that a commute once provided.",
-    "quickAnswer": "Daily Pulse is an 8‑group, 42‑exercise gym plan that includes animated how‑to demos, lets you log reps and weight for each set, tracks your gym streak so you see consistent progress, and works offline on phone, syncing to Google Sheets."
+    "intro": "You finish a video call, stare at the same kitchen table, and wonder where the hour went. The lack of a clear start or end makes it hard to fit a workout. Daily Pulse logs your session in one tap.",
+    "why": "Remote workers often sit for hours without natural breaks, leading to stiffness and low energy that sneaks up between meetings. Without a commute to signal shift, exercise feels like another task on an endless list. A quick log removes the guesswork, shows progress, and turns movement into a habit that fits the blurred day.",
+    "quickAnswer": "Daily Pulse is a private on-device habit tracker that lets remote workers log any workout in one tap, view animated demos, track reps and weight, and see their gym streak grow without leaving their desk and stay motivated each day.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
   },
   "workout-log-for-entrepreneurs": {
-    "intro": "You start your morning checking emails, then jump into back‑to‑back meetings, and by 3 PM you realize you haven’t moved a muscle; the friction is finding time to log a workout. Daily Pulse records every set in a single tap, right on your phone.",
-    "why": "Entrepreneurs wear every hat, founder, sales, support, so health drops to the bottom of the list, and when a workout finally occurs they forget the exact reps or weight, breaking progress. Daily Pulse logs workouts in one tap, keeping streak alive. Animated demos reinforce form during sessions between calls, so you stay consistent and injury‑free.",
-    "quickAnswer": "Daily Pulse is a workout log built for entrepreneurs: an 8‑group, 42‑exercise gym plan with animated how‑to demos, simple reps‑and‑weight logging, and a visible gym streak that updates after each session, all recorded in one tap to keep your momentum."
+    "intro": "You start the day answering investor emails while your coffee cools, then jump between sales calls and product demos, fitting stretch before next meeting. Logging workouts feels like chore on busy list. Daily Pulse logs set, rep and weight in one tap.",
+    "why": "Entrepreneurs juggle product pitches, investor updates, and team huddles, leaving little room for gym time; when they finally sneak a session, remembering sets, reps and weights adds mental load that steals focus from the next pitch. A single‑tap log removes that friction, turning scattered effort into visible progress they can trust.",
+    "quickAnswer": "Daily Pulse is an eight‑group, forty‑two‑exercise gym plan with animated how‑to demos, simple rep/weight logging, and a visible streak that shows each consecutive workout day, built for founders who need fast, reliable tracking for founders juggling endless meetings and decisions.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "workout-log-for-adhd": {
+    "intro": "You wake up, scroll through your phone, see the gym bag by the door, but planning a routine makes you pause. Daily Pulse lets you log each set with a single tap, stripping away the mental load of deciding what to do next.",
+    "why": "People with ADHD often start strong but stall when a system demands constant decision‑making or complex tracking. A workout log that requires only one tap removes the executive‑function burden, lets the routine stay visible, and builds a streak that feels rewarding without overwhelming the brain and the animated demos cut the guesswork that derails focus.",
+    "quickAnswer": "Daily Pulse is an 8-group, 42-exercise gym plan that pairs animated how-to demos with one-tap rep and weight logging, builds a visible streak, and cuts the decision-fatigue that stops ADHDers from sticking to workouts after day three while staying simple.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "workout-log-for-fitness-beginners": {
+    "intro": "You finish a rushed morning, glance at the half‑packed gym bag, and wonder which move won’t hurt your shoulder—this hesitation kills momentum before you start. Daily Pulse captures that doubt in a single tap, turning confusion into a clear log you can follow.",
+    "why": "Beginners walk into the gym overwhelmed by rows of machines, unsure which lift builds strength without straining joints, and they waste minutes scrolling videos that contradict each other. Daily Pulse gives them a preset 8‑group, 42‑move plan with animated demos, so every rep is logged safely and progress is visible.",
+    "quickAnswer": "Daily Pulse is the habit tracker that logs your gym routine in one tap, shows animated form cues for each of the 42 exercises, tracks reps, weight, and builds a visible streak so you never guess what to do next.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "workout-log-for-busy-parents": {
+    "intro": "When the baby’s nap ends and the lunchbox is half‑packed, you have barely a minute before the next diaper change. Trying to log a set while holding a squirming kid feels impossible. Daily Pulse logs every rep and weight with one tap.",
+    "why": "Busy parents squeeze workouts into stolen moments—between school runs, nap windows, or while dinner simmers. They can’t fumble with menus or type notes; any extra tap steals focus from the child or the stove. A simple log that records reps, weight, and streaks in one tap keeps the habit visible without adding friction.",
+    "quickAnswer": "Daily Pulse is a habit tracker that gives busy parents an 8‑group, 42‑exercise gym plan with animated how‑to demos, lets you log reps and weight in one tap, and shows a growing gym streak to keep motivation high today everywhere",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "workout-log-for-freelancers": {
+    "intro": "Freelancers often start their day with a coffee at 9 am, then stare at a blank calendar while juggling client calls, unsure when to squeeze in a workout. Daily Pulse logs set in one tap and builds a gym streak that fits into your freelance flow.",
+    "why": "Freelancers face days that shift from client calls to deep work without a fixed schedule, making it easy to let exercise slip. A simple log tied to each session creates a rhythm, signals progress, and protects mental energy, turning sporadic movement into a reliable part of their workflow for long-term health.",
+    "quickAnswer": "Daily Pulse is an 8‑group, 42‑exercise gym plan that includes animated how‑to demos, lets you log reps and weight after each set, and tracks a continuous gym streak to show your consistency, private on-device works offline syncs to Google Sheets.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "workout-log-for-medical-residents": {
+    "intro": "After a 12-hour ICU shift, you collapse into the call room, still in scrubs, and the thought of pulling out a notebook to jot down yesterday’s bench press feels impossible. Daily Pulse lets you tap once to log the workout you actually did.",
+    "why": "Your residency throws you into rotating night floats, endless consults, and stolen minutes between codes, making any fixed workout plan collapse. You need a log that adapts to whatever time you snatch, records sets without extra steps, and shows streaks so you can see progress despite the chaos every day.",
+    "quickAnswer": "Daily Pulse is the workout log built for medical residents: an 8-group, 42-exercise gym plan with animated how-to demos, simple tap logging of reps and weight, and a visible gym streak that survives shift changes so you stay consistent every.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "workout-log-for-designers": {
+    "intro": "You spend the morning tweaking pixel grids, then get pulled into back‑to‑back client calls that leave your shoulders tight. Forgetting to log your workout while juggling sketches and deadlines is a real friction. Daily Pulse logs it in one tap.",
+    "why": "Designers pour mental energy into visual problem‑solving, yet they rarely see how movement impacts that focus. Skipping exercise leads to stiffness, foggy thinking, and missed deadlines. Logging workouts makes the connection visible, helping you schedule breaks that restore clarity and keep your creative flow steady. It also gives you a quick streak to celebrate consistency.",
+    "quickAnswer": "Daily Pulse is a private, on‑device habit tracker that lets designers log workouts in one tap, view animated demos, track reps/weight, and maintain a gym streak all without leaving the creative flow while keeping your data safe and synced optionally.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-students": {
+    "intro": "You open your laptop at 8 am, a half‑finished essay waiting, and your coffee’s already cold. Trying to recall what went well and what to improve after each study session feels like guesswork. Daily Pulse logs that reflection in one tap, right where you are.",
+    "why": "Students juggle lectures, labs, assignments and revision while trying to keep any routine. Without a quick way to note what worked and what didn’t, patterns stay hidden, stress builds, and study time slips. Daily Pulse gives a one‑tap journal that captures those insights, helping you adjust habits before burnout hits.",
+    "quickAnswer": "Daily Pulse is a private on‑device habit and life tracker that lets students log mood, energy, tasks, workouts and a structured journal in one tap, with optional Google Sheet sync for backup, and review trends offline to stay balanced daily.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-software-developers": {
+    "intro": "You spend three hours staring at a terminal, then realize you skipped lunch and your back aches. Forgetting to jot down how you felt or what you nailed leaves gaps in your self‑review. Daily Pulse captures that note in one tap, right on your phone.",
+    "why": "During a sprint you might code for four straight hours, then crash with irregular sleep that throws off your mood and energy. When crunch hits, habits like stretching or water intake vanish, making it hard to spot patterns that affect performance. A dedicated journal lets you see those links quickly.",
+    "quickAnswer": "Daily Pulse is a private, on‑device habit and life tracker that lets developers log mood, energy, habits, workouts, tasks and a structured journal in one tap, with optional Google Sheet sync and keeps your data private and secure for you",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-remote-workers": {
+    "intro": "You end your 9‑am video call still in pajamas, kitchen table your desk, and the day blurs together. You can’t tell what moved the needle from what just filled time. Daily Pulse lets you tap once to log went‑well, to‑improve, and a free note.",
+    "why": "Without a commute to signal start and end, remote workers let work bleed into personal time, making it hard to spot energy dips or recurring distractions. Daily Pulse’s structured journal gives a quick, private checkpoint each evening, revealing trends in mood, focus, and habits so you can adjust before fatigue sets in.",
+    "quickAnswer": "Daily Pulse is a private on‑device journal that lets remote workers tap once to record went‑well, to‑improve, and free thoughts, then automatically sorts entries into Mind, Wellbeing, Health, Work, Learning, Finance, Digital, and Growth categories for clear weekly patterns today",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-entrepreneurs": {
+    "intro": "You begin your day answering founder emails while your latte sits untouched, then jump into a product demo before you’ve even had breakfast. Forgetting to jot down what worked or what stalled is a common slip. Daily Pulse captures that insight in a single tap.",
+    "why": "As an entrepreneur you juggle sales, code, and caregiving, often postponing exercise or meditation until ‘later’ and losing sight of what actually moves the needle. A structured journal that tags wins and gaps across Mind, Wellbeing, Health, Work, Learning, Finance, Digital and Growth surfaces blind spots before they become costly.",
+    "quickAnswer": "Daily Pulse is a private, one-tap journal built for entrepreneurs who need to log went-well, to-improve, and free-form notes while automatically tagging each entry into Mind, Wellbeing, Health, Work, Learning, Finance, Digital and Growth for instant pattern spotting every day.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-adhd": {
+    "intro": "You wake up, spill coffee on your notebook, and the habit tracker you set up yesterday already feels like another chore. Starting systems die by day three because they ask too much. Daily Pulse logs your went‑well, to‑improve, and free‑journal entry in a single tap.",
+    "why": "People with ADHD often abandon elaborate trackers because the effort to maintain them outweighs the benefit, leaving thoughts scattered and self‑trust eroded. Daily Pulse’s one‑tap journal captures wins, struggles, and free notes instantly, and tags each entry across Mind, Wellbeing, Health, Work, Learning, Finance, Digital, and Growth, so patterns emerge without extra steps.",
+    "quickAnswer": "Daily Pulse is a private, one‑tap journal that lets people with ADHD record went‑well, to‑improve, and free‑form thoughts, then automatically sorts them into Mind, Wellbeing, Health, Work, Learning, Finance, Digital, and Growth for instant pattern insight and actionable steps.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-fitness-beginners": {
+    "intro": "After scrolling through Instagram fitness reels, you stand in your living room with a pair of dumbbells, unsure if the squat form is safe, and you waste time guessing which move to try next. Daily Pulse logs that hesitation in one tap.",
+    "why": "Fitness beginners often skip workouts because they’re unsure which exercise matches their goal or how to perform it without strain, leading to sore joints and stalled progress. By logging each session’s went‑well, to‑improve notes and tagging it under Health or Wellbeing, you turn guesswork into data that shows what truly moves you forward.",
+    "quickAnswer": "Daily Pulse is the habit tracker that lets fitness beginners log a went‑well / to‑improve journal and tag each workout under Mind, Wellbeing, Health, Work, Learning, Finance, Digital, Growth with a single tap, turning vague effort into clear, actionable insight.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-busy-parents": {
+    "intro": "Morning rush: you’re wiping cereal off the kitchen counter while the baby cries, wishing you could jot down what went well without digging for a notebook. Daily Pulse captures your went‑well, to‑improve, and free‑journal thoughts in a single tap, right where you stand.",
+    "why": "Busy parents juggle feeding, chores, and sleep‑deprived moments, leaving no mental bandwidth for lengthy reflections. A quick journal helps spot patterns in mood, energy, and habits without stealing time from family. Daily Pulse’s one‑tap entry fits into those fleeting seconds, turning chaos into usable insight. It also syncs optional Google Sheet for later review.",
+    "quickAnswer": "Daily Pulse is a habit and life‑tracker that lets busy parents log went‑well, to‑improve, and free‑journal notes plus structured Mind, Wellbeing, Health, Work, Learning, Finance, Digital, and Growth entries with a single tap, keeping data securely always on the phone.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-freelancers": {
+    "intro": "You begin your day answering a client’s Slack message while your mug sits half‑full, then realize you have no quick way to note what went well and what didn’t before the next meeting pulls you away. Daily Pulse captures that reflection in a single tap.",
+    "why": "Freelancers swing between client work, admin, and personal tasks without a manager setting the pace, so the day can blur into a string of reactive actions. A structured journal helps you spot patterns, protect billable time, and decide where to invest energy before burnout creeps in and improve your weekly rate.",
+    "quickAnswer": "Daily Pulse is the private, one‑tap journal that logs your went‑well, to‑improve, and free‑form notes while organizing deeper entries into Mind, Wellbeing, Health, Work, Learning, Finance, Digital and Growth, giving freelancers instant insight without leaving the app for better decisions",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "journal-for-medical-residents": {
+    "intro": "At 3 a.m. after a 12‑hour ICU stint, you’re still staring at a stack of discharge notes, wishing you could jot down what went well and what needs fixing without opening another app. Daily Pulse logs that reflection in a single tap.",
+    "why": "Medical residents run on fragmented sleep, back‑to‑back rounds, and endless paperwork, leaving little mental space for structured reflection. Yet research shows that brief, daily debriefs cut burnout and improve clinical reasoning. A dedicated journal that captures wins, gaps, and deeper logs in one place fits the chaotic rhythm of residency.",
+    "quickAnswer": "Daily Pulse is the offline journal that lets residents tag a went‑well / to‑improve note and then expand into Mind, Wellbeing, Health, Work, Learning, Finance, Digital, Growth categories, all with one tap, no internet needed for your busy shift today.",
+    "_model": "nvidia/nemotron-3-super-120b-a12b:free"
   }
 }
