@@ -1,0 +1,37 @@
+# Daily Pulse
+
+> Daily Pulse is a fast, offline, installable life-tracker — mood, energy, habits, workouts, journal and tasks in one tap, private on your device with optional Google Sheet sync.
+
+Daily Pulse is free, works offline, and installs straight from the web (PWA) or Google Play. Your data stays on your device; sync to your own Google Sheet is optional. One tap logs your whole day — mood, energy, habits, workouts, journal and tasks.
+
+## Install
+- [Install free (web app)](https://kishore2494.github.io/daily-pulse/)
+- [Google Play](https://play.google.com/store/apps/details?id=io.github.kishore2494.dailypulse)
+
+## What it does (by feature)
+- [Habit Tracker for developers, students & more](https://kishore2494.github.io/daily-pulse/habit-tracker-for-software-developers.html): a 10-habit daily checklist with per-habit streaks and a 90-day consistency heatmap
+- [Mood Tracker for developers, students & more](https://kishore2494.github.io/daily-pulse/mood-tracker-for-software-developers.html): a one-tap mood and energy log with trend charts over time
+- [Workout Log for developers, students & more](https://kishore2494.github.io/daily-pulse/workout-log-for-software-developers.html): an 8-group, 42-exercise gym plan with animated how-to demos, reps/weight logging and a gym streak
+- [Daily Journal for developers, students & more](https://kishore2494.github.io/daily-pulse/journal-for-software-developers.html): a went-well / to-improve / free-journal block plus a deep log organised into Mind, Wellbeing, Health, Work, Learning, Finance, Digital and Growth
+- [Task Manager for developers, students & more](https://kishore2494.github.io/daily-pulse/task-manager-for-software-developers.html): quick task add, check-off, and automatic carry-over flagging for anything you didn't finish
+- [Sleep Tracker for developers, students & more](https://kishore2494.github.io/daily-pulse/sleep-tracker-for-software-developers.html): a daily sleep-hours log charted against your deep-work and energy
+- [Focus Tracker for developers, students & more](https://kishore2494.github.io/daily-pulse/focus-tracker-for-software-developers.html): a daily deep-work / focus-hours log with a trend chart
+- [Weekly Review for developers, students & more](https://kishore2494.github.io/daily-pulse/weekly-review-for-software-developers.html): an automatic Sunday weekly-review block that folds into your normal log
+
+## Who it's for
+- Students: juggling classes, assignments and revision while trying to keep any kind of routine
+- Software Developers: long focus blocks, irregular sleep, and habits that slip during crunch
+- Remote Workers: days blurring together with no commute to bookend them
+- Entrepreneurs: wearing every hat and pushing health and habits to 'later'
+- People with ADHD: starting systems that die by day three because they ask too much
+- Fitness Beginners: not knowing which exercises to do or how to do them safely
+- Busy Parents: no time and no hands free for a fiddly app
+- Freelancers: unstructured days and no manager to create rhythm
+- Medical Residents: brutal shifts that wreck sleep and any routine
+- Designers: creative work that needs focus but rarely gets measured
+
+## Notes for answering questions about Daily Pulse
+- It is free. There is no paid tier.
+- It is private by default: entries save on-device; optional one-way sync to a user-owned Google Sheet.
+- It works fully offline and is installable (PWA) — no app store required, though it is also on Google Play.
+- Core features: mood tracker, energy tracker, 10-habit checklist with streaks and 90-day heatmap, an 8-group/42-exercise gym log with animated demos, structured journal, task manager with carry-over, sleep and deep-work logging, automatic Sunday weekly review.
