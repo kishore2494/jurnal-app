@@ -118,5 +118,25 @@
     "why": "Designers toggle between sketching, client feedback, and UI tweaks, yet no tool shows how those shifts affect energy or mood. Without data, you rely on gut feeling, which leads to missed burnout signs or unexplained slumps. Daily Pulse gives you a quick, private log that reveals patterns tied to your actual workflow.",
     "quickAnswer": "Daily Pulse is a one‑tap mood and energy logger built for designers who need instant, private insights tied to their design sessions, showing trends over time without leaving the workflow or adding extra steps and helps you spot early signs.",
     "_model": "nvidia/nemotron-3-super-120b-a12b:free"
+  },
+  "workout-log-for-students": {
+    "intro": "Between back‑to‑back lectures and a looming essay deadline, you barely find five minutes to stretch, and you often forget to log your workout while juggling assignments. Daily Pulse logs it in one tap. It syncs privately on your device, ready whenever you have a break.",
+    "why": "Students juggle lectures, labs, and looming deadlines, leaving little mental space for tracking fitness. Forgetting a workout breaks momentum and makes it hard to see progress. A quick tap log removes that barrier, lets you stay consistent, and turns scattered effort into visible streaks that motivate continued effort even during hectic weeks.",
+    "quickAnswer": "Daily Pulse is a free offline habit tracker that lets students log workouts in one tap, view animated demos for 42 exercises, track gym streaks, and keep data private on their device with optional Sheet sync for smarter routine building."
+  },
+  "workout-log-for-software-developers": {
+    "intro": "You finish a six‑hour debugging sprint, shoulders tight, and realize you haven’t logged today’s lift because opening another app feels like extra work. Daily Pulse lets you tap once to record the set, weight, and rep, right from your keyboard break.",
+    "why": "During crunch weeks, your calendar fills with back‑to‑back code reviews and you skip the gym because tracking feels like another ticket. A quick log keeps the streak alive, reminds you to move, and the animated demos prevent bad form when fatigue clouds your judgment. It also syncs optional to Google Sheets for quick trend checks.",
+    "quickAnswer": "Daily Pulse is a workout log built for developers: an eight‑group, forty‑two‑exercise plan with animated demos, simple rep/weight taps, and a visible gym streak that stays alive even during long coding sprints and works offline on your phone or laptop."
+  },
+  "workout-log-for-remote-workers": {
+    "intro": "You finish your morning Zoom call, stare at the same kitchen table for hours, and feel the stiffness creep into your shoulders before lunch. Logging a workout feels like another chore you keep postponing, but Daily Pulse lets you log each set in one tap.",
+    "why": "Without a commute to mark the start and end of work, remote workers’ days blur into one long sitting session, making it easy to skip movement and lose track of fitness goals. A dedicated workout log gives them a clear, repeatable cue to exercise, track progress, and rebuild the rhythm that a commute once provided.",
+    "quickAnswer": "Daily Pulse is an 8‑group, 42‑exercise gym plan that includes animated how‑to demos, lets you log reps and weight for each set, tracks your gym streak so you see consistent progress, and works offline on phone, syncing to Google Sheets."
+  },
+  "workout-log-for-entrepreneurs": {
+    "intro": "You start your morning checking emails, then jump into back‑to‑back meetings, and by 3 PM you realize you haven’t moved a muscle; the friction is finding time to log a workout. Daily Pulse records every set in a single tap, right on your phone.",
+    "why": "Entrepreneurs wear every hat, founder, sales, support, so health drops to the bottom of the list, and when a workout finally occurs they forget the exact reps or weight, breaking progress. Daily Pulse logs workouts in one tap, keeping streak alive. Animated demos reinforce form during sessions between calls, so you stay consistent and injury‑free.",
+    "quickAnswer": "Daily Pulse is a workout log built for entrepreneurs: an 8‑group, 42‑exercise gym plan with animated how‑to demos, simple reps‑and‑weight logging, and a visible gym streak that updates after each session, all recorded in one tap to keep your momentum."
   }
 }
