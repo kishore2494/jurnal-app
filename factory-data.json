@@ -30,6 +30,12 @@
     { "key": "busy-parents", "name": "Busy Parents", "pain": "no time and no hands free for a fiddly app", "hook": "a full day logged in the time it takes to make one coffee" },
     { "key": "freelancers", "name": "Freelancers", "pain": "unstructured days and no manager to create rhythm", "hook": "build your own rhythm when nobody else sets it for you" },
     { "key": "medical-residents", "name": "Medical Residents", "pain": "brutal shifts that wreck sleep and any routine", "hook": "track sleep and energy through rotations, offline, private on your device" },
-    { "key": "designers", "name": "Designers", "pain": "creative work that needs focus but rarely gets measured", "hook": "see your focus hours and mood trend against the work you actually shipped" }
+    { "key": "designers", "name": "Designers", "pain": "creative work that needs focus but rarely gets measured", "hook": "see your focus hours and mood trend against the work you actually shipped" },
+    { "key": "nurses", "name": "Nurses", "pain": "12-hour shifts, rotating schedules, and no time to log anything mid-round", "hook": "between rounds and charting, a tracker only survives if it takes one tap" },
+    { "key": "teachers", "name": "Teachers", "pain": "days ruled by bells, grading at night, and their own routine coming last", "hook": "your day runs on someone else's schedule; your habits need to fit the gaps" },
+    { "key": "writers", "name": "Writers", "pain": "mood-dependent output, procrastination, and irregular creative rhythm", "hook": "creative work is moody; seeing the pattern helps you show up anyway" },
+    { "key": "athletes", "name": "Athletes", "pain": "tracking training load but ignoring recovery, sleep, and mood", "hook": "your training is tracked; recovery, sleep and mood usually aren't" },
+    { "key": "consultants", "name": "Consultants", "pain": "constant travel, client demands, and work-life lines that blur", "hook": "living out of airports, routine is the first thing to go" },
+    { "key": "night-shift-workers", "name": "Night-Shift Workers", "pain": "disrupted sleep, off-hours living, and a real toll on health", "hook": "when your day is the world's night, sleep and energy need watching" }
   ]
 }
