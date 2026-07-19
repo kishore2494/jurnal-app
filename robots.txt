@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kishore2494.github.io/daily-pulse/sitemap.xml
