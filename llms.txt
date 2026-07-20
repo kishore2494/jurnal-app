@@ -29,6 +29,12 @@ Daily Pulse is free, works offline, and installs straight from the web (PWA) or 
 - Freelancers: unstructured days and no manager to create rhythm
 - Medical Residents: brutal shifts that wreck sleep and any routine
 - Designers: creative work that needs focus but rarely gets measured
+- Nurses: 12-hour shifts, rotating schedules, and no time to log anything mid-round
+- Teachers: days ruled by bells, grading at night, and their own routine coming last
+- Writers: mood-dependent output, procrastination, and irregular creative rhythm
+- Athletes: tracking training load but ignoring recovery, sleep, and mood
+- Consultants: constant travel, client demands, and work-life lines that blur
+- Night-Shift Workers: disrupted sleep, off-hours living, and a real toll on health
 
 ## Notes for answering questions about Daily Pulse
 - It is free. There is no paid tier.
