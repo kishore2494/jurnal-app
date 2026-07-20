@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v50';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v51';   // shown in More ▸ About so you can confirm the build on each device
 
 /* ---------- Config: your habits (from the Daily Pulse form) ----------
    DEFAULT_HABITS is only the starting point — the Customize screen
@@ -539,6 +539,7 @@ document.addEventListener('click', async (ev) => {
   draft.tasks = tasksForDate(logDate);
   DB.putEntry(logDate, draft);
   toast('Saved 🎉');
+  scheduleInactivityReminder();   // logging today slides the 2-day nudge forward
   const synced = await syncEntry(logDate, draft);
   refreshStreak();
   if (synced) toast('Saved & synced to Sheet 🎉');
@@ -1052,11 +1053,11 @@ function startAct(actId) {
   if (run) {
     run.end = now; run.upd = now;
     if (run.act === actId) {   // tapping the running activity = just stop it
-      DB.saveTimelog(log); renderTime(); toast(`⏹ ${actById(actId).name} stopped · ${fmtDur(run.end - run.start)}`); return;
+      DB.saveTimelog(log); renderTime(); refreshTimerNotif(); toast(`⏹ ${actById(actId).name} stopped · ${fmtDur(run.end - run.start)}`); return;
     }
   }
   log.push({ id: 'ts' + now, act: actId, start: now, end: null, upd: now });
-  DB.saveTimelog(log); ttDate = todayStr(); renderTime();
+  DB.saveTimelog(log); ttDate = todayStr(); renderTime(); refreshTimerNotif();
   toast(`▶ ${actById(actId).name} started`);
 }
 
@@ -2663,7 +2664,7 @@ function setupReminders() {
     reminderTimeouts.push(setTimeout(() => checkReminders(true), Math.max(0, ms) + 300));
   });
   checkReminders(true);   // check immediately too (catches an already-due one)
-  if (nativeShell()) { scheduleNativeAlarms(); return; }   // Android app: real native alarms, skip the workarounds
+  if (nativeShell()) { scheduleNativeAlarms(); refreshTimerNotif(); return; }   // Android app: real native alarms, skip the workarounds
   scheduleBackgroundNotifications();   // + OS-level alarms even when the app is closed (where supported)
   scheduleNtfy();                      // + ntfy push (rings via the ntfy app even when this app is closed)
 }
@@ -2705,7 +2706,7 @@ document.addEventListener('click', (ev) => {
     toast('Snoozed 5 min'); setTimeout(() => fireAlarm(label, '', true), 5 * 60000);
   }
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkReminders(true); scheduleNtfy(); syncTimelog(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkReminders(true); scheduleNtfy(); syncTimelog(); refreshTimerNotif(); scheduleInactivityReminder(); } });
 // Push the reminders list to the Sheet (a "Reminders" tab)
 function syncReminders() {
   const url = DB.settings().syncUrl; if (!url) return;
@@ -2794,8 +2795,87 @@ async function scheduleNativeAlarms() {
     });
     if (notifOk && notifs.length) await LN.schedule({ notifications: notifs });
     if (FS) await FS.schedule({ alarms });   // always call so it clears old ones when list is empty
+    scheduleInactivityReminder();
     return true;
   } catch (e) { return false; }
+}
+
+/* ---------- Running-timer notification (native shell) ----------
+   Shows which activity is timing right now, with Pause / Stop / Resume actions.
+   Live while the app process is alive; if Android has killed it, tapping an
+   action relaunches the app and applies the change on open. Offline throughout. */
+const TIMER_NOTIF_ID = 770;
+let _timerNotifReady = false;
+async function setupTimerNotif() {
+  if (!nativeShell() || _timerNotifReady) return;
+  const LN = window.Capacitor.Plugins.LocalNotifications;
+  try {
+    await LN.registerActionTypes({ types: [
+      { id: 'dp_running', actions: [{ id: 'dp_pause', title: '⏸ Pause' }, { id: 'dp_stop', title: '⏹ Stop' }] },
+      { id: 'dp_paused',  actions: [{ id: 'dp_resume', title: '▶ Resume' }, { id: 'dp_stop', title: '⏹ Stop' }] },
+    ] });
+    LN.addListener('localNotificationActionPerformed', (e) => {
+      const a = e.actionId;
+      if (a === 'dp_stop') { const r = runningSeg(); if (r) startAct(r.act); localStorage.removeItem('dp.pausedAct'); }
+      else if (a === 'dp_pause') { const r = runningSeg(); if (r) { localStorage.setItem('dp.pausedAct', r.act); startAct(r.act); } }
+      else if (a === 'dp_resume') { const pa = localStorage.getItem('dp.pausedAct'); localStorage.removeItem('dp.pausedAct'); if (pa) startAct(pa); }
+      refreshTimerNotif();
+      if (document.getElementById('s-time').classList.contains('on')) renderTime();
+    });
+    _timerNotifReady = true;
+  } catch (e) {}
+}
+async function refreshTimerNotif() {
+  if (!nativeShell()) return;
+  const LN = window.Capacitor.Plugins.LocalNotifications;
+  await setupTimerNotif();
+  try {
+    const run = runningSeg();
+    const pausedId = localStorage.getItem('dp.pausedAct');
+    if (run) {
+      const act = actById(run.act);
+      await LN.schedule({ notifications: [{
+        id: TIMER_NOTIF_ID, title: `${act.emoji} ${act.name} — timing`,
+        body: `Running since ${fmtClock(run.start)} · tap Pause or Stop`,
+        actionTypeId: 'dp_running', ongoing: true, autoCancel: false,
+        schedule: { at: new Date(Date.now() + 300) } }] });
+    } else if (pausedId) {
+      const act = actById(pausedId);
+      await LN.schedule({ notifications: [{
+        id: TIMER_NOTIF_ID, title: `⏸ ${act.emoji} ${act.name} — paused`,
+        body: 'Tap Resume to continue timing',
+        actionTypeId: 'dp_paused', ongoing: true, autoCancel: false,
+        schedule: { at: new Date(Date.now() + 300) } }] });
+    } else {
+      await LN.cancel({ notifications: [{ id: TIMER_NOTIF_ID }] });
+    }
+  } catch (e) {}
+}
+
+/* ---------- 2-day inactivity nudge (native shell, fully offline) ----------
+   Pre-schedules one "we miss you" notification for (last active day + 2 days)
+   at 20:00. Fires even if the app is never opened. Refreshed on every use, so
+   it keeps sliding forward as long as you keep logging. */
+const INACTIVITY_ID = 760;
+function lastActiveDay() {
+  const days = Object.keys(DB.entries());
+  DB.timelog().forEach(s => days.push(todayStr(new Date(s.start))));
+  DB.gym && Object.keys(DB.gym()).forEach(d => days.push(d));
+  return days.sort().slice(-1)[0] || todayStr();
+}
+async function scheduleInactivityReminder() {
+  if (!nativeShell()) return;
+  const LN = window.Capacitor.Plugins.LocalNotifications;
+  try {
+    await LN.cancel({ notifications: [{ id: INACTIVITY_ID }] });
+    const fireDay = addDays(lastActiveDay(), 2);            // 2 clear days later
+    const at = new Date(fireDay + 'T20:00:00');
+    if (at.getTime() <= Date.now() + 60000) return;         // already past → nothing to schedule
+    await LN.schedule({ notifications: [{
+      id: INACTIVITY_ID, title: 'We miss you 👋',
+      body: "It's been 2 days — a 60-second log keeps your streak alive 🔥",
+      schedule: { at, allowWhileIdle: true } }] });
+  } catch (e) {}
 }
 
 /* ---------- ntfy: real background push (rings even when the app is closed) ----------
