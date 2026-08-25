@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v139';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v143';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -713,8 +713,10 @@ function renderDeepSections() {
    Testers get silent web updates; this makes improvements visible so they keep
    giving feedback. Bump WHATS_NEW.v to re-show with new items. */
 const WHATS_NEW = {
-  v: 'w11',
+  v: 'w12',
   items: [
+    '⏰ <b>Alarms fixed properly — please update in the Play Store</b> — reminders now ring even while your phone is asleep, and they make a sound even when Android blocks the full-screen alarm. Daylog also asks once for the “Alarms &amp; reminders” permission so your reminder lands on the exact minute.',
+    '👀 <b>Readability fixes</b> — the Snooze button on the alarm screen was invisible in light mode, and streak numbers, counters and totals were too faint. All fixed and checked against accessibility contrast standards.',
     '⏰ <b>Alarm fix — please update in the Play Store</b> — on Android 14+ Android blocks exact alarms by default, so some reminders never fired and nothing told you. Settings now shows a warning with a one-tap fix, alarms survive a restart, and they ring loudly even when the full-screen alarm is blocked.',
     '🔢 <b>Counted habits</b> — give any habit a daily goal like “8 glasses of water” or “at most 2 coffees”. The chip becomes a tap counter. Set goals in Customize ▸ Checklist habits (🎯).',
     '✨ <b>Habit ideas</b> — a browse-able gallery of starter habits on the Log (below your checklist), including cut-down goals.',
@@ -4525,6 +4527,11 @@ document.addEventListener('click', async (ev) => {
     DB.saveReminders(r); renderSettings(); syncReminders();
     if ('Notification' in window && Notification.permission !== 'granted') await Notification.requestPermission();
     setupReminders(); toast('Reminder added');
+    // Ask for exact alarms HERE, at the moment the user commits to a reminder. The passive
+    // warning card was not enough — a tester set an alarm, saw a success toast, and got
+    // nothing, because Android 14+ denies exact alarms by default and the card was further
+    // down the page.
+    maybeAskExactAlarm();
     return;
   }
   const rt = ev.target.closest('[data-rem-toggle]');
@@ -5255,6 +5262,44 @@ async function refreshAlarmHealth() {
 }
 /* The banner shown on the Reminders card in Settings. Only appears when something is
    actually wrong, and every line is one tap from being fixed. */
+/* Ask for the exact-alarm permission at the moment it matters. Without it Android only
+   fires the reminder "sometime after" the chosen time (and, before v140, not at all while
+   the phone was dozing). Shown at most once per install unless the user re-triggers it. */
+async function maybeAskExactAlarm() {
+  if (!nativeShell()) return;
+  const h = await refreshAlarmHealth();
+  if (h.exactAllowed !== false) return;                    // already allowed, or unknown
+  if (localStorage.getItem('dp.exactAsked') === '1') { renderSettings(); return; }
+  localStorage.setItem('dp.exactAsked', '1');
+  let m = document.getElementById('exact-ask');
+  if (!m) { m = document.createElement('div'); m.id = 'exact-ask'; m.className = 'copy-modal'; document.body.appendChild(m); }
+  m.innerHTML = `<div class="copy-box">
+    <h2 class="h2-icon">${hicon('clock')}<span>One tap so your alarm is on time</span></h2>
+    <p class="hint" style="line-height:1.6">Android blocks apps from setting <b>exact</b> alarms unless you allow it. Without this, Daylog can still remind you — but Android decides when, and it can be several minutes late.</p>
+    <div class="wn-item">⏰ Allow <b>Alarms &amp; reminders</b> and your reminder fires at the minute you chose.</div>
+    <div class="wn-item">🔒 It only lets Daylog schedule alarms. Nothing is collected or sent.</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-primary" id="exact-go" style="flex:1">Allow exact alarms</button>
+      <button class="btn btn-ghost" id="exact-skip">Not now</button>
+    </div>
+  </div>`;
+  m.style.display = 'flex';
+}
+document.addEventListener('click', async (ev) => {
+  const m = document.getElementById('exact-ask');
+  if (!m || m.style.display === 'none') return;
+  if (ev.target.id === 'exact-skip' || ev.target === m) {
+    m.style.display = 'none'; renderSettings();
+    toast('You can turn it on any time in Settings ▸ Reminders'); return;
+  }
+  if (ev.target.id === 'exact-go') {
+    m.style.display = 'none';
+    const FS = fullScreenPlugin();
+    try { if (FS && FS.openExactAlarmSettings) await FS.openExactAlarmSettings(); } catch (e) {}
+    toast('Turn on “Alarms & reminders”, then come back');
+  }
+});
+
 function alarmHealthHTML() {
   if (!nativeShell()) return '';
   const h = alarmHealth();
@@ -6016,6 +6061,13 @@ setupReminders();
 setTimeout(() => { if (localStorage.getItem('dp.onboarded') && !document.getElementById('onboard').classList.contains('on')) showWhatsNewPopup(); }, 1200);
 setTimeout(() => checkReminders(true), 1000);   // catch a reminder you missed while the app was closed
 // Ask Android what it will actually honour, so Settings can warn instead of failing silently.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !nativeShell()) return;
+  refreshAlarmHealth().then(() => {          // they may have just granted it in Settings
+    const s = document.getElementById('s-settings');
+    if (s && s.classList.contains('on')) renderSettings();
+  });
+});
 setTimeout(() => { refreshAlarmHealth().then(() => {
   const s = document.getElementById('s-settings');
   if (s && s.classList.contains('on')) renderSettings();

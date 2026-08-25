@@ -1,3 +1,66 @@
+## 2026-08-23 — tester on Android 16: alarm silent while asleep + invisible Snooze button
+
+Two real bugs from one test session on an Android 16 phone. Web **v143**, bundle **110/70**.
+
+### 1. "I set the alarm, turned the phone off, nothing happened; I turned it on and the alarm appeared"
+That sentence is the whole diagnosis. Two independent faults stacked:
+
+**a) The fallback did not pierce Doze.** 109 fell back to `setWindow(RTC_WAKEUP, at, 10min)`
+when exact alarms are denied. **`setWindow` is deferred by idle maintenance** — the alarm sat
+there until the device left Doze, which is exactly what happens when you turn the screen on.
+Hence "nothing, then it fired the moment I woke it".
+**Fix: `setAndAllowWhileIdle()`.** Still inexact (OS rate-limits to ~1 per 9 min per app) but
+it *does* fire while dozing, and needs no permission.
+
+**b) The sound lived in the Activity.** `AlarmReceiver` chose the silent channel whenever
+`canUseFullScreenIntent()` was true, assuming `AlarmActivity` would open and ring. On Android
+14+ **having the permission is not the same as being allowed to launch** — OEM keyguard policy
+and background-activity-start rules can still refuse, and then nothing makes any noise at all.
+We already had proof of this on the POCO, where MIUI logged
+`MIUILOG- Permission Denied Activity KeyguardLocked` and only the FSI notification got through.
+**Fix: always post on the audible channel** (`dp_alarm_audible`, USAGE_ALARM sound +
+vibration). The notification is now the guaranteed delivery path; `AlarmActivity` cancels it in
+`onCreate` when it does win, so the two never overlap.
+
+**Rule: never let the only audible path depend on an Activity that the OS may refuse to start.**
+
+Also fixed: snooze called `setAlarmClock()` directly, which throws on Android 14+ — it now
+routes through `scheduleOne()` and inherits the same permission check and fallback.
+
+**Proactive permission ask.** The passive warning card was not enough — the tester never saw
+it. `maybeAskExactAlarm()` now fires right after a reminder is saved, once per install, with a
+one-tap deep link, plus a `visibilitychange` re-check so returning from system settings
+refreshes the state.
+
+### 2. Snooze button invisible in light mode — a CSS specificity collision
+`:root[data-mode="light"] .btn-ghost` (specificity **0,3,0**) beat
+`.alarm-btns .btn-ghost` (**0,2,0**) and applied `background:#eef1f7`, while the overlay's
+`color:#fff` still applied. **White on near-white, ~1.1:1.** Invisible. It only reproduced in
+light mode, which is why every earlier on-device test (navy theme) missed it.
+Fixed with id specificity (`#alarm .btn-ghost`, 1,1,0) so no theme rule can reach it. Now
+4.86:1 in light, navy and black alike.
+
+### That bug class is now caught mechanically
+Added a **WCAG contrast check** to `tools/evals/checks.js`. It immediately exposed a systemic
+problem: `--warn`, `--good`, `--bad` and `--accent` were tuned for the dark theme and **never
+given light-mode values**, so the 🔥 streak number sat at **1.48:1** on light chips, and
+counters/totals/deltas at 2.7-3.1:1.
+
+Fix: separate **`--good-ink` / `--warn-ink` / `--bad-ink` / `--accent-ink`** tokens for TEXT,
+with dark light-mode values (`#047857`, `#a3560c`, `#b91c1c`, `#3b5bdb`). The fill colours are
+unchanged, because they pair with hard-coded dark glyph colours on `.check` elements — a
+straight retint would have broken those. Also darkened light `--text-faint` #8b95ab → #6b7280
+(3.01 → ~4.8:1).
+
+**Probe false positive worth remembering (the third one):** a gradient background reports
+`backgroundColor: transparent`, so the first version walked past it and reported white-on-white
+**1.00:1 for all 19 gradient buttons**. It now returns null and skips when any ancestor paints
+a background-image.
+
+**Eval movement:** 80 errors / penalty 3524 → **8 errors / 923**, contrast-invisible **72 → 0**,
+contrast-low **621 → 42**. The 8 remaining errors are the previously documented tap-target
+cases. 55/55 unit tests.
+
 ## 2026-08-23 — PRODUCTION ACCESS GRANTED
 
 Applied 2026-08-22 21:07, granted within a day. Open testing is now available too.

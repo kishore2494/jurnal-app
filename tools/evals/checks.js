@@ -116,6 +116,51 @@
     }
   }
 
+  // 6b — CONTRAST. A reported bug had white text on a near-white background (the alarm
+  //      overlay's snooze button, from a theme rule out-specifying the overlay rule).
+  //      Nothing but a real luminance check catches that, so compute WCAG contrast for
+  //      every visible text node against its nearest opaque ancestor background.
+  const lum = (r, g, b) => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const parseRGB = c => { const m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null;
+    const p = m[1].split(',').map(x => parseFloat(x)); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+  // Returns the nearest opaque background colour, or null when it cannot be known.
+  // A gradient (background-image) reports backgroundColor: transparent, so the first
+  // version of this check walked past it to the card behind and reported white-on-white
+  // 1.00:1 for every gradient button in the app — 19 false errors. If any ancestor up to
+  // the text's own background paints an image/gradient, we cannot compute a ratio, so we
+  // skip rather than lie.
+  const hasImage = n => { const bi = getComputedStyle(n).backgroundImage; return bi && bi !== 'none'; };
+  const bgOf = el => { let n = el;
+    while (n && n !== document.documentElement) {
+      if (hasImage(n)) return null;                      // unknowable — skip this node
+      const c = parseRGB(getComputedStyle(n).backgroundColor);
+      if (c && c.a >= 0.9) return c;
+      n = n.parentElement;
+    }
+    const rc = parseRGB(getComputedStyle(document.body).backgroundColor); return rc || { r: 255, g: 255, b: 255, a: 1 }; };
+  all.forEach(el => {
+    const txt = Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('');
+    if (!txt) return;
+    const cs = getComputedStyle(el);
+    const fg = parseRGB(cs.color); if (!fg || fg.a < 0.5) return;
+    const bg = bgOf(el);
+    if (!bg) return;                                     // gradient/image behind the text
+    // flatten a translucent foreground onto its background before comparing
+    const mix = (f, b, a) => f * a + b * (1 - a);
+    const fr = mix(fg.r, bg.r, fg.a), fg2 = mix(fg.g, bg.g, fg.a), fb = mix(fg.b, bg.b, fg.a);
+    const L1 = lum(fr, fg2, fb) + 0.05, L2 = lum(bg.r, bg.g, bg.b) + 0.05;
+    const ratio = L1 > L2 ? L1 / L2 : L2 / L1;
+    const px = parseFloat(cs.fontSize) || 14;
+    const bold = (parseInt(cs.fontWeight, 10) || 400) >= 700;
+    const large = px >= 24 || (px >= 18.66 && bold);
+    const need = large ? 3.0 : 4.5;
+    if (ratio < need) {
+      add(ratio < 1.6 ? 'contrast-invisible' : 'contrast-low', el,
+          `${ratio.toFixed(2)}:1 (needs ${need}) "${txt.slice(0, 22)}"`, ratio < 1.6 ? 'error' : 'warn');
+    }
+  });
+
   // ACCEPTED, by design — reported but not treated as fixable:
   //   .yp cells are 5x9 because a year is 31 columns wide (Daylio's grid has the same
   //     constraint). The mosaic is a visualisation; tapping a day is a convenience, and
