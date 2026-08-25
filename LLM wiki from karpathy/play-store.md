@@ -1,20 +1,25 @@
 # Play Store launch — status & handoff
 
-> **STATUS 2026-08-22 21:07 — APPLIED FOR PRODUCTION ACCESS.** Google is reviewing the
-> application form; they email the account owner, "usually 7 days or less".
-> Production track = Inactive. Closed testing "Alpha": **109 (69) in review**,
-> 108 (68) live to testers since Aug 19.
+> **STATUS 2026-08-23 — PRODUCTION ACCESS GRANTED.** Applied 2026-08-22 21:07, granted
+> within a day. Production track still **Inactive** — access is permission, not a release.
+> Next action is to create the production release.
 >
-> **When production access is granted: promote 109 (69), NOT 108.** 108 still has the
-> alarm bug (exact-alarm permission denied by default on Android 14+ → reminders never
-> fired, silently). Fixed only in 109.
+> ### ⚠️ THE ONE THING THAT MATTERS NOW
+> **Promote 109 (69), NOT 108 (68).** 108 contains the alarm bug (Android 14+ denies
+> SCHEDULE_EXACT_ALARM by default → reminders never fired, silently). Only 109 has the fix.
+> Version codes only increase, so promoting 108 would ship the bug AND force an immediate
+> follow-up. Confirm 109 shows "Available to selected testers" (i.e. it cleared closed-test
+> review) before promoting.
+>
+> ### Recommended: STAGED ROLLOUT, not 100%
+> The alarm fix is verified firing on the POCO (Android 11) and verified structurally, but
+> **never confirmed on an Android 14+ device** — which is the only platform where the
+> original bug exists. Android 11 cannot reproduce it. Start production at a low percentage,
+> confirm reminders fire on a real Android 14+ phone, then ramp to 100%.
 >
 > Play title: `Daylog: Habit Tracker & Mood` · package `io.github.kishore2494.dailypulse`
-> (the "dailypulse" id and the hosting URL keep the old name on purpose — changing either
-> would break every install).
->
-> **Answers submitted on the production form** are the 300-CHARACTER versions logged in
-> log.md 2026-08-22. Field limit is characters, not words.
+> (the "dailypulse" id and the hosting URL deliberately keep the old name — changing either
+> breaks every install).
 
 _Last updated: 2026-07-29 · app live at v60 · Play Console: closed-test release submitting for review._
 

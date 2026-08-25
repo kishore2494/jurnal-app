@@ -1,3 +1,18 @@
+## 2026-08-23 — PRODUCTION ACCESS GRANTED
+
+Applied 2026-08-22 21:07, granted within a day. Open testing is now available too.
+Production track is still Inactive — access is a permission, not a release.
+
+**Next action: create the production release from 109 (69).** Not 108 — it still has the
+alarm bug, and version codes only increase, so shipping 108 would require an immediate
+follow-up update.
+
+**Recommendation recorded: staged rollout rather than 100%.** The alarm fix is verified
+firing on the POCO (Android 11) and verified in the shipped dex, but the Android 14+ path —
+the only place the original bug exists — has never been confirmed on a real device, because
+Android 11 cannot reproduce it. A low initial percentage limits exposure if that path is
+still wrong; ramp after a real Android 14+ confirmation.
+
 ## 2026-08-22 — applied for production access (109/69 in review)
 
 Rolled out **109 (69)** to the closed "Alpha" track (in review at time of writing) and
