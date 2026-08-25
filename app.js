@@ -472,6 +472,59 @@ async function resyncAll() {
   toast(`Pushed ${ok} day(s) to your Sheet`);
 }
 
+/* ---------- PIS (Personal Intelligence System) direct push ---------- */
+function pisUrl() {
+  return (DB.settings().pisUrl || 'http://127.0.0.1:5001').replace(/\/+$/, '');
+}
+
+async function pisCheck() {
+  const st = document.getElementById('pis-status');
+  const res = document.getElementById('pis-result');
+  if (st) st.textContent = 'checking…';
+  try {
+    const r = await fetch(pisUrl() + '/api/integrations/daily-pulse/status', { mode: 'cors' });
+    if (!r.ok) throw new Error('PIS replied ' + r.status);
+    const d = await r.json();
+    if (st) st.textContent = 'connected ✓';
+    if (res) res.innerHTML = d && d.app ? '<span style="color:var(--green,#4ade80)">✓ ' + escapeHtml(d.app) +
+      ' is running — ' + d.days_in_pis + ' day(s), ' + d.habits_in_pis + ' habit(s) already inside.' +
+      (d.last_import_at ? '<br>Last import: ' + escapeHtml(d.last_import_at.replace('T', ' ').slice(0, 16)) : '') + '</span>' : '';
+    toast('PIS connected ✅');
+  } catch (e) {
+    if (st) st.textContent = 'offline';
+    if (res) res.innerHTML = '<span style="color:var(--red,#f87171)">✗ ' + escapeHtml(e.message || e) +
+      '<br>Is the PIS server running on this computer? (cd PIS && ./start_pis.sh)</span>';
+    toast('Could not reach PIS', true);
+  }
+}
+
+async function pisPush() {
+  const res = document.getElementById('pis-result');
+  if (res) res.textContent = 'Pushing to PIS…';
+  try {
+    const blob = backupBlob();
+    const r = await fetch(pisUrl() + '/api/integrations/daily-pulse/import', {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backup: blob })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('PIS replied ' + r.status));
+    const st = document.getElementById('pis-status');
+    if (st) st.textContent = 'connected ✓';
+    if (res) res.innerHTML = '<span style="color:var(--green,#4ade80)">✓ Imported ' +
+      (d.days || 0) + ' day(s) into PIS — ' + (d.habits_synced || 0) + ' habit log(s)' +
+      (d.habits_created ? ', ' + d.habits_created + ' new habit(s)' : '') +
+      (d.skipped && d.skipped.length ? ', ' + d.skipped.length + ' skipped' : '') +
+      '.</span>';
+    toast('Pushed to PIS 🧠');
+  } catch (e) {
+    if (res) res.innerHTML = '<span style="color:var(--red,#f87171)">✗ ' + escapeHtml(e.message || e) + '</span>';
+    toast('Push failed', true);
+  }
+}
+
 /* ---------- Multi-device sync: full-state push + JSONP pull ----------
    The sync link IS the login. Whichever device saved most recently wins;
    the app pulls on open so you see the latest before editing. */
@@ -4505,6 +4558,19 @@ function renderSettings() {
       </div>
       <input type="file" id="import-file" accept="application/json" style="display:none">
     </div>
+    <div class="card">
+      <h2>🧠 PIS sync <span class="hint" id="pis-status">not connected</span></h2>
+      <div class="hint" style="margin-bottom:8px">Push your Daylog days straight into your <b>Personal Intelligence System</b> (the PIS app on this computer — server running at <b>localhost:5001</b>) so its Mirror, Trends, and chat can analyze your life. On your phone, use the Google Sheet link instead.</div>
+      <div class="task-add" style="margin-top:8px">
+        <input type="text" id="pis-url" value="${escapeHtml(s.pisUrl || 'http://127.0.0.1:5001')}" placeholder="http://127.0.0.1:5001" style="flex:1" spellcheck="false" autocapitalize="off">
+        <button class="btn btn-ghost btn-sm" id="pis-save">Save</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-primary btn-sm" id="pis-push">⬆ Push my days to PIS</button>
+        <button class="btn btn-ghost btn-sm" id="pis-check">Check connection</button>
+      </div>
+      <div class="hint" id="pis-result" style="margin-top:8px"></div>
+    </div>
     <div class="card"><h2>ℹ️ About</h2>
       <div class="hint">Daylog · <b>${APP_VERSION}</b> · local-first. Your data stays on this device${s.syncUrl?' and syncs to your Google Sheet':''}.
       Add to Home Screen to use it like a native app, offline. · <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div></div>
@@ -4519,6 +4585,16 @@ document.addEventListener('click', async (ev) => {
   }
   if (ev.target.id === 'sync-now') { toast('Syncing…'); pullState(ok => { if (!ok) pushState(true); toast('Synced ✅'); }); }
   if (ev.target.id === 'resync') { toast('Pushing all…'); resyncAll(); }
+  if (ev.target.id === 'pis-save') {
+    const s2 = DB.settings();
+    s2.pisUrl = (document.getElementById('pis-url').value || '').trim();
+    DB.saveSettings(s2);
+    toast('PIS link saved');
+    renderSettings();
+    return;
+  }
+  if (ev.target.id === 'pis-check') { pisCheck(); return; }
+  if (ev.target.id === 'pis-push') { pisPush(); return; }
   if (ev.target.id === 'rem-add') {
     const time = document.getElementById('rem-new-time').value;
     const label = document.getElementById('rem-new-label').value.trim();
@@ -4786,10 +4862,14 @@ function sendFeedback(text, contact) {
 /* Everything the app stores, for a COMPLETE backup/restore. */
 const BACKUP_KEYS = ['entries', 'tasks', 'notes', 'plans', 'gym', 'exercises', 'reminders', 'timelog', 'timeacts', 'events', 'docs', 'habitcfg', 'actcfg', 'deepcfg', 'gymcfg', 'corecfg', 'daycfg', 'gymgroups', 'navcfg', 'pomo', 'timebox', 'pomohist', 'health'];
 function exportData() {
-  const out = { settings: DB.settings() };
-  BACKUP_KEYS.forEach(k => { const raw = localStorage.getItem('dp.' + k); if (raw) out[k] = JSON.parse(raw); });
+  const out = backupBlob();
   saveFile('daily-pulse-backup-' + todayStr() + '.json', JSON.stringify(out, null, 2), 'application/json');
   localStorage.setItem('dp.lastBackup', String(Date.now()));
+}
+function backupBlob() {
+  const out = { settings: DB.settings() };
+  BACKUP_KEYS.forEach(k => { const raw = localStorage.getItem('dp.' + k); if (raw) out[k] = JSON.parse(raw); });
+  return out;
 }
 function importData(file) {
   const r = new FileReader();
