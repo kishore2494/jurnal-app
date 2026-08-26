@@ -179,6 +179,41 @@
   if (vSnapT != null) localStorage.setItem('dp.timelog', vSnapT); else localStorage.removeItem('dp.timelog');
   if (vSnapH != null) localStorage.setItem('dp.health', vSnapH); else localStorage.removeItem('dp.health');
 
+  // ---- Habit cues (implementation intentions) ----
+  const cSnapC = localStorage.getItem('dp.habitcfg'), cSnapDate = logDate;
+  localStorage.setItem('dp.habitcfg', JSON.stringify([
+    { key: 'cq', emoji: '📖', label: 'Read' }, { key: 'cw', emoji: '🏋️', label: 'Lift' }]));
+  reloadCfg();
+  const cH = habitCfg()[0];
+  logDate = todayStr();
+  // the regression that matters: with no cue the markup must be exactly what it always was
+  ok('no cue leaves chip markup unchanged',
+     chipTextHTML(cH) === '<span class="hlbl">' + escapeHtml(cH.label) + '</span>', chipTextHTML(cH));
+  ok('habitCue is empty for an unset habit', habitCue(cH) === '');
+  const cCfg = habitCfg(); cCfg[0].cue = 'after my morning coffee'; saveHabitCfg(cCfg);
+  ok('cue renders on the chip', /hcue/.test(chipTextHTML(habitCfg()[0])));
+  ok('cue renders its text', /after my morning coffee/.test(chipTextHTML(habitCfg()[0])));
+  // a plan for a past day is noise
+  logDate = addDays(todayStr(), -3);
+  ok('cue is suppressed on a past day', !/hcue/.test(chipTextHTML(habitCfg()[0])));
+  logDate = todayStr();
+  // escaping on all three surfaces
+  const cCfg2 = habitCfg(); cCfg2[0].cue = '<img src=x onerror=alert(1)> "q" & amp'; saveHabitCfg(cCfg2);
+  const cH2 = habitCfg()[0];
+  ok('cue escapes html on the chip', /&lt;img/.test(chipTextHTML(cH2)) && !/<img/.test(chipTextHTML(cH2)));
+  ok('cue escapes html on the habits line', /&lt;img/.test(cueLineHTML(cH2)) && !/<img/.test(cueLineHTML(cH2)));
+  ok('cue escapes html in the editor value', /&lt;img/.test(cueInputHTML(cH2)) && !/<img/.test(cueInputHTML(cH2)));
+  // the editor row must never carry data-id, or enableDrag reorders phantom rows
+  ok('cue editor row has no data-id', !/data-id/.test(cueInputHTML(cH2)));
+  ok('cue editor caps length', new RegExp('maxlength="' + CUE_MAX + '"').test(cueInputHTML(cH2)));
+  // empty is deleted, never stored, or every device sees habitcfg as changed
+  const cCfg3 = habitCfg(); delete cCfg3[0].cue; saveHabitCfg(cCfg3);
+  ok('cleared cue is deleted not blanked', !('cue' in habitCfg()[0]));
+  ok('unset habit shows the plan prompt', /Plan a when/.test(cueLineHTML(habitCfg()[0])));
+  logDate = cSnapDate;
+  if (cSnapC != null) localStorage.setItem('dp.habitcfg', cSnapC); else localStorage.removeItem('dp.habitcfg');
+  reloadCfg(); _goalMap = null;
+
   // ---- Awards ----
   const aSnapE = localStorage.getItem('dp.entries'), aSnapC = localStorage.getItem('dp.habitcfg'),
         aSnapA = localStorage.getItem('dp.awards'), aSnapI = localStorage.getItem('dp.awardsInit'),

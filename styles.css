@@ -1390,3 +1390,35 @@ input[type="range"] { height: 30px; }
    and where the change is inside the metric's own noise floor. */
 .wow-delta.flat { color: var(--text-dim); background: rgba(127, 127, 127, .14); }
 .vs-modes .range-btn { min-height: 44px; }   /* .range-btn alone is ~36px, under the tap floor */
+
+/* ---------- Implementation intentions — the when/where cue ----------
+   The cue is a PROMPT, so it shows only while the habit is still open. Hidden in CSS and
+   not in JS because the chip's tap handler toggles .on/.skip in place without re-rendering
+   — which means unticking brings the cue back for free. --text-dim, not --text-faint: an
+   earlier release already had to fix "counters and totals were too faint", and this is
+   11px. */
+.habit .htxt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.habit .htxt > .hlbl { flex: 0 0 auto; width: 100%; }
+.habit .hcue { font-size: 11px; line-height: 1.25; color: var(--text-dim); font-weight: 500;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.habit.on .hcue, .habit.skip .hcue { display: none; }
+/* A counted habit's chip is full-width and its ± / 0 buttons have fixed widths, so the cue
+   gets one line only. */
+.habit.qty .hcue { -webkit-line-clamp: 1; white-space: nowrap; text-overflow: ellipsis; }
+
+.hcue-line { display: block; width: 100%; text-align: left; margin: 2px 0 8px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--bg-input);
+  color: var(--text-dim); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  min-height: 36px; }
+.hcue-line.empty { border-style: dashed; color: var(--text-faint); font-weight: 500; }
+.hcue-line:active { opacity: .6; }
+
+.cfg-cue { display: flex; align-items: center; gap: 7px; padding: 0 0 8px; margin-top: -3px; }
+.cfg-cue-ico { flex: 0 0 auto; font-size: 12px; opacity: .8; }
+.cfg-cue .cfg-name { font-size: 12px !important; padding: 8px 9px !important; }
+/* Interleaving .cfg-cue rows means .cfg-row:last-child stops matching, which would leave a
+   stray divider under the last habit — move the divider onto the cue row instead so each
+   habit group still ends with exactly one. */
+#cfg-habits .cfg-row { border-bottom: none; }
+#cfg-habits .cfg-cue { border-bottom: 1px solid var(--border); }
+#cfg-habits .cfg-cue:last-child { border-bottom: none; }

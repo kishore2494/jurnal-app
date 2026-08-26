@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v171';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v174';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -406,6 +406,14 @@ function goalFor(key) {
   if (!_goalMap) { _goalMap = {}; habitCfg().forEach(h => { if (h.goal && h.goal.n != null) _goalMap[h.key] = h.goal; }); }
   return _goalMap[key] || null;
 }
+/* Implementation intention (Gollwitzer): a habit may carry a WHEN/WHERE plan — "after my
+   morning coffee, at my desk". The research rated this the strongest single evidence base in
+   the whole Strava set (around d = 0.65), and the effect comes from the FORMAT: an if-then
+   plan, not a better name. Optional and absent by default, so there is nothing to migrate —
+   every read goes through habitCue(), and every write deletes rather than storing ''. */
+function habitCue(h) { return h && typeof h.cue === 'string' ? h.cue.trim() : ''; }
+const CUE_MAX = 60;
+
 function hVal(entry, key) {
   if (!entry || !entry.habits || !(key in entry.habits)) return H_MISS;
   const v = entry.habits[key];
@@ -786,8 +794,12 @@ function renderDeepSections() {
    Testers get silent web updates; this makes improvements visible so they keep
    giving feedback. Bump WHATS_NEW.v to re-show with new items. */
 const WHATS_NEW = {
-  v: 'w13',
+  v: 'w14',
   items: [
+    '📍 <b>Plan a when &amp; where</b> — give any habit a cue like “after my morning coffee, at my desk”. It shows on that habit\'s chip until you tick it off. This is the best-evidenced habit trick there is: naming <i>when</i> and <i>where</i> beats naming the habit. Set one in Customize ▸ Checklist habits, or tap 📍 on the Habits screen.',
+    '📈 <b>You vs you</b> — Stats ▸ Overview now compares your last week, last 4 weeks, or the same 4 weeks a year ago against your own past. No leaderboards and no other people: the only person on the other side is you. When there isn\'t enough history it tells you the date it unlocks instead of guessing.',
+    '🏆 <b>Trophy case</b> — Stats ▸ Awards. 54 awards across 8 families, tiered so a big goal pays out along the way. Worked out from your own log, so nothing can be faked and nothing is ever taken away. “Next up” shows how close you are.',
+    '🖼️ <b>Share cards</b> — turn a streak, your year in pixels, your habits, an insight or an award into a picture. Drawn on your phone from your own data; only the image is ever shared.',
     '❤️ <b>Real auto-tracking</b> — steps, distance, calories, sleep, workouts and heart rate now come from <b>Health Connect</b>, alongside the automatic screen time. Settings ▸ Auto-tracking ▸ Connect Health Connect. Every metric is a separate switch, and anything you don\'t allow simply stays blank.',
     '🔔 <b>Pick your own alarm sound</b> — Customize ▸ Alarm sound. Choose any alarm tone on your phone (or your own audio file), preview it, and turn vibration on or off. Needs the Play Store update.',
     '⏰ <b>Alarms fixed properly — please update in the Play Store</b> — reminders now ring even while your phone is asleep, and they make a sound even when Android blocks the full-screen alarm. Daylog also asks once for the “Alarms &amp; reminders” permission so your reminder lands on the exact minute.',
@@ -1219,6 +1231,15 @@ function showGoalEditor(key) {
   m.dataset.key = key;
 }
 document.addEventListener('click', (ev) => {
+  const ce2 = ev.target.closest && ev.target.closest('[data-cue-edit]');
+  if (ce2) {
+    customPage = 'habits'; show('custom');            // show() renders synchronously
+    // Focus AFTER show(), because show() calls window.scrollTo(0,0) once the screen has
+    // rendered — doing this inside renderCustom would be immediately undone.
+    const i = document.querySelector(`[data-cfg-cue="${ce2.dataset.cueEdit}"]`);
+    if (i) { i.focus(); try { i.scrollIntoView({ block: 'center' }); } catch (e) {} }
+    return;
+  }
   const gb = ev.target.closest && ev.target.closest('[data-cfg-goal]');
   if (gb) { showGoalEditor(gb.dataset.cfgGoal); return; }
   const m = document.getElementById('goal-editor');
@@ -1298,6 +1319,16 @@ document.addEventListener('click', (ev) => {
   autosaveDraft();
 });
 
+/* Label + optional cue as ONE flexible column. With no cue this returns exactly the markup
+   it always did, so the chip's flex layout — and the min-width:0 fix that stopped badges
+   being pushed out of the chip — is untouched for every user who never sets one. */
+function chipTextHTML(h) {
+  const cue = logDate === todayStr() ? habitCue(h) : '';   // a plan for 12 days ago is noise
+  if (!cue) return `<span class="hlbl">${escapeHtml(h.label)}</span>`;
+  return `<span class="htxt"><span class="hlbl">${escapeHtml(h.label)}</span>`
+       + `<span class="hcue">📍 ${escapeHtml(cue)}</span></span>`;
+}
+
 function habitChipHTML(h) {
   const g = goalFor(h.key);
   const state = hVal(draft, h.key);
@@ -1313,7 +1344,7 @@ function habitChipHTML(h) {
     const prog = `${logged ? n : '–'}/${g.cmp === 'atmost' ? '≤' : ''}${g.n}${g.unit ? ' ' + escapeHtml(g.unit) : ''}`;
     return `<div class="habit qty ${on?'on':''}${over?' over':''}" data-habit="${h.key}" style="${style}" title="Tap to add 1">
       <span class="check">${over ? '!' : '✓'}</span><span class="emoji">${hi ? icon(hi, 17) : escapeHtml(h.emoji)}</span>
-      <span class="hlbl">${escapeHtml(h.label)}</span>
+      ${chipTextHTML(h)}
       <span class="qty-prog">${prog}</span>
       ${logged && n > 0 ? `<button type="button" class="qty-btn" data-habit-dec="${h.key}" aria-label="minus 1">−</button>` : ''}
       ${!logged && g.cmp === 'atmost' ? `<button type="button" class="qty-btn qty-zero" data-habit-zero="${h.key}" title="none today">0</button>` : ''}
@@ -1324,7 +1355,7 @@ function habitChipHTML(h) {
   // tap toast spells it out. Title attribute carries it for anyone unsure.
   return `<div class="habit ${on?'on':''}${sk?' skip':''}" data-habit="${h.key}" style="${style}" title="${sk?'Skipped — your streak is safe':'Tap: done → skip → clear'}">
     <span class="check">${sk?'⤳':'✓'}</span><span class="emoji">${hi ? icon(hi, 17) : escapeHtml(h.emoji)}</span>
-    <span class="hlbl">${escapeHtml(h.label)}</span>${sk?'':(st>1?`<span class="streak">${icon('flame',13)}${st}</span>`:'')}</div>`;
+    ${chipTextHTML(h)}${sk?'':(st>1?`<span class="streak">${icon('flame',13)}${st}</span>`:'')}</div>`;
 }
 function refreshHabitChip(key) {
   const el = document.querySelector(`[data-habit="${key}"]`); if (!el) return;
@@ -2481,6 +2512,11 @@ document.addEventListener('change', (ev) => {
 /* ============================================================
    SCREEN: HABITS (streaks + heatmaps)
    ============================================================ */
+function cueLineHTML(h) {
+  const cue = habitCue(h);
+  return `<button type="button" class="hcue-line${cue ? '' : ' empty'}" data-cue-edit="${h.key}">`
+       + (cue ? `📍 ${escapeHtml(cue)}` : '📍 Plan a when &amp; where') + `</button>`;
+}
 function renderHabits() {
   document.getElementById('screen-title').textContent = 'Habits';
   document.getElementById('screen-sub').textContent = 'Streaks & consistency';
@@ -2503,6 +2539,7 @@ function renderHabits() {
     return `<div class="card">
       <h2>${h.emoji} ${escapeHtml(h.label)}
         <span class="hint" style="float:right">🔥 ${st} day${st===1?'':'s'} · ${pct}% / 30d${skipped?` · ${skipped} skipped`:''}</span></h2>
+      ${cueLineHTML(h)}
       <div class="heat">${heat}</div>
       <div class="strength-row" title="Weighted 13-day trend — one miss won't zero it, one day won't max it">
         <span class="hint">Strength</span>
@@ -3736,6 +3773,15 @@ document.addEventListener('keydown', (ev) => {
    ============================================================ */
 const CFG_COLORS = ['', '#fb923c', '#6d8cff', '#a78bfa', '#ec4899', '#34d399', '#fbbf24', '#f87171', '#22d3ee'];
 function nextCfgColor(c) { return CFG_COLORS[(CFG_COLORS.indexOf(c || '') + 1) % CFG_COLORS.length]; }
+/* NO data-id on this row. enableDrag() reorders by querySelectorAll('[data-id]') inside
+   #cfg-habits, so a data-id here would inject phantom ids into the saved order and the
+   ids.map(...).filter(Boolean) that follows would silently DROP habits on the next drag. */
+function cueInputHTML(h) {
+  return `<div class="cfg-cue"><span class="cfg-cue-ico">📍</span>
+    <input class="cfg-name" data-cfg-cue="${h.key}" maxlength="${CUE_MAX}"
+      placeholder="when &amp; where — e.g. after my morning coffee"
+      value="${escapeHtml(habitCue(h))}"></div>`;
+}
 function cfgRow(kind, item, deletable) {
   const id = item.key || item.id;
   const color = item.color || '';
@@ -3846,7 +3892,10 @@ function cfgSectionHTML(page) {
   if (page === 'habits') {
     return `<div class="card">
       <h2>✅ Daily checklist habits <span class="hint">emoji · name · color · 👁 · drag</span></h2>
-      <div id="cfg-habits">${habitCfg().map(h => cfgRow('h', h, !!h.custom)).join('')}</div>
+      <div class="hint" style="margin-bottom:10px">📍 A when-and-where plan is the
+        best-evidenced habit trick there is: “after my morning coffee, at my desk” beats
+        “read more”. Your plan shows on that habit's chip on the Log until you tick it off.</div>
+      <div id="cfg-habits">${habitCfg().map(h => cfgRow('h', h, !!h.custom) + cueInputHTML(h)).join('')}</div>
       <div class="task-add">
         <input type="text" id="cfg-new-habit" placeholder="New habit… (e.g. 🌅 Wake at 6)" autocomplete="off">
         <button class="btn btn-primary btn-sm" id="cfg-add-habit">Add</button>
@@ -4122,6 +4171,18 @@ document.addEventListener('input', (ev) => {
   const cn = ev.target.closest('[data-cfg-name]');
   if (cn) { const [k, id] = cn.dataset.cfgName.split(':'); const f = cfgFind(k, id);
     if (f.item) { if (f.item.label !== undefined || k === 'h') f.item.label = cn.value; else f.item.name = cn.value; f.save(); } return; }
+  const cq = ev.target.closest('[data-cfg-cue]');
+  if (cq) { const f = cfgFind('h', cq.dataset.cfgCue);
+    if (f.item) {
+      const v = cq.value.replace(/\s+/g, ' ').trim().slice(0, CUE_MAX);
+      // Never store '': the sync differ compares JSON.stringify(remote) against the stored
+      // string, so writing empty cues into every habit would make every device see habitcfg
+      // as changed and churn a pointless round-trip on first open. Mirrors `delete h.goal`.
+      if (v) f.item.cue = v; else delete f.item.cue;
+      f.save();
+    }
+    // Deliberately no renderCustom() here — it would destroy the focused input mid-keystroke.
+    return; }
   // deep-log renames
   const dst = ev.target.closest('[data-dsec-title]');
   if (dst) { const cfg = deepCfg(); const sec = cfg.find(s => s.id === dst.dataset.dsecTitle);
