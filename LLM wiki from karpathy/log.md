@@ -1,3 +1,60 @@
+## 2026-08-26 — 🚀 LIVE ON GOOGLE PLAY · real Health Connect auto-capture · Strava research
+
+**Daylog is published on Google Play.** Production access granted 08-23, released 08-26.
+
+### Health Connect auto-capture is now REAL (web v148 + bundle 112/72)
+Before this, `HealthConnectPlugin.today()` returned **hardcoded nulls** for every sensor
+metric — six switches in Settings ▸ Auto-tracking (Sleep, Steps, Calories, Workouts, Heart
+rate) **controlled nothing**. Only screen time was ever real. That was a live defect: five
+toggles that looked functional and did nothing. The Play listing luckily never claimed them.
+
+- Added **Kotlin 2.1.0** to the project (the HC client exposes only suspend functions) plus
+  `androidx.health.connect:connect-client` and coroutines.
+- **`HealthReader.kt`** aggregates today's steps / distance / calories / exercise / heart rate,
+  and reads **sleep over an 18-hour look-back** — a night's sleep does not sit inside today's
+  calendar window, so a midnight→now query would miss it entirely.
+- **Each metric is fetched independently.** One ungranted permission cannot wipe the rest.
+  Absent stays **null, never 0** — "no data" and "zero steps" are different facts to the
+  insight engine.
+- **minSdk stayed 24.** HC declares 26; rather than dropping Android 7 users days after
+  launch, we use `tools:overrideLibrary` and guard every call behind `SDK_INT >= 26`, with
+  **all HC imports isolated in HealthReader.kt** so lazy class loading means old devices never
+  load it. That isolation is the whole reason the override is safe.
+- Manifest: 6 read permissions, the `HEALTH_PERMISSIONS` rationale alias (HC requires a
+  rationale target), and the `healthdata` `<queries>` entry for pre-Android-14.
+- **The web consumer side needed no rework** — `syncHealth()` already read `t.steps`,
+  `t.sleepMinutes` and honoured each toggle. It was only ever receiving nulls. Added the HC
+  permission flow (a separate grant from Usage access), a Connect button **gated on the native
+  method existing** so older bundles don't show a dead control, and honest copy.
+- APK **2.99 → 4.28 MB** (Kotlin stdlib + HC client).
+
+**⚠️ BEFORE UPLOADING 112:** reading Health Connect data requires the **Health apps
+declaration** in Play Console, and Google reviews it. Do not ship 112 without completing it.
+
+### Strava research → `DAYLOG-STRAVA-RESEARCH.md`
+5 research dimensions, **111 findings**, 53 rated *build*, 13 adversarial verifications
+(2 refuted). Both research workflows hit the session limit before their synthesis agents ran,
+so the synthesis was done by hand from the journals — the work was recovered, not lost.
+
+**The finding that reshapes the roadmap, verified against our own code:** Android WebView has
+**no Web Share API at all**. `saveFile()` (app.js:2665) gates on `navigator.canShare`, so
+inside the shell that branch is **dead code** and a PNG falls through to a blob viewer with no
+share sheet. Confirmed independently: `grep -c canvas app.js` → **0** (card rendering is
+greenfield) and `@capacitor/share` is **not installed**.
+So image *generation* is pure web and ships instantly; image *delivery* needs one rebuild with
+`@capacitor/share`. Don't promise "share to WhatsApp" before that lands.
+
+**Also notable:** two of Strava's most-praised mechanics — consistency-over-performance and a
+forgiving streak cadence — Daylog already implements in a *more* humane form (EMA strength
+score, skip state). And Strava **paywalls custom goals and most of the recap layer**, which a
+free private tracker can simply give away.
+
+### Behaviour-design audit — PARTIAL
+2 of 4 research areas completed (evidence base, dark patterns) before the session limit; the
+ethical-design and retention areas, all 13 verifications and the final grading did not run.
+**Re-run after the limit resets** — the script is cached, so completed agents replay free:
+`Workflow({scriptPath: '.../behaviour-design-audit-daylog-wf_d9f8a6cb-91a.js', resumeFromRunId: 'wf_d9f8a6cb-91a'})`
+
 ## 2026-08-26 (later) — in-app alarm sound picker · web v146 + bundle 111/71
 
 Kishore asked for an in-app sound change, in the Customize section. Built it using
