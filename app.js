@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v146';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v148';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -768,6 +768,7 @@ function renderDeepSections() {
 const WHATS_NEW = {
   v: 'w13',
   items: [
+    '❤️ <b>Real auto-tracking</b> — steps, distance, calories, sleep, workouts and heart rate now come from <b>Health Connect</b>, alongside the automatic screen time. Settings ▸ Auto-tracking ▸ Connect Health Connect. Every metric is a separate switch, and anything you don\'t allow simply stays blank.',
     '🔔 <b>Pick your own alarm sound</b> — Customize ▸ Alarm sound. Choose any alarm tone on your phone (or your own audio file), preview it, and turn vibration on or off. Needs the Play Store update.',
     '🧠 <b>PIS sync</b> — Daylog now talks to your <b>Personal Intelligence System</b> directly. Settings ▸ PIS sync ▸ “Push my days to PIS” sends every logged day (mood, energy, focus, sleep, deep work, habits, journal) to PIS on this computer in one tap — no files, no sheet.',
     '😴 <b>Sleep &amp; deep work reach your PIS Trends</b> — the sleep hours and deep-work hours you log now show up as a dedicated chart in PIS ▸ Trends.',
@@ -1601,6 +1602,22 @@ document.addEventListener('click', (ev) => {
   if (ut) { const k = ut.dataset.useTracked; draft[k] = +ut.dataset.trackedVal;
     if (k === 'sleepHours') { draft.bedTime = ''; draft.wakeTime = ''; }   // tracked value replaces manual bed/wake
     renderToday(); autosaveDraft(); toast('Using your tracked time ⏱'); return; }
+  if (ev.target.id === 'hc-connect') {
+    const hc = hcPlugin();
+    if (!hc || !hc.requestHealthPermissions) { toast('Needs the Play Store app', true); return; }
+    // promise chain, not await — this listener is not async
+    Promise.resolve(hc.isAvailable ? hc.isAvailable() : null)
+      .then(a => {
+        if (a && a.healthConnectNeedsUpdate) { toast('Update Health Connect on your phone first', true); return null; }
+        if (a && a.healthConnect === false) { toast("Health Connect isn't available on this phone", true); return null; }
+        return hc.requestHealthPermissions();
+      })
+      .then(r => { if (!r) return;
+        toast(r.granted ? 'Connected — ' + r.granted + ' of ' + r.of + ' metrics allowed' : 'Nothing allowed yet');
+        renderSettings(); })
+      .catch(() => toast('Health Connect unavailable', true));
+    return;
+  }
   if (ev.target.id === 'health-sync') {
     if (hcPlugin()) syncHealth();
     else toast('Open the installed app → this will read Health Connect (sleep, steps, distance, calories)', true);
@@ -4505,7 +4522,9 @@ function renderSettings() {
         <button class="at-tog ${at[k] ? 'on' : ''}" data-at-toggle="${k}" ${!at.on && k !== 'on' ? 'disabled' : ''}><span class="at-knob"></span></button>
       </div>`;
       return `<div class="card">
-      <h2>📈 Auto-tracking <span class="hint">${hcPlugin() ? 'from your phone' : 'coming in a Play update'}</span></h2>
+      <h2>📈 Auto-tracking <span class="hint">${hcPlugin() ? 'from your phone' : 'needs the Play Store app'}</span></h2>
+      ${hcPlugin() ? `<div class="hint" style="margin-bottom:8px">📱 <b>Screen time</b> uses Android's Usage access. 👟 <b>Steps, sleep, calories, workouts and heart rate</b> come from <b>Health Connect</b> — a separate one-time permission. Tap <b>Sync now</b> and Daylog will ask for whichever it needs.</div>
+        ${(hcPlugin() && hcPlugin().requestHealthPermissions) ? '<button class="btn btn-ghost btn-sm" id="hc-connect" style="margin-bottom:10px">❤️ Connect Health Connect</button>' : '<div class="hint">Sensor metrics need the latest Play Store update.</div>'}` : ''}
       <div class="at-row">
         <div class="at-txt"><div class="at-lbl"><b>Auto health tracking</b></div><div class="at-sub">master switch — off = nothing is collected</div></div>
         <button class="at-tog ${at.on ? 'on' : ''}" data-at-toggle="on"><span class="at-knob"></span></button>
@@ -5158,6 +5177,21 @@ async function syncHealth(opts) {
       if (!usageDisclosureAccepted()) { showUsageDisclosure(() => syncHealth(opts)); return null; }
       const p = await hc.requestPermissions();
       if (p && p.granted === false) { toast('Turn on Usage access for Daylog (screen just opened), then tap Sync again', true); return null; }
+    }
+    // Health Connect is a SEPARATE grant from Usage access, with its own system sheet.
+    // Only ask on an explicit sync, and only if a sensor metric is actually switched on.
+    const wantsSensors = at.steps || at.sleep || at.calories || at.workouts || at.hr;
+    if (!opts.silent && wantsSensors && hc.healthPermissionState && hc.requestHealthPermissions) {
+      try {
+        const st = await hc.healthPermissionState();
+        if (st && st.supported !== false && (st.granted || 0) === 0) {
+          const r = await hc.requestHealthPermissions();
+          if (r && (r.granted || 0) === 0) {
+            toast('Allow Daylog to read the metrics you want in Health Connect, then Sync again', true);
+            return null;
+          }
+        }
+      } catch (e) { /* HC unavailable — screen time still works */ }
     }
     const t = await hc.today();
     if (!t) return null;
