@@ -138,6 +138,80 @@
   // ---- fmtMin ----
   ok('fmtMin 445 → 7h25m', fmtMin(445) === '7h25m', fmtMin(445));
   ok('fmtMin null → null', fmtMin(null) === null);
+  ok('fmtMin under an hour drops the 0h', fmtMin(29) === '29m', fmtMin(29));
+
+  // ---- You vs you (temporal comparison) ----
+  const vSnapE = localStorage.getItem('dp.entries'), vSnapT = localStorage.getItem('dp.timelog'),
+        vSnapH = localStorage.getItem('dp.health'), vSnapMode = vsMode;
+  const VE = {};
+  for (let i = 1; i <= 14; i++) VE[addDays(todayStr(), -i)] = { mood: i <= 7 ? 8 : 6, habits: {} };
+  VE[todayStr()] = { mood: 1, habits: {} };            // a partial today that must be ignored
+  localStorage.setItem('dp.entries', JSON.stringify(VE));
+  localStorage.removeItem('dp.timelog'); localStorage.removeItem('dp.health');
+  vsMode = 'w';
+  const vw = vsPastHTML();
+  ok('vs card renders', /vs-card/.test(vw));
+  // 8.0, not ~7.1: today's mood of 1 must not be averaged into the recent window
+  ok('vs excludes a partial today', /pm-score">8\.0/.test(vw), (vw.match(/pm-score">[^<]*/) || [])[0]);
+  ok('vs shows the older window value', /vs 6\.0/.test(vw));
+  ok('vs names the excluded day', /sits out of both sides/.test(vw));
+  // window arithmetic: 7 days ending yesterday, and the pair before it
+  const vA = vsWindow(7, 1), vB = vsWindow(7, 8);
+  ok('vs window ends yesterday', vA.days[6] === addDays(todayStr(), -1), vA.days[6]);
+  ok('vs windows do not overlap', vA.days[0] > vB.days[6]);
+  ok('vs windows are the same length', vA.days.length === 7 && vB.days.length === 7);
+  // year mode compares the same weekdays: 364 days back, not 365
+  ok('vs year steps back 364 days', (VS_PERIODS.find(x => x.k === 'y') || {}).back === 364);
+  ok('vs year keeps the weekday aligned',
+     new Date(vsWindow(28, 1).days[0] + 'T00:00:00').getDay() ===
+     new Date(vsWindow(28, 365).days[0] + 'T00:00:00').getDay());
+  // direction: screen time is one of the metrics that is better DOWN
+  ok('vs screen time is a down-is-better metric',
+     (VS_METRICS.find(m => m.k === 'screen') || {}).dir === -1);
+  ok('vs mood is an up-is-better metric', (VS_METRICS.find(m => m.k === 'mood') || {}).dir === 1);
+  ok('vs time tracked takes no side', (VS_METRICS.find(m => m.k === 'tracked') || {}).dir === 0);
+  // a thin log must say so rather than render an empty frame
+  localStorage.setItem('dp.entries', JSON.stringify({ [todayStr()]: { mood: 7 } }));
+  const vThin = vsPastHTML();
+  ok('vs degrades honestly on a thin log', /more day/.test(vThin) && !/wow-row/.test(vThin));
+  vsMode = vSnapMode;
+  if (vSnapE != null) localStorage.setItem('dp.entries', vSnapE); else localStorage.removeItem('dp.entries');
+  if (vSnapT != null) localStorage.setItem('dp.timelog', vSnapT); else localStorage.removeItem('dp.timelog');
+  if (vSnapH != null) localStorage.setItem('dp.health', vSnapH); else localStorage.removeItem('dp.health');
+
+  // ---- Awards ----
+  const aSnapE = localStorage.getItem('dp.entries'), aSnapC = localStorage.getItem('dp.habitcfg'),
+        aSnapA = localStorage.getItem('dp.awards'), aSnapI = localStorage.getItem('dp.awardsInit'),
+        aSnapS = localStorage.getItem('dp.sampleMeta');
+  localStorage.setItem('dp.habitcfg', JSON.stringify([{ key: 'w', emoji: '🏋️', label: 'W', added: '2000-01-01' }]));
+  const AE = {}; for (let i = 200; i >= 0; i--) AE[addDays(todayStr(), -i)] = { mood: 7, habits: { w: true } };
+  localStorage.setItem('dp.entries', JSON.stringify(AE));
+  localStorage.removeItem('dp.awards'); localStorage.setItem('dp.awardsInit', '1');
+  localStorage.removeItem('dp.sampleMeta');
+  syncAwards();
+  const aPeak = awardList().filter(a => a.grp === 'strength' && a.earned).length;
+  ok('strength awards earned at peak', aPeak >= 4, aPeak);
+  // decay the EMA by removing the last 10 days — earned awards must NOT be revoked
+  for (let i = 0; i < 10; i++) delete AE[addDays(todayStr(), -i)];
+  localStorage.setItem('dp.entries', JSON.stringify(AE));
+  const aAfter = awardList().filter(a => a.grp === 'strength' && a.earned).length;
+  ok('awards are never revoked', aAfter === aPeak, aPeak + ' -> ' + aAfter);
+  // one stray old date must not zero habit strength
+  AE['2010-01-01'] = { mood: 5, habits: {} };
+  localStorage.setItem('dp.entries', JSON.stringify(AE));
+  ok('a stray 2010 entry does not zero strength', bestHabitStrength() > 0, bestHabitStrength());
+  // sample data must never write to the permanent ledger
+  localStorage.removeItem('dp.awards');
+  localStorage.setItem('dp.sampleMeta', JSON.stringify({ dates: ['x'] }));
+  syncAwards();
+  ok('sample data earns no real awards', Object.keys(awardLog()).length === 0);
+  localStorage.removeItem('dp.sampleMeta');
+  if (aSnapE != null) localStorage.setItem('dp.entries', aSnapE); else localStorage.removeItem('dp.entries');
+  if (aSnapC != null) localStorage.setItem('dp.habitcfg', aSnapC); else localStorage.removeItem('dp.habitcfg');
+  if (aSnapA != null) localStorage.setItem('dp.awards', aSnapA); else localStorage.removeItem('dp.awards');
+  if (aSnapI != null) localStorage.setItem('dp.awardsInit', aSnapI); else localStorage.removeItem('dp.awardsInit');
+  if (aSnapS != null) localStorage.setItem('dp.sampleMeta', aSnapS); else localStorage.removeItem('dp.sampleMeta');
+  _goalMap = null;
 
   if (snapshot != null) localStorage.setItem('dp.tasks', snapshot); else localStorage.removeItem('dp.tasks');
 

@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v169';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v171';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -3215,35 +3215,13 @@ function renderDash() {
   if (wMood != null && nMood != null && allDates.length >= 5)
     corrRows.push(`<div class="corr-note">💪 Workout days: mood <b>${wMood.toFixed(1)}</b> vs <b>${nMood.toFixed(1)}</b> on rest days (${wMood > nMood ? '+' : ''}${(wMood - nMood).toFixed(1)}).</div>`);
 
-  // week (last 7 days) vs the 7 before — real deltas across sources
-  const wk = (off) => { const ds = []; for (let i = 0; i < 7; i++) ds.push(addDays(todayStr(), -(i + off))); return ds; };
-  const avgOver = (ds, k) => { const v = ds.map(d => e[d] && e[d][k]).filter(x => x != null && x !== '' && !isNaN(+x)); return v.length ? v.reduce((a, b) => a + +b, 0) / v.length : null; };
-  const trackedTotal = ds => ds.reduce((s, d) => s + segsForDay(d).reduce((t, x) => t + (x.b - x.a), 0), 0);
-  const thisW = wk(0), lastW = wk(7);
-  const wowRows = [];
-  const wow = (label, a, b, unit, dec) => {
-    if (a == null || b == null) return;
-    const diff = a - b; const up = diff >= 0;
-    wowRows.push(`<div class="wow-row"><span class="name">${label}</span>
-      <span class="wow-vals">${a.toFixed(dec)}${unit} <span class="hint">vs ${b.toFixed(dec)}${unit}</span></span>
-      <span class="wow-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(diff).toFixed(dec)}${unit}</span></div>`);
-  };
-  wow('😊 Mood', avgOver(thisW, 'mood'), avgOver(lastW, 'mood'), '', 1);
-  wow('😴 Sleep', avgOver(thisW, 'sleepHours'), avgOver(lastW, 'sleepHours'), 'h', 1);
-  wow('🎯 Deep work', avgOver(thisW, 'deepWorkHours'), avgOver(lastW, 'deepWorkHours'), 'h', 1);
-  const tA = trackedTotal(thisW) / 3600000, tB = trackedTotal(lastW) / 3600000;
-  if (tA > 0 || tB > 0) wow('⏱ Time tracked', tA, tB, 'h', 0);
-  const woA = thisW.filter(d => e[d] && +e[d].workoutsDone > 0).length, woB = lastW.filter(d => e[d] && +e[d].workoutsDone > 0).length;
-  if (woA || woB) wow('💪 Workouts', woA, woB, '', 0);
-  const scA = hAvgR(thisW, 'screenMin'), scB = hAvgR(lastW, 'screenMin');
-  if (scA != null && scB != null) wow('📱 Screen time', scA / 60, scB / 60, 'h', 1);
-  const stA = hAvgR(thisW, 'steps'), stB = hAvgR(lastW, 'steps');
-  if (stA != null && stB != null) wow('👟 Steps', stA, stB, '', 0);
-  const deepInsightsCard = (corrRows.length || wowRows.length) ? `<div class="card">
+  // Correlations only. Week-over-week moved to the "You vs you" card, which handles three
+  // periods and does not paint more screen time green — so the placeholder copy, which used
+  // to promise "week-over-week trends" here, had to change with it.
+  const deepInsightsCard = corrRows.length ? `<div class="card">
       <h2>🔗 Connected insights <span class="hint">how your metrics move together</span></h2>
       ${corrRows.join('')}
-      ${wowRows.length ? `<h3 class="wow-head">This week vs last week</h3>${wowRows.join('')}` : ''}
-    </div>` : (allDates.length < 5 ? '<div class="card"><h2>🔗 Connected insights</h2><div class="hint">Log ~5 days and this unlocks: how sleep drives your mood, week-over-week trends, workout effects.</div></div>' : '');
+    </div>` : (allDates.length < 5 ? '<div class="card"><h2>🔗 Connected insights</h2><div class="hint">Log ~5 days and this unlocks: how sleep drives your mood, workout effects, and what your screen time costs you.</div></div>' : '');
 
   const woSeries = days.map(d => ({ x: d, y: e[d] && e[d].workoutsDone!=null && e[d].workoutsDone!=='' ? +e[d].workoutsDone : null }));
 
@@ -3344,6 +3322,8 @@ function renderDash() {
       ${barChart(pmSeries, '#8b9dff', { max: 100 })}
       <div style="margin-top:10px">${pmBars}</div>
     </div>
+
+    ${vsPastHTML()}
 
     ${(() => { const r = coachReview(); return r ? `<div class="card"><h2>🧑‍🏫 Weekly review <span class="hint">last 7 days</span></h2>${r.map(l => `<div class="rev rev-${l.k}">${l.t}</div>`).join('')}</div>` : ''; })()}
 
@@ -5747,6 +5727,219 @@ document.addEventListener('click', (ev) => {
   const d = b.dataset.beOpen;
   if (!DB.entry(d)) { toast('Nothing logged on ' + prettyDate(d)); return; }
   logDate = d; loadDraft(); show('today'); buzz(12); toast('Opened ' + prettyDate(d));
+});
+
+/* ============================================================
+   YOU vs YOU — temporal (self-past) comparison.
+
+   The research's evidence-backed replacement for a leaderboard: the only person on the
+   other side of the comparison is you, n days ago. It is also the only motivational
+   comparison an accountless, serverless, single-user app can honestly offer.
+
+   This REPLACES the old week-over-week strip, which had four problems worth naming because
+   each one is a rule here:
+     - `const up = diff >= 0` painted every increase green, so MORE screen time read as
+       progress.
+     - `wk(0)` included today. A half-logged today drags steps, screen time, tracked hours
+       and habit counts down every morning, so the strip quietly wobbled all day. Today now
+       sits out of both windows.
+     - `if (a == null || b == null) return` made a metric vanish silently when history was
+       thin. Thin metrics are now named instead of hidden.
+     - Any non-zero delta was a win or a loss, however tiny. A change inside a metric's own
+       noise floor now reads "level".
+
+   Two more rules the old one never had: the year window steps back 364 days (not 365) and
+   month mode uses 28 (not 30), so both sides hold the same weekdays; and a period with no
+   comparable past names the date it unlocks instead of rendering a fake zero.
+   ============================================================ */
+const VS_PERIODS = [
+  { k: 'w', n: 7,  back: 7,   min: 3, label: 'vs last week',
+    aLab: 'Last 7 days',  bLab: 'the 7 before' },
+  { k: 'm', n: 28, back: 28,  min: 8, label: 'vs last month',
+    aLab: 'Last 4 weeks', bLab: 'the 4 before' },
+  { k: 'y', n: 28, back: 364, min: 8, label: 'vs last year',
+    aLab: 'Last 4 weeks', bLab: 'the same 4 weeks a year ago' },
+];
+let vsMode = 'w';          // in-memory only, like dashTab / dashRange
+
+/* n days ending `off` days before today. off is always >= 1, so today never counts.
+   The end bound goes through addDays() rather than +86400000 so a DST boundary cannot
+   shift it by an hour. */
+function vsWindow(n, off) {
+  const days = [];
+  for (let i = n - 1; i >= 0; i--) days.push(addDays(todayStr(), -(i + off)));
+  const last = days[days.length - 1];
+  return { days,
+    t0: new Date(days[0] + 'T00:00:00').getTime(),
+    t1: new Date(addDays(last, 1) + 'T00:00:00').getTime() };
+}
+
+/* Reads each store ONCE and hands out window-scoped accessors. Every value comes back as
+   { v, n } — the number, and how many days actually carried data — or null. */
+function vsCtx() {
+  const e = DB.entries(), hs = healthStore(), log = DB.timelog();
+  const hkeys = habitCfg().filter(h => !h.hidden).map(h => h.key);
+  const num = (d, k) => { const v = e[d] && e[d][k];
+    return (v != null && v !== '' && !isNaN(+v)) ? +v : null; };
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  return { e, hs, log, hkeys, num,
+    logged: w => w.days.filter(d => e[d]).length,
+    avgField: (w, k) => { const v = w.days.map(d => num(d, k)).filter(x => x != null);
+      return v.length ? { v: mean(v), n: v.length } : null; },
+    avgHealth: (w, k) => { const v = w.days.map(d => (hs[d] || {})[k])
+        .filter(x => x != null && !isNaN(+x)).map(Number);
+      return v.length ? { v: mean(v), n: v.length } : null; },
+    /* One pass over the timelog. A window is a CONTIGUOUS date range, so a single overlap
+       per segment equals summing per-day totals — without re-parsing dp.timelog once per
+       day (56 parses in year mode, on a POCO C31). */
+    trackedMs: w => (Array.isArray(log) ? log : []).reduce((s, x) => {
+      if (!x || x.start == null) return s;
+      const a = Math.max(x.start, w.t0);
+      const b = Math.min(x.end == null ? Date.now() : x.end, w.t1);
+      return s + Math.max(0, b - a); }, 0),
+  };
+}
+
+/* dir: +1 up is better, -1 down is better, 0 no judgement (the arrow still shows which way
+   the number moved; only the colour is withheld). eps: the smallest change worth calling a
+   change. zero on BOTH sides means the user does not track it at all, and the row stays out
+   rather than reporting a meaningless 0 vs 0. */
+const VS_METRICS = [
+  { k: 'mood',     label: '😊 Mood',        dir:  1, eps: 0.2,
+    fmt: v => v.toFixed(1),                   get: (c, w) => c.avgField(w, 'mood') },
+  { k: 'energy',   label: '⚡ Energy',       dir:  1, eps: 0.2,
+    fmt: v => v.toFixed(1),                   get: (c, w) => c.avgField(w, 'energy') },
+  { k: 'sleep',    label: '😴 Sleep',       dir:  1, eps: 0.2,
+    fmt: v => v.toFixed(1) + 'h',             get: (c, w) => c.avgField(w, 'sleepHours') },
+  { k: 'deep',     label: '🎯 Deep work',   dir:  1, eps: 0.2,
+    fmt: v => v.toFixed(1) + 'h',             get: (c, w) => c.avgField(w, 'deepWorkHours') },
+  { k: 'habits',   label: '✅ Habits/day',  dir:  1, eps: 0.3,
+    fmt: v => v.toFixed(1),
+    get: (c, w) => { if (!c.hkeys.length) return null;
+      // per LOGGED day, so unlogged days do not read as zero-habit days
+      const per = w.days.filter(d => c.e[d])
+        .map(d => c.hkeys.filter(k => hVal(c.e[d], k) === H_DONE).length);
+      return per.length ? { v: per.reduce((a, b) => a + b, 0) / per.length, n: per.length } : null; } },
+  { k: 'tracked',  label: '⏱ Time tracked', dir:  0, eps: 0.5,
+    fmt: v => fmtH(v),
+    get: (c, w) => { const ms = c.trackedMs(w);
+      return { v: ms / 3600000, n: w.days.length, zero: ms === 0 }; } },
+  { k: 'workouts', label: '💪 Workout days', dir:  1, eps: 1,
+    fmt: v => String(Math.round(v)),
+    get: (c, w) => { const k = w.days.filter(d => c.e[d] && +c.e[d].workoutsDone > 0).length;
+      return { v: k, n: c.logged(w), zero: k === 0 }; } },
+  { k: 'steps',    label: '👟 Steps',       dir:  1, eps: 250,
+    fmt: v => Math.round(v).toLocaleString(), get: (c, w) => c.avgHealth(w, 'steps') },
+  { k: 'screen',   label: '📱 Screen time', dir: -1, eps: 5,
+    fmt: v => fmtMin(Math.round(v)),          get: (c, w) => c.avgHealth(w, 'screenMin') },
+  { k: 'logged',   label: '📘 Days logged',  dir:  1, eps: 1,
+    fmt: v => String(Math.round(v)),          get: (c, w) => ({ v: c.logged(w), n: w.days.length }) },
+];
+
+function vsPastHTML() {
+  const c = vsCtx();
+  const all = Object.keys(c.e).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  const h2 = hint => `<h2 class="h2-icon">${hicon('history')}<span>You vs you</span>${
+    hint ? `<span class="hint" style="margin-left:auto">${hint}</span>` : ''}</h2>`;
+
+  // Under a week of history there is nothing to compare. Say so; do not ship an empty frame.
+  if (all.length < 6) {
+    const left = 6 - all.length;
+    return `<div class="card vs-card">${h2('')}
+      <div class="hint">Log ${left} more day${left === 1 ? '' : 's'} and this starts comparing
+      your week against the one before. The only person on the other side of this comparison
+      is you.</div></div>`;
+  }
+
+  const p = VS_PERIODS.find(x => x.k === vsMode) || VS_PERIODS[0];
+  const A = vsWindow(p.n, 1), B = vsWindow(p.n, 1 + p.back);
+  const picker = `<div class="range-row vs-modes">${VS_PERIODS.map(x =>
+    `<button type="button" class="range-btn ${x.k === p.k ? 'on' : ''}"
+      data-vsmode="${x.k}">${x.label}</button>`).join('')}</div>`;
+  const shell = (hint, body) => `<div class="card vs-card">${h2(hint)}${picker}${body}</div>`;
+
+  // Honest degradation 1 — the older window is entirely before your first logged day.
+  const first = all[0], bLast = B.days[B.days.length - 1];
+  if (first > bLast) {
+    return shell('', `<div class="empty">Your log starts ${shortDate(first)}, so there is
+      nothing from ${p.bLab} to compare against. This one unlocks
+      <b>${shortDate(addDays(first, p.back + 1))}</b>.</div>`);
+  }
+
+  const rows = [], thin = [];
+  VS_METRICS.forEach(m => {
+    const a = m.get(c, A), b = m.get(c, B);
+    if (!a && !b) return;                            // you do not track this — stay quiet
+    if (a && b && a.zero && b.zero) return;          // nothing on either side
+    if (!a || !b || a.n < p.min || b.n < p.min) { thin.push(m.label); return; }
+    const d = a.v - b.v;
+    const level = Math.abs(d) < m.eps;
+    // the arrow follows the NUMBER, the colour follows dir — they are not the same thing
+    const cls = (level || m.dir === 0) ? 'flat' : (((m.dir > 0) === (d > 0)) ? 'up' : 'down');
+    const chip = level ? 'level' : `${d > 0 ? '▲' : '▼'} ${m.fmt(Math.abs(d))}`;
+    const cov = (a.n === b.n && a.n === p.n) ? '' : ` · ${a.n}d vs ${b.n}d`;
+    rows.push({ m, a, b, d, level, cls, chip,
+      html: `<div class="wow-row"><span class="name">${m.label}</span>
+        <span class="wow-vals">${m.fmt(a.v)} <span class="hint">vs ${m.fmt(b.v)}${cov}</span></span>
+        <span class="wow-delta ${cls}">${chip}</span></div>` });
+  });
+
+  // Honest degradation 2 — the window exists but is too sparse to say anything.
+  if (!rows.length) {
+    const bl = c.logged(B);
+    return shell('', `<div class="empty">Only ${bl} of those ${p.n} days ${bl === 1 ? 'is' : 'are'}
+      logged, so there is nothing solid to compare against yet. Keep logging — it fills
+      in.</div>`);
+  }
+
+  // Hero: mood if it is comparable, else the first metric that is.
+  const hero = rows.find(r => r.m.k === 'mood') || rows[0];
+  const list = rows.filter(r => r !== hero);
+  const heroHTML = `<div class="pm-hero">
+      <div class="pm-score">${hero.m.fmt(hero.a.v)}<span class="pm-out">
+        ${stripLeadEmoji(hero.m.label)}</span></div>
+      <div class="pm-meta"><span class="wow-delta ${hero.cls}">${hero.chip}</span>
+        <span class="hint"> vs ${hero.m.fmt(hero.b.v)}</span>
+        <div class="hint">${shortDate(A.days[0])} – ${shortDate(A.days[A.days.length - 1])}
+          · ${c.logged(A)} of ${p.n} days logged</div></div>
+    </div>`;
+
+  // One sentence worth reading. Ranked by size relative to each metric's OWN noise floor,
+  // so 300 steps cannot outrank a full point of mood.
+  const moved = rows.filter(r => !r.level && r.m.dir !== 0);
+  const rank = (x, y) => Math.abs(y.d) / y.m.eps - Math.abs(x.d) / x.m.eps;
+  const up = moved.filter(r => r.cls === 'up').sort(rank)[0];
+  const dn = moved.filter(r => r.cls === 'down').sort(rank)[0];
+  const sign = r => (r.d > 0 ? '+' : '−') + r.m.fmt(Math.abs(r.d));
+  const verdict = (rows.length >= 3 && (up || dn)) ? `<div class="corr-note">${
+    up ? `Biggest lift: <b>${stripLeadEmoji(up.m.label)} ${sign(up)}</b>. ` : ''}${
+    dn ? `Biggest slip: <b>${stripLeadEmoji(dn.m.label)} ${sign(dn)}</b>.`
+       : 'Nothing went backwards.'}</div>` : '';
+
+  const notes = `<div class="hint" style="margin-top:8px">Today is still being logged, so it
+    sits out of both sides.${thin.length
+      ? ` Not enough history yet to compare: ${thin.join(', ')}.` : ''}</div>`;
+
+  return shell(`${p.aLab} vs ${p.bLab}`, heroHTML + list.map(r => r.html).join('') + verdict + notes);
+}
+
+/* Swap the one card instead of re-rendering Stats: renderDash() rebuilds the journal graph,
+   the year mosaic and the whole award list, and throws away scroll position. */
+function refreshVsCard() {
+  const card = document.querySelector('.vs-card');
+  if (!card) { renderDash(); return; }
+  const tmp = document.createElement('div');
+  tmp.innerHTML = vsPastHTML();
+  const next = tmp.firstElementChild;
+  if (next) card.replaceWith(next); else card.remove();
+}
+
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest && ev.target.closest('[data-vsmode]');
+  if (!b || b.dataset.vsmode === vsMode) return;
+  vsMode = b.dataset.vsmode;
+  buzz(8);
+  refreshVsCard();
 });
 
 /* ============================================================

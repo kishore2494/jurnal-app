@@ -1383,3 +1383,10 @@ input[type="range"] { height: 30px; }
 .ss-hint { margin-top: 10px; padding: 10px 12px; border-radius: 12px;
   background: rgba(251,191,36,.14); border: 1px solid rgba(251,191,36,.4);
   color: #fde68a; font-size: 12.5px; font-weight: 600; text-align: center; }
+
+/* ---------- You vs you (temporal comparison) ----------
+   Two rules only; everything else reuses .wow-row / .pm-hero / .range-row / .empty.
+   .flat is the neutral delta chip — used where neither direction is "better" (time tracked)
+   and where the change is inside the metric's own noise floor. */
+.wow-delta.flat { color: var(--text-dim); background: rgba(127, 127, 127, .14); }
+.vs-modes .range-btn { min-height: 44px; }   /* .range-btn alone is ~36px, under the tap floor */
