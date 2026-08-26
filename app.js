@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v144';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v146';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -768,6 +768,7 @@ function renderDeepSections() {
 const WHATS_NEW = {
   v: 'w13',
   items: [
+    '🔔 <b>Pick your own alarm sound</b> — Customize ▸ Alarm sound. Choose any alarm tone on your phone (or your own audio file), preview it, and turn vibration on or off. Needs the Play Store update.',
     '🧠 <b>PIS sync</b> — Daylog now talks to your <b>Personal Intelligence System</b> directly. Settings ▸ PIS sync ▸ “Push my days to PIS” sends every logged day (mood, energy, focus, sleep, deep work, habits, journal) to PIS on this computer in one tap — no files, no sheet.',
     '😴 <b>Sleep &amp; deep work reach your PIS Trends</b> — the sleep hours and deep-work hours you log now show up as a dedicated chart in PIS ▸ Trends.',
     '⏰ <b>Alarms fixed properly — please update in the Play Store</b> — reminders now ring even while your phone is asleep, and they make a sound even when Android blocks the full-screen alarm. Daylog also asks once for the “Alarms &amp; reminders” permission so your reminder lands on the exact minute.',
@@ -3572,6 +3573,7 @@ const CUSTOM_PAGES = [
   { id: 'log',    ico: '📝', label: 'Log screen fields',  sub: 'mood, energy, sleep, reflections…' },
   { id: 'logsec', ico: '🧩', label: 'Log screen sections', sub: 'reorder or hide every card' },
   { id: 'habits', ico: '✅', label: 'Checklist habits',    sub: 'emoji, name, colour, counts & goals' },
+  { id: 'sound',  ico: '🔔', label: 'Alarm sound',         sub: 'pick the tone your reminders ring with' },
   { id: 'acts',   ico: '⏱️', label: 'Time activities',    sub: 'one-tap stopwatch activities' },
   { id: 'deep',   ico: '🧠', label: 'Deep log',           sub: 'sections & fields' },
   { id: 'gym',    ico: '💪', label: 'Gym & workouts',     sub: 'exercises, split, groups' },
@@ -3603,6 +3605,35 @@ function cfgSectionHTML(page) {
       <h2>🧭 Tabs <span class="hint">📌 pinned ${pinnedCount} · 🎯 default · drag · 👁 hide</span></h2>
       <div id="cfg-nav">${navRows}</div>
       <div class="hint" style="margin-top:8px">Pin as many tabs as you like (4–5 stay easiest to tap) — pinned tabs fill the bottom bar in this order, everything else lives in <b>☰ Menu</b>. 🎯 is the tab the app opens to.</div></div>`;
+  }
+  if (page === 'sound') {
+    const FS = fullScreenPlugin();
+    if (!nativeShell() || !FS || !FS.getAlarmSound) {
+      return `<div class="card">
+        <h2>🔔 Alarm sound</h2>
+        <div class="hint">Choosing a tone needs the installed Android app — in a browser tab the alarm uses a built-in beep. Update Daylog in the Play Store, then come back here.</div>
+      </div>`;
+    }
+    const cached = safeParse(localStorage.getItem('dp.alarmSound'), null) || {};
+    return `<div class="card">
+      <h2>🔔 Alarm sound <span class="hint">what your reminders ring with</span></h2>
+      <div class="snd-now">
+        <div class="snd-lbl">Current tone</div>
+        <div class="snd-name" id="snd-name">${escapeHtml(cached.name || 'Phone default alarm')}</div>
+      </div>
+      <div class="snd-btns">
+        <button class="btn btn-primary btn-sm" id="snd-pick">🎵 Choose sound</button>
+        <button class="btn btn-ghost btn-sm" id="snd-play">▶ Preview</button>
+        <button class="btn btn-ghost btn-sm" id="snd-stop">⏹ Stop</button>
+      </div>
+      <div class="at-row" style="margin-top:12px">
+        <div class="at-txt"><div class="at-lbl">📳 Vibrate with the alarm</div>
+          <div class="at-sub">turn off if you only want sound</div></div>
+        <button class="at-tog ${cached.vibrate === false ? '' : 'on'}" data-snd-vib><span class="at-knob"></span></button>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="snd-reset" style="margin-top:12px">↺ Back to the phone's default alarm</button>
+      <div class="hint" style="margin-top:10px">Picks from every alarm tone already on your phone, plus your own audio files — nothing extra to download. The same tone is used whether the full-screen alarm opens or it rings as a notification.</div>
+    </div>`;
   }
   if (page === 'logsec') {
     const rows = logSecCfg().map(sec => `<div class="cfg-row ${sec.hidden ? 'hid' : ''}" data-id="${sec.id}">
@@ -3699,6 +3730,7 @@ function renderCustom() {
   if (customPage === 'habits') enableDrag(document.getElementById('cfg-habits'), ids => {
     const cfg = habitCfg(); saveHabitCfg(ids.map(id => cfg.find(h => h.key === id)).filter(Boolean)); renderCustom();
   });
+  if (customPage === 'sound') refreshAlarmSound();
   if (customPage === 'logsec') enableDrag(document.getElementById('cfg-logsec'), ids => {
     const cur = logSecCfg();
     saveLogSec(ids.map(id => cur.find(x => x.id === id)).filter(Boolean));
@@ -5379,6 +5411,59 @@ document.addEventListener('click', async (ev) => {
     const FS = fullScreenPlugin();
     try { if (FS && FS.openExactAlarmSettings) await FS.openExactAlarmSettings(); } catch (e) {}
     toast('Turn on “Alarms & reminders”, then come back');
+  }
+});
+
+/* ---------- Alarm sound (Customize ▸ Alarm sound) ----------
+   The tone is stored natively (SharedPreferences) so the alarm screen AND the fallback
+   notification channel can both read it without the WebView being alive. We keep a copy in
+   localStorage purely so the page can render instantly before the plugin answers. */
+async function refreshAlarmSound() {
+  const FS = fullScreenPlugin(); if (!FS || !FS.getAlarmSound) return null;
+  try {
+    const r = await FS.getAlarmSound();
+    localStorage.setItem('dp.alarmSound', JSON.stringify(r));
+    const el = document.getElementById('snd-name');
+    if (el) el.textContent = r.name || 'Phone default alarm';
+    return r;
+  } catch (e) { return null; }
+}
+document.addEventListener('click', async (ev) => {
+  const FS = fullScreenPlugin();
+  if (ev.target && ev.target.id === 'snd-pick') {
+    if (!FS || !FS.pickAlarmSound) { toast('Needs the app update', true); return; }
+    try { const r = await FS.pickAlarmSound();
+      localStorage.setItem('dp.alarmSound', JSON.stringify(r));
+      renderCustom(); toast('Alarm sound: ' + (r.name || 'default'));
+    } catch (e) { toast("Couldn't open the sound picker", true); }
+    return;
+  }
+  if (ev.target && ev.target.id === 'snd-play') {
+    if (!FS || !FS.previewAlarmSound) return;
+    const cur = safeParse(localStorage.getItem('dp.alarmSound'), null) || {};
+    try { await FS.previewAlarmSound({ uri: cur.uri || '' }); } catch (e) {}
+    return;
+  }
+  if (ev.target && ev.target.id === 'snd-stop') { try { FS && FS.stopPreview && await FS.stopPreview(); } catch (e) {} return; }
+  if (ev.target && ev.target.id === 'snd-reset') {
+    if (!FS || !FS.setAlarmSound) return;
+    try { const r = await FS.setAlarmSound({ uri: '', name: '' });
+      localStorage.setItem('dp.alarmSound', JSON.stringify(r));
+      renderCustom(); toast('Back to your phone default');
+    } catch (e) {}
+    return;
+  }
+  const vb = ev.target.closest && ev.target.closest('[data-snd-vib]');
+  if (vb) {
+    if (!FS || !FS.setAlarmSound) return;
+    const cur = safeParse(localStorage.getItem('dp.alarmSound'), null) || {};
+    const next = cur.vibrate === false;               // toggle
+    try { const r = await FS.setAlarmSound({ uri: cur.uri || '', name: cur.name || '', vibrate: next });
+      localStorage.setItem('dp.alarmSound', JSON.stringify(r));
+      vb.classList.toggle('on', next);
+      if (next) buzz(22);
+      toast(next ? 'Vibration on' : 'Vibration off');
+    } catch (e) {}
   }
 });
 

@@ -1272,3 +1272,12 @@ input[type="range"] { height: 30px; }
 #alarm .btn-ghost { background: rgba(255, 255, 255, .18); color: #ffffff;
   border: 1.5px solid rgba(255, 255, 255, .72); box-shadow: none; }
 #alarm .btn-primary, #alarm .btn-ghost { font-weight: 700; }
+
+/* ---- Customize ▸ Alarm sound ---- */
+.snd-now { background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px;
+  padding: 11px 13px; margin-top: 4px; }
+.snd-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); }
+.snd-name { font-size: 15px; font-weight: 700; font-family: var(--font-display); margin-top: 3px;
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snd-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.snd-btns .btn { flex: 0 0 auto; }
