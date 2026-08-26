@@ -83,6 +83,8 @@
     html[data-mode="light"] .try{color:#33418a;background:rgba(109,140,255,.08);border-color:rgba(109,140,255,.25);}
     html[data-mode="light"] .shot{background:#eef1f7;box-shadow:0 10px 26px rgba(30,42,70,.14);}
     html[data-mode="light"] section{background:var(--card);}
+    /* Sections that have no screenshot must not be squeezed into the 220px image column. */
+    section.full{grid-template-columns:1fr;}
 </style>
 </head>
 <body>
@@ -97,7 +99,7 @@
 
   <div class="toc">
     <a href="#log">Log</a><a href="#time">Time</a><a href="#habits">Habits</a><a href="#gym">Gym</a>
-    <a href="#cal">Calendar</a><a href="#write">Write</a><a href="#stats">Stats</a><a href="#patterns">Insights</a><a href="#autotrack">Auto-tracking</a><a href="#search">Search</a><a href="#custom">Customize</a><a href="#data">Your data</a>
+    <a href="#cal">Calendar</a><a href="#write">Write</a><a href="#stats">Stats</a><a href="#patterns">Insights</a><a href="#autotrack">Auto-tracking</a><a href="#search">Search</a><a href="#custom">Customize</a><a href="#data">Your data</a><a href="#rewards">Ring &amp; mood grid</a><a href="#counted">Counted habits</a><a href="#alarms">Alarms</a><a href="#year">Year in pixels</a><a href="#writing">Journal prompts</a><a href="#layout">Rearrange the Log</a><a href="#focus">Focus &amp; gym</a>
   </div>
 
   <section id="log">
@@ -226,7 +228,7 @@
   <section id="patterns">
     <div class="shot"><img src="guide/img/patterns.png" alt="Your patterns — on-device insights: sleep sweet spot, habit mood lift, peak focus window" loading="lazy"></div>
     <div>
-      <div class="head"><span class="num">8</span><h2>Your patterns — real insights 🧠</h2></div>
+      <div class="head"><span class="num">10</span><h2>Your patterns — real insights 🧠</h2></div>
       <p class="what">Daylog mines your raw data on your phone and tells you what actually works for you.</p>
       <ul>
         <li>Your <b>sleep sweet spot</b> — which sleep range gives you the best mood.</li>
@@ -241,7 +243,7 @@
   <section id="autotrack" class="flip">
     <div class="shot"><img src="guide/img/autotrack.png" alt="Automatic screen time tracking and health analytics charts" loading="lazy"></div>
     <div>
-      <div class="head"><span class="num">9</span><h2>Auto-tracking 📱</h2></div>
+      <div class="head"><span class="num">11</span><h2>Auto-tracking 📱</h2></div>
       <p class="what">Data that collects itself.</p>
       <ul>
         <li><b>Screen time</b> syncs automatically from your phone — charted daily and correlated with your mood.</li>
@@ -255,13 +257,108 @@
   <section id="search">
     <div class="shot"><img src="guide/img/menu.png" alt="Menu with Search — find anything you ever wrote" loading="lazy"></div>
     <div>
-      <div class="head"><span class="num">10</span><h2>Search &amp; the Menu 🔍</h2></div>
+      <div class="head"><span class="num">12</span><h2>Search &amp; the Menu 🔍</h2></div>
       <p class="what">Everything else is one tap away.</p>
       <ul>
         <li><b>Search</b> finds anything you ever wrote — journals, tasks, notes, plans, articles. Try a <b>#tag</b>.</li>
         <li><b>Pin any tabs you like</b> to the bottom bar — ☰ Menu ▸ Edit tabs.</li>
         <li>Voice typing: tap <b>🎤 Speak</b> on any journal or note and talk.</li>
         <li>New here? Take the <b>guided tour</b>: Settings ▸ Take the app tour.</li>
+      </ul>
+    </div>
+  </section>
+
+
+  <section id="rewards" class="full">
+    <div>
+      <div class="head"><span class="num">13</span><h2>The bits that pay you back 🎯</h2></div>
+      <p class="what">Three things at the top of your Log that make it worth opening.</p>
+      <ul>
+        <li><b>Today ring</b> — one dial showing how much of today you've filled in. Every field and habit you tick closes it a little; it buzzes and turns green when the day is complete.</li>
+        <li><b>On this day</b> — your own entry from a week, a month, three months or a year ago, right above today's. <b>Tap it to open that day.</b> Your old entries finally earn their keep.</li>
+        <li><b>Mood grid</b> — instead of two sliders, tap <b>one square</b> to set your mood <i>and</i> your energy at once (pleasant ↔ unpleasant across, high ↔ low energy up and down). The grid then offers ten precise words for that feeling — tap one to tag your entry with it, tap again to remove. Those tags are searchable later.</li>
+      </ul>
+      <div class="try">👉 <b>Try:</b> tap the top-right square on the mood grid, then tap <b>Energised</b>. Now search <b>#energised</b> in a month's time.</div>
+    </div>
+  </section>
+
+  <section id="counted" class="full">
+    <div>
+      <div class="head"><span class="num">14</span><h2>Counted habits &amp; skip days 🔢</h2></div>
+      <p class="what">Not every habit is a yes/no, and not every missed day is a failure.</p>
+      <ul>
+        <li><b>Give a habit a daily goal</b> — "at least 8 glasses of water", "at least 20 pages", or a cut-down goal like "<b>at most</b> 2 coffees". Set them in <b>Customize ▸ Checklist habits</b> and tap the 🎯 button on any habit.</li>
+        <li>A counted habit becomes a <b>tap counter</b>: tap the chip to add one, <b>−</b> to undo. "At most" habits also get a <b>0</b> button to log a clean zero, and turn red if you go over.</li>
+        <li><b>Skip a day without losing your streak</b> — tap a habit a second time to mark it <b>skipped</b>. Rest days, sick days and holidays stop counting as failures, and they're left out of your completion percentage too.</li>
+        <li><b>Habit strength</b> — every habit gets a score out of 100 on the Habits screen. It's a weighted trend, so one missed day can't wipe out months of work and one good day can't fake it.</li>
+        <li><b>Habit ideas</b> — tap <b>✨ Browse habit ideas</b> under your checklist for a gallery of starters across Health, Mind, Productivity and Cut down.</li>
+      </ul>
+      <div class="try">👉 <b>Try:</b> Browse habit ideas ▸ add <b>Water</b>, then tap the chip eight times.</div>
+    </div>
+  </section>
+
+  <section id="alarms" class="full">
+    <div>
+      <div class="head"><span class="num">15</span><h2>Reminders that actually ring ⏰</h2></div>
+      <p class="what">Set a time and Daylog takes over your screen — even locked.</p>
+      <ul>
+        <li>Add reminders in <b>Settings ▸ Reminders</b>. Each one can be a <b>full-screen alarm</b> (loud, over the lock screen, with Dismiss and Snooze 5 min) or just a quiet notification — tap the mode to switch.</li>
+        <li><b>Android needs your permission for on-the-minute alarms.</b> On Android 14 and newer, Android blocks exact alarms by default. Daylog asks once, and you can allow it any time from the warning in Settings ▸ Reminders. Without it your reminder still fires, but Android decides when — up to several minutes late.</li>
+        <li>Your alarms <b>survive a restart</b> — they're restored automatically when your phone boots.</li>
+        <li>If your phone blocks the full-screen alarm, Daylog still rings <b>loudly as a notification</b> so you never silently miss one.</li>
+        <li>On Xiaomi, Redmi, POCO, realme, OPPO, vivo and OnePlus phones, also switch on <b>Autostart</b> and set battery usage to <b>No restrictions</b> — those systems stop alarms otherwise.</li>
+      </ul>
+      <div class="try">👉 <b>Try:</b> Settings ▸ Reminders ▸ <b>⏰ Test full-screen alarm (1 min)</b>, then lock your phone and wait.</div>
+    </div>
+  </section>
+
+  <section id="year" class="full">
+    <div>
+      <div class="head"><span class="num">16</span><h2>Your year in pixels 🗓️</h2></div>
+      <p class="what">A whole year of your life as one picture.</p>
+      <ul>
+        <li>At the bottom of <b>Stats</b>, every day of the year is one small coloured square — red through green, from the mood you logged.</li>
+        <li>Rows are months, columns are days, so patterns jump out: a bad fortnight, a good summer, the week you stopped logging.</li>
+        <li><b>Tap any square</b> to open that day's entry.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="writing" class="full">
+    <div>
+      <div class="head"><span class="num">17</span><h2>Journal prompts 📝</h2></div>
+      <p class="what">A blank box is the hardest thing to write in.</p>
+      <ul>
+        <li>Above the journal box, tap <b>🙏 Gratitude</b>, <b>🌙 Brain dump</b>, <b>⭐ Highlights</b> or <b>💡 Idea</b> to drop in a ready-made prompt.</li>
+        <li>Use <b>#tags</b> anywhere — they link entries together and are searchable.</li>
+        <li>Prefer talking? Tap <b>🎤 Speak</b> and dictate.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="layout" class="full">
+    <div>
+      <div class="head"><span class="num">18</span><h2>Make the Log yours 🧩</h2></div>
+      <p class="what">If you don't use something, hide it. If you use it most, put it first.</p>
+      <ul>
+        <li><b>Customize ▸ Log screen sections</b> — drag to reorder <i>every</i> card on your Log (Today ring, On this day, mood grid, Tasks, checklist, Workout, Health, Reflection, Deep log, Sunday review) and tap 👁 to hide any of them.</li>
+        <li><b>Customize ▸ Log screen fields</b> — rename or hide individual fields, including the reflection questions.</li>
+        <li><b>Settings ▸ Log screen widgets</b> — quick on/off switches for the ring, On this day, the mood grid and the haptic buzz.</li>
+        <li><b>Theme</b> — Light, Dark navy, Black, or <b>Auto</b> to follow your phone.</li>
+        <li>Pin whichever tabs you want to the bottom bar: <b>☰ Menu ▸ Edit tabs</b>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="focus" class="full">
+    <div>
+      <div class="head"><span class="num">19</span><h2>Focus, sounds &amp; the gym 🎧</h2></div>
+      <p class="what">The tools around the tracking.</p>
+      <ul>
+        <li><b>Focus</b> — a Pomodoro timer with an ongoing notification, plus timeboxing for planning a block of work.</li>
+        <li><b>Waves</b> — binaural focus tones you can play while you work.</li>
+        <li><b>Gym</b> — an editable split, animated exercise demos, per-set logging and muscle-group breakdowns. Reachable from the Log or ☰ Menu.</li>
+        <li><b>Next-day mood effects</b> — Stats tells you how a habit today changes your mood <i>tomorrow</i>, with a confidence rating. A next-day effect can't be explained away by your mood causing the habit.</li>
       </ul>
     </div>
   </section>

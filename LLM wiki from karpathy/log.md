@@ -1,3 +1,71 @@
+## 2026-08-26 — ALARM FIX VERIFIED ON ANDROID 15 (Samsung SM-M146B) — the platform that was broken
+
+Tested 110/70 on Kishore's personal Samsung Galaxy M14 (SM-M146B, **Android 15 / API 35**),
+paired over wireless debugging. This is the first test on a platform where the bug can
+actually reproduce — the POCO and realme are both Android 11, where `canScheduleExactAlarms()`
+does not exist and exact alarms are always granted.
+
+**Every one of the three fixes was proven load-bearing, in one run.**
+
+1. **The bug condition was present.** `canScheduleExactAlarms()` returned **false** — the app's
+   own warning card appeared in Settings ("need one more tap" / "Exact alarms are not
+   allowed"). So the new health check correctly detects the real-world denial.
+
+2. **`setAndAllowWhileIdle` fired while the phone was dozing.** The registration showed
+   `type=RTC_WAKEUP`, `window=+44s`, and critically **`flags=0x20` (FLAG_ALLOW_WHILE_IDLE)**
+   with `policyWhenElapsed: device_idle=--` — Doze was not deferring it. Phone was locked and
+   `mWakefulness=Dozing` for ~100s, then:
+   `13:56:15.226 Received BROADCAST ... act=...ALARM.399 cmp=.../.AlarmReceiver`
+   The 109 `setWindow()` version would have been held until the screen came on — exactly the
+   reported symptom.
+
+3. **Android 15 blocked the direct activity launch, as predicted:**
+   ```
+   E ActivityTaskManager: Background activity launch blocked!
+     [... intent: .../.AlarmActivity ... resultIfPiSenderAllowsBal: BAL_BLOCK]
+   E ActivityTaskManager: Abort background activity starts from 10615
+   ```
+   With 109's silent channel that would have been **total silence** — the tester's exact
+   experience. Instead the notification went out on **`channel=dp_alarm_audible`**
+   (`category=alarm`, `HIGH_PRIORITY`, USAGE_ALARM sound + vibration), and its full-screen
+   intent then launched AlarmActivity anyway: screen went **Awake**, `AlarmActivity` resumed.
+
+**Conclusion: the chain now degrades correctly at every step.** Doze → fires anyway;
+direct launch blocked → notification still rings; FSI available → screen takes over.
+
+### Incidental findings on that phone
+- It had **versionCode 2 / name 47 from 2026-07-19** installed — an early Capacitor build with
+  **zero alarm components**. Alarms could never have worked there, independent of the bug.
+- **Signing keys matched** (`144d1f76…d728`, verified by pulling the installed APK and
+  comparing), so `install -r` upgraded in place and preserved data. Checked *before* installing,
+  precisely because a mismatch would have forced an uninstall and destroyed his entries.
+- The phone was **100% full** (453 MB free of 110 GB) and refused the install. Freed **8.14 GB**
+  by deleting only provably-junk Samsung diagnostics: `/sdcard/log/ewlogd` (2,498 rolling logs
+  spanning 2024-05 → 2026-08) and `/sdcard/log/batterystats` (2024 dumps).
+  **Did NOT touch the "Telegram cache" he asked about** — inspection showed the 13.6 GB is in
+  `files/Telegram/` (7.7 GB `Telegram Video`, 5.9 GB `Telegram Files`), i.e. **saved media, not
+  cache** (actual cache was 1 MB). Clearing it would have deleted his videos, so it was left
+  alone and reported instead. His login was never at risk either way — Telegram's session lives
+  in internal `/data/data`, unreachable from `/sdcard`.
+
+### Test-harness lessons
+- **Wireless debugging on Android 11+ uses a random port**, so scanning 5555 never finds it.
+  `adb pair <ip>:<pairport> <code>` then it appears as an `_adb-tls-connect` device.
+- A MAC address is useless for this, and Android randomises it per network anyway. The one
+  Kishore sent was the **router's second radio** (one digit off `192.168.1.1`'s MAC).
+- Don't blind-tap a personal phone. Coordinate guesses opened a date picker, a Google search
+  and his work app's login screen before I switched to reading bounds from `uiautomator dump`.
+- `$UID` is read-only in zsh — using it as a variable name kills the shell.
+
+### Documentation (Kishore's request)
+`guide.html` grew from 12 to **19 sections**, adding every feature shipped since v119: today
+ring, On this day, mood grid + emotion words, counted habits, skip days, habit strength, habit
+ideas, **the exact-alarm permission and what happens without it**, boot survival, OEM autostart
+guidance, Year in Pixels, journal prompts, Log-section reordering, Auto theme, Focus/Waves/Gym,
+next-day mood effects. Also fixed pre-existing duplicate section numbers (two 8s and two 9s)
+and gave text-only sections a `.full` class so they aren't squeezed into the 220px screenshot
+column.
+
 ## 2026-08-23 — tester on Android 16: alarm silent while asleep + invisible Snooze button
 
 Two real bugs from one test session on an Android 16 phone. Web **v143**, bundle **110/70**.
