@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v164';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v165';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -6221,10 +6221,14 @@ async function blobToB64(blob) {
   });
 }
 
+/* The native rung of the delivery ladder. Present only in builds that ship SharePlugin.java,
+   so this returns null on the open web AND in any installed app older than that build — the
+   web layer reaches installed apps instantly but native code does not, so the two must be
+   allowed to disagree about what exists. */
 function nativeSharePlugin() {
   const p = window.Capacitor && Capacitor.Plugins;
-  const fs = p && p.FullScreenAlarm;
-  return (fs && typeof fs.shareImage === 'function') ? fs : null;
+  const sp = p && p.DaylogShare;
+  return (sp && typeof sp.shareImage === 'function') ? sp : null;
 }
 
 async function deliverCard(blob, fname) {
