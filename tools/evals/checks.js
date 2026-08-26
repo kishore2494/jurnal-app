@@ -31,17 +31,36 @@
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
-  const screenEl = document.querySelector('.screen.on') || document.body;
+  /* When a full-screen overlay is open it — not the screen behind it — is what the user
+     is looking at, so it becomes the probe root. Without this, opening the share sheet
+     re-measured the Stats screen underneath and reported those findings under the
+     overlay's name: duplicated noise, and the overlay's own elements never checked at all. */
+  const OVERLAYS = ['#sharesheet.on', '#milestone.on', '.tour.on', '.ob.on'];
+  const overlay = OVERLAYS.map(sel => document.querySelector(sel)).find(el => el && el.offsetHeight > 0);
+  const screenEl = overlay || document.querySelector('.screen.on') || document.body;
   const all = Array.from(screenEl.querySelectorAll('*')).filter(vis);
 
   // 1 — page must never scroll horizontally
   const de = document.documentElement;
   if (de.scrollWidth > VW + 1) add('page-hscroll', de, `scrollWidth ${de.scrollWidth} > viewport ${VW}`, 'error');
 
-  // 2 — nothing may extend past the right edge of the viewport
+  // 2 — nothing may extend past the right edge of the viewport.
+  //     EXCEPT inside a deliberate horizontal scroller. A tab strip or carousel with
+  //     `overflow-x: auto` is SUPPOSED to have children outside the viewport — that is what
+  //     makes it swipeable, and it is the sanctioned way to handle content too wide for the
+  //     screen. Flagging those produced 66 bogus errors the moment the Stats tab row was
+  //     made scrollable. The page-level check above still catches real horizontal scroll.
+  const inHScroller = (el) => {
+    for (let n = el.parentElement; n && n !== document.documentElement; n = n.parentElement) {
+      const ox = getComputedStyle(n).overflowX;
+      if (ox === 'auto' || ox === 'scroll') return true;
+    }
+    return false;
+  };
   all.forEach(el => {
     const r = el.getBoundingClientRect();
     if (r.width <= 0) return;
+    if (inHScroller(el)) return;
     if (r.right > VW + 1.5) add('past-viewport', el, `right edge ${Math.round(r.right)} > ${VW}`, 'error');
     if (r.left < -1.5) add('past-viewport-left', el, `left edge ${Math.round(r.left)}`, 'warn');
   });
@@ -131,14 +150,32 @@
   // the text's own background paints an image/gradient, we cannot compute a ratio, so we
   // skip rather than lie.
   const hasImage = n => { const bi = getComputedStyle(n).backgroundImage; return bi && bi !== 'none'; };
-  const bgOf = el => { let n = el;
+  /* Translucent layers are COMPOSITED, not skipped. The previous version ignored any
+     background with alpha < 0.9 and walked past it, so a chip painted
+     rgba(255,255,255,.07) over an rgba(6,10,20,.82) scrim was compared against the light
+     page body far below — reporting 1.10:1 for text that is actually near-white on
+     near-black. Same false-positive family as the gradient case above: when the probe
+     cannot see the real ground it must either compute it properly or say nothing. */
+  const bgOf = el => {
+    const layers = []; let n = el;
     while (n && n !== document.documentElement) {
       if (hasImage(n)) return null;                      // unknowable — skip this node
       const c = parseRGB(getComputedStyle(n).backgroundColor);
-      if (c && c.a >= 0.9) return c;
+      if (c && c.a > 0.001) { layers.push(c); if (c.a >= 0.999) break; }
       n = n.parentElement;
     }
-    const rc = parseRGB(getComputedStyle(document.body).backgroundColor); return rc || { r: 255, g: 255, b: 255, a: 1 }; };
+    const rootBg = parseRGB(getComputedStyle(document.documentElement).backgroundColor);
+    const bodyBg = parseRGB(getComputedStyle(document.body).backgroundColor);
+    let cur = (bodyBg && bodyBg.a >= 0.999) ? bodyBg
+            : (rootBg && rootBg.a >= 0.999) ? rootBg : { r: 255, g: 255, b: 255, a: 1 };
+    if (layers.length && layers[layers.length - 1].a >= 0.999) cur = layers.pop();
+    for (let i = layers.length - 1; i >= 0; i--) {       // deepest first, upward
+      const L = layers[i];
+      cur = { r: L.r * L.a + cur.r * (1 - L.a), g: L.g * L.a + cur.g * (1 - L.a),
+              b: L.b * L.a + cur.b * (1 - L.a), a: 1 };
+    }
+    return cur;
+  };
   all.forEach(el => {
     const txt = Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('');
     if (!txt) return;

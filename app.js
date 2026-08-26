@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v153';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v164';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -296,6 +296,16 @@ function prettyDate(str) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 function isSunday(str) { return new Date(str + 'T00:00:00').getDay() === 0; }
+/* Compact date for records and awards. prettyDate() leads with the weekday, so stripping
+   after its comma leaves a bare "Thu" — useless on a shelf that spans years. Shows the
+   year only when it is not the current one. */
+function shortDate(str) {
+  if (!str) return '';
+  const d = new Date(str + 'T00:00:00');
+  const other = d.getFullYear() !== new Date().getFullYear();
+  return d.toLocaleDateString(undefined, other
+    ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' });
+}
 
 /* ---------- Voice dictation (speak → journal) ---------- */
 let _recog = null, _recogOn = false, _recogBtn = null, _userStopped = false, _natSR = false;
@@ -1504,6 +1514,37 @@ function checkStreakMilestone() {
   shown[key] = 1; localStorage.setItem('dp.milestones', JSON.stringify(shown));
   showMilestone(st);
 }
+/* Awards can be earned by editing ANY past day, not just today, so this runs on every
+   save. Only genuinely new awards are announced, and at most one at a time — a batch of
+   popups is a punishment, not a reward. */
+function checkNewAwards() {
+  let fresh = [];
+  try { fresh = syncAwards(); } catch (e) { return; }
+  if (!fresh.length) return;
+  // Rank by how deep the tier is within its own family. Sorting on the raw number made a
+  // 250,000-step badge always outrank a 365-day streak, which is backwards.
+  const depth = a => { const f = AWARD_FAMILIES.find(x => x.grp === a.grp);
+    return f ? (f.tiers.indexOf(a.tier) + 1) / f.tiers.length : 0; };
+  fresh.sort((a, b) => depth(b) - depth(a));
+  showAward(fresh[0], fresh.length - 1);
+}
+function showAward(a, more) {
+  let m = document.getElementById('milestone');
+  if (!m) { m = document.createElement('div'); m.id = 'milestone'; m.className = 'milestone'; document.body.appendChild(m); }
+  const confetti = Array.from({ length: 34 }, (_, i) =>
+    `<span class="mf" style="left:${(i * 149) % 100}%;background:${['#6d8cff','#4ad6c0','#fbbf24','#f87171','#a78bfa','#34d399'][i % 6]};animation-delay:${(i % 9) * .16}s;animation-duration:${2.2 + (i % 5) * .35}s"></span>`).join('');
+  m.innerHTML = `<div class="mf-wrap">${confetti}</div>
+    <div class="ms-inner">
+      <div class="ms-fire">${a.ico}</div>
+      <div class="ms-title" style="margin-top:2px">${a.title}</div>
+      <div class="ms-num" style="font-size:44px;line-height:1.15">${awardName(a)}</div>
+      <div class="ms-msg">Unlocked${more > 0 ? ` — and ${more} more waiting in your trophy case` : ''}.</div>
+      <button class="btn btn-primary" data-share-card="award" data-aw-share="${a.id}">Make a share card</button>
+      <button class="btn btn-ghost btn-sm" id="ms-close" style="margin-top:8px">Close</button>
+    </div>`;
+  m.classList.add('on');
+  if (navigator.vibrate) navigator.vibrate([70, 50, 70, 50, 140]);
+}
 function showMilestone(n) {
   let m = document.getElementById('milestone');
   if (!m) { m = document.createElement('div'); m.id = 'milestone'; m.className = 'milestone'; document.body.appendChild(m); }
@@ -1536,6 +1577,7 @@ function saveDraftNow(date, d) {
   DB.putEntry(date, d);
   refreshStreak();
   if (date === todayStr()) checkStreakMilestone();   // full-screen reward at 3/5/7/10/14… days
+  checkNewAwards();                                  // tiered awards can land on any date edited
   pushWidgetData();                                  // keep the (future native) home-screen widget fresh
   scheduleInactivityReminder();
   syncEntry(date, d);
@@ -3392,7 +3434,9 @@ function renderDash() {
       ${hStat(hAvg('calories') != null ? Math.round(hAvg('calories')) : null, '🔥 avg kcal')}
       ${hStat(hAvg('sleepMin') != null ? fmtMin(Math.round(hAvg('sleepMin'))) : null, '😴 avg sleep')}
       ${hStat(hAvg('exerciseMin') != null ? fmtMin(Math.round(hAvg('exerciseMin'))) : null, '🏃 avg active')}
-      ${hStat(hAvg('hr') != null ? Math.round(hAvg('hr')) + ' bpm' : null, '❤️ avg HR')}
+      ${/* the unit lives on the LABEL line like every other stat — "67 bpm" as the value
+             overflowed its 60px column at 320px and got clipped */''}
+      ${hStat(hAvg('hr') != null ? String(Math.round(hAvg('hr'))) : null, '❤️ avg bpm')}
     </div></div>
     ${at.screentime ? hChart('screenMin', '📱 Screen time', '#fb923c', v => fmtMin(Math.round(v))) : ''}
     ${at.steps ? hChart('steps', '👟 Steps', '#34d399', v => Math.round(v).toLocaleString()) : ''}
@@ -3402,11 +3446,15 @@ function renderDash() {
     ${(hCorrRows.length || screenVsWork) ? `<div class="card"><h2>🔗 Health ↔ You</h2>${hCorrRows.join('')}${screenVsWork}</div>` : ''}
     ${(!sampleOn && hDays < 5) ? '<button class="btn btn-ghost btn-sm" id="hc-sample">👀 Preview with sample data</button>' : ''}`);
 
-  const TABS = [['overview', icon('chart', 15) + ' Overview'], ['time', icon('clock', 15) + ' Time'], ['check', icon('check', 15) + ' Checklist'], ['health', icon('heart', 15) + ' Health']];
-  const body = { overview: overviewHTML, time: timeHTML, check: checkHTML, health: healthHTML }[dashTab] || overviewHTML;
+  const TABS = [['overview', icon('chart', 15) + ' Overview'], ['awards', icon('star', 15) + ' Awards'], ['time', icon('clock', 15) + ' Time'], ['check', icon('check', 15) + ' Checklist'], ['health', icon('heart', 15) + ' Health']];
+  // The other tabs are pre-built STRINGS; the trophy case is a function, so it is called
+  // here rather than put in the map — a function reference would stringify its own source
+  // into the page. It is also the only tab that replays full history, so it stays lazy.
+  const body = dashTab === 'awards' ? awardsHTML()
+    : ({ overview: overviewHTML, time: timeHTML, check: checkHTML, health: healthHTML }[dashTab] || overviewHTML);
   document.getElementById('s-dash').innerHTML = `
     <div class="seg-row">${TABS.map(([k, l]) => `<button class="seg-btn ${dashTab===k?'on':''}" data-dashtab="${k}">${l}</button>`).join('')}</div>
-    ${dashTab === 'check' ? '' : rangeRow}
+    ${(dashTab === 'check' || dashTab === 'awards') ? '' : rangeRow}
     ${body}`;
 }
 
@@ -5628,7 +5676,7 @@ function bestEfforts() {
     if (all.length < 3) return;
     const top = all.slice().sort((a, b) => b[1] - a[1]).slice(0, 3);
     const thisYear = all.filter(p => p[0].startsWith(yr)).sort((a, b) => b[1] - a[1])[0] || null;
-    rows.push({ label, ico, unit, top, thisYear, fmt: fmt || (v => String(Math.round(v))) });
+    rows.push({ label, ico, unit, top, thisYear, fmt: fmt || (v => Math.round(v).toLocaleString()) });
   };
 
   add('Most steps', 'trending', '', Object.keys(hs).map(d => [d, hs[d].steps]));
@@ -5636,7 +5684,7 @@ function bestEfforts() {
   add('Most active minutes', 'dumbbell', '', Object.keys(hs).map(d => [d, hs[d].exerciseMin]), v => fmtMin(Math.round(v)));
   add('Least screen time', 'phone', '', Object.keys(hs).filter(d => hs[d].screenMin != null)
       .map(d => [d, -hs[d].screenMin]), v => fmtMin(Math.round(-v)));
-  add('Deepest focus day', 'target', 'h', Object.keys(e).map(d => [d, e[d].deepWork]), v => v.toFixed(1) + 'h');
+  add('Deepest focus day', 'target', 'h', Object.keys(e).map(d => [d, e[d].deepWorkHours]), v => v.toFixed(1) + 'h');
   add('Best mood', 'smile', '', Object.keys(e).map(d => [d, e[d].mood]), v => String(v) + '/10');
   add('Most habits done', 'check', '', Object.keys(e).map(d => [d,
       e[d].habits ? Object.keys(e[d].habits).filter(k => hVal(e[d], k) === H_DONE).length : null]));
@@ -5645,12 +5693,12 @@ function bestEfforts() {
   const medal = i => ['🥇', '🥈', '🥉'][i] || '';
   return `<div class="card">
     <h2 class="h2-icon">${hicon('target')}<span>Your best ever</span>
-      <span class="hint" style="margin-left:auto">you vs your own past</span></h2>
+      <span class="hint" style="margin-left:auto"><a href="#" data-share-card="streak">share</a></span></h2>
     ${rows.map(r => `<div class="be-row">
       <div class="be-head">${icon(r.ico, 15)} <span>${r.label}</span></div>
       <div class="be-list">${r.top.map((t, i) => `<span class="be-item${i === 0 ? ' gold' : ''}"
         data-be-open="${t[0]}" title="${prettyDate(t[0])}">${medal(i)} <b>${r.fmt(t[1])}</b>
-        <em>${prettyDate(t[0]).replace(/,.*$/, '')}</em></span>`).join('')}</div>
+        <em>${shortDate(t[0])}</em></span>`).join('')}</div>
       ${r.thisYear && r.thisYear[0] !== r.top[0][0]
         ? `<div class="be-year">Best this year: <b>${r.fmt(r.thisYear[1])}</b> · ${prettyDate(r.thisYear[0])}</div>` : ''}
     </div>`).join('')}
@@ -5662,6 +5710,645 @@ document.addEventListener('click', (ev) => {
   const d = b.dataset.beOpen;
   if (!DB.entry(d)) { toast('Nothing logged on ' + prettyDate(d)); return; }
   logDate = d; loadDraft(); show('today'); buzz(12); toast('Opened ' + prettyDate(d));
+});
+
+/* ============================================================
+   ACHIEVEMENTS + SHARE CARDS
+
+   Awards are DERIVED from the log on every read. There is no stored score, so there is
+   nothing to inflate and nothing to lose — the three failure modes the research named
+   were "an unreachable ceiling set by somebody else", "targets calibrated to nobody" and
+   "rewards you can lose or fake", and deriving everything from your own history avoids
+   all three. Deliberate choices:
+
+     - Every family is TIERED. A 30-day goal pays out at 3, 7, 14, 21 too, so nobody
+       finishes empty-handed — the all-or-nothing failure mode.
+     - No points, no currency, no streak insurance. Informational feedback only: tangible
+       rewards are precisely what erodes intrinsic motivation.
+     - Nothing is ever revoked. A 30-day streak you held in March is still yours in July.
+     - The earned DATE is replayed from history, not stamped as "today" on first run, so
+       an existing user's Trophy Case is truthful the moment it appears.
+   ============================================================ */
+
+const AWARD_FAMILIES = [
+  { grp: 'streak',   ico: '🔥', title: 'Consistency',  unit: 'days in a row',  mode: 'peak',
+    tiers: [3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 365] },
+  { grp: 'days',     ico: '📘', title: 'Days logged',  unit: 'days logged',    mode: 'cum',
+    tiers: [10, 25, 50, 100, 250, 500, 1000] },
+  { grp: 'habits',   ico: '✅', title: 'Habits done',  unit: 'habits ticked',  mode: 'cum',
+    tiers: [25, 100, 250, 500, 1000, 2500, 5000] },
+  { grp: 'perfect',  ico: '⭐', title: 'Perfect days', unit: 'perfect days',   mode: 'cum',
+    tiers: [1, 5, 10, 25, 50, 100, 200] },
+  { grp: 'journal',  ico: '✍️', title: 'Written',      unit: 'journal entries', mode: 'cum',
+    tiers: [5, 25, 50, 100, 250, 500] },
+  { grp: 'focus',    ico: '🎯', title: 'Deep work',    unit: 'focused hours',  mode: 'cum',
+    tiers: [10, 50, 100, 250, 500, 1000] },
+  { grp: 'steps',    ico: '👟', title: 'Distance',     unit: 'steps walked',   mode: 'cum',
+    tiers: [50000, 250000, 1000000, 2500000, 5000000] },
+  { grp: 'strength', ico: '💪', title: 'Habit strength', unit: '% strength',   mode: 'peak',
+    tiers: [25, 50, 75, 90, 100] },
+];
+
+/* A chronological [date, value] series per family. Replaying history is what lets the
+   Trophy Case show the real date an award was earned instead of the day the feature
+   shipped. 'strength' is the one exception — the EMA would have to be recomputed for
+   every past day, so it reports current value only and its date reads "earned earlier". */
+function awardSeries(grp) {
+  const e = DB.entries(), dates = Object.keys(e).sort();
+  const out = []; let acc = 0;
+  if (grp === 'days')    { dates.forEach(d => out.push([d, ++acc])); return out; }
+  if (grp === 'journal') { dates.forEach(d => { if ((e[d].journal || '').trim()) acc++; out.push([d, acc]); }); return out; }
+  if (grp === 'habits')  { dates.forEach(d => { const h = e[d].habits || {};
+      acc += Object.keys(h).filter(k => hVal(e[d], k) === H_DONE).length; out.push([d, acc]); }); return out; }
+  if (grp === 'perfect') { const keys = habitCfg().filter(h => !h.hidden).map(h => h.key);
+      if (!keys.length) return [];
+      dates.forEach(d => { if (keys.every(k => hVal(e[d], k) === H_DONE)) acc++; out.push([d, acc]); }); return out; }
+  if (grp === 'focus')   { dates.forEach(d => { const raw = e[d].deepWorkHours;
+      if (raw != null && raw !== '' && !isNaN(+raw)) acc += +raw; out.push([d, Math.round(acc)]); }); return out; }
+  if (grp === 'steps')   { const hs = healthStore();
+      Object.keys(hs).sort().forEach(d => { const v = hs[d] && hs[d].steps;
+        if (v != null && !isNaN(+v)) acc += +v; out.push([d, acc]); }); return out; }
+  if (grp === 'streak')  { let run = 0, prev = null;
+      dates.forEach(d => { run = (prev && addDays(prev, 1) === d) ? run + 1 : 1; prev = d; out.push([d, run]); });
+      return out; }
+  return [];
+}
+
+function bestHabitStrength() {
+  const keys = habitCfg().filter(h => !h.hidden).map(h => h.key);
+  let best = 0;
+  keys.forEach(k => { try { const v = habitStrength(k); if (v > best) best = v; } catch (e) {} });
+  return Math.round(best);
+}
+
+function awardList() {
+  const out = [];
+  AWARD_FAMILIES.forEach(f => {
+    const ser = f.grp === 'strength' ? [] : awardSeries(f.grp);
+    let cur = 0;
+    if (f.grp === 'strength') cur = bestHabitStrength();
+    else if (ser.length) cur = f.mode === 'peak'
+      ? ser.reduce((m, p) => p[1] > m ? p[1] : m, 0)          // reduce, not Math.max(...) — a
+      : ser[ser.length - 1][1];                                // long history would blow the stack
+    f.tiers.forEach(t => {
+      const hit = ser.find(p => p[1] >= t);
+      out.push({ id: f.grp + ':' + t, grp: f.grp, ico: f.ico, title: f.title, unit: f.unit,
+                 tier: t, cur, earned: cur >= t, on: hit ? hit[0] : null });
+    });
+  });
+  return out;
+}
+
+function awardLog() { try { return safeParse(localStorage.getItem('dp.awards'), {}) || {}; } catch (e) { return {}; } }
+
+/* Records which awards have already been announced. On the very first run every existing
+   award is recorded SILENTLY — an established user opening this for the first time should
+   see a full Trophy Case, not forty stacked celebration popups. */
+function syncAwards() {
+  const seen = awardLog(), fresh = [];
+  const firstRun = !localStorage.getItem('dp.awardsInit');
+  awardList().filter(a => a.earned).forEach(a => {
+    if (seen[a.id]) return;
+    seen[a.id] = a.on || todayStr();
+    if (!firstRun) fresh.push(a);
+  });
+  try {
+    localStorage.setItem('dp.awards', JSON.stringify(seen));
+    if (firstRun) localStorage.setItem('dp.awardsInit', '1');
+  } catch (e) {}
+  return fresh;
+}
+
+function awardName(a) {
+  if (a.grp === 'steps')    return (a.tier >= 1e6 ? (a.tier / 1e6) + 'M' : (a.tier / 1000) + 'k') + ' steps';
+  if (a.grp === 'strength') return a.tier + '% strength';
+  return a.tier.toLocaleString() + ' ' + a.unit.replace(/^% /, '');
+}
+
+/* ---------- Trophy Case ---------- */
+function awardsHTML() {
+  const list = awardList(), seen = awardLog();
+  const earned = list.filter(a => a.earned);
+  if (!earned.length && !Object.keys(DB.entries()).length) {
+    return `<div class="card"><h2 class="h2-icon">${hicon('star')}<span>Trophy case</span></h2>
+      <div class="empty">Log a day and your first award lands here.</div></div>`;
+  }
+  // Next up, one per family: the goal-gradient effect only works if you can SEE the gap.
+  const next = [];
+  AWARD_FAMILIES.forEach(f => {
+    const t = list.filter(a => a.grp === f.grp && !a.earned).sort((a, b) => a.tier - b.tier)[0];
+    if (t) next.push(t);
+  });
+  next.sort((a, b) => (b.cur / b.tier) - (a.cur / a.tier));
+
+  const byGrp = {};
+  earned.forEach(a => { (byGrp[a.grp] = byGrp[a.grp] || []).push(a); });
+
+  return `<div class="card">
+    <h2 class="h2-icon">${hicon('star')}<span>Trophy case</span>
+      <span class="hint" style="margin-left:auto">${earned.length} of ${list.length}</span></h2>
+    ${AWARD_FAMILIES.filter(f => byGrp[f.grp]).map(f => `
+      <div class="aw-grp">
+        <div class="aw-grp-h">${f.ico} ${f.title}</div>
+        <div class="aw-list">${byGrp[f.grp].sort((a, b) => b.tier - a.tier).map(a => `
+          <button type="button" class="aw-badge" data-aw-share="${a.id}">
+            <span class="aw-t">${awardName(a)}</span>
+            <span class="aw-d">${a.on ? shortDate(a.on) : 'earned earlier'}</span>
+          </button>`).join('')}</div>
+      </div>`).join('')}
+    ${earned.length ? '<div class="hint aw-tip">Tap any award to make a share card.</div>' : ''}
+  </div>
+  ${next.length ? `<div class="card">
+    <h2 class="h2-icon">${hicon('target')}<span>Next up</span></h2>
+    ${next.slice(0, 6).map(a => { const pct = Math.max(2, Math.min(100, Math.round(a.cur / a.tier * 100)));
+      const left = a.tier - a.cur;
+      return `<div class="aw-next">
+        <div class="aw-next-h"><span>${a.ico} ${awardName(a)}</span>
+          <span class="aw-next-n">${left.toLocaleString()} to go</span></div>
+        <div class="aw-bar"><span style="width:${pct}%"></span></div>
+      </div>`; }).join('')}
+  </div>` : ''}`;
+}
+
+/* ============================================================
+   SHARE CARDS — canvas, generated entirely on device.
+
+   The bitmap leaves the app; the data never does. That is the whole point, and it is why
+   there is no server in this path at all. Design rules taken from the research: three or
+   four numbers at most (a card is not a dashboard), one sentence worth reading, and a
+   signature look that is recognisable at thumbnail size — so cards are always dark with
+   the same accent stroke regardless of the app theme.
+   ============================================================ */
+
+const CARD_W = 1080;
+const CARD_RATIOS = { '4:5': 1350, '9:16': 1920 };
+/* Every card BODY is laid out against this nominal height and then centred vertically in
+   whatever ratio was picked, while the frame, wordmark and footer stay pinned to the real
+   edges. Without this, a 9:16 story card kept the 4:5 layout at the top and left a third
+   of the canvas empty underneath. */
+const CARD_BODY = 1350;
+function bodyTop(H) { return (H - CARD_BODY) / 2; }
+const CARD_INK = '#f2f5ff', CARD_DIM = '#8f9bbd', CARD_BG = '#0d1220', CARD_BG2 = '#141b2e';
+const CARD_ACCENT = '#6d8cff', CARD_WARM = '#fbbf24', CARD_GOOD = '#4ad6c0';
+
+let cardState = { kind: 'streak', ratio: '4:5', arg: null, blob: null, busy: false };
+
+function cardFont(px, weight) { return `${weight || 400} ${px}px "DM Sans", "Twemoji Mozilla", system-ui, sans-serif`; }
+
+/* Fonts must be resolved BEFORE the first fillText or the card silently renders in a
+   fallback face — and the canvas gives no warning when that happens. */
+async function cardFontsReady() {
+  try {
+    if (document.fonts && document.fonts.load) {
+      await Promise.all([document.fonts.load(cardFont(100, 800)), document.fonts.load(cardFont(40, 400)),
+                         document.fonts.load(cardFont(48, 700))]);
+      await document.fonts.ready;
+    }
+  } catch (e) {}
+}
+
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  if (g.roundRect) { g.roundRect(x, y, w, h, r); return; }
+  g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+
+/* Wrap to a width and return the y the caller should continue from. */
+function cardWrap(g, text, x, y, maxW, lh, align) {
+  const words = String(text).split(/\s+/); let line = '', yy = y;
+  g.textAlign = align || 'left';
+  words.forEach(w => {
+    const t = line ? line + ' ' + w : w;
+    if (g.measureText(t).width > maxW && line) { g.fillText(line, x, yy); yy += lh; line = w; }
+    else line = t;
+  });
+  if (line) { g.fillText(line, x, yy); yy += lh; }
+  return yy;
+}
+
+/* Lay text out WITHOUT drawing it, so a box can be sized to its contents. Drawing first
+   and hoping is what made the insight card spill its sub-text into the footer. */
+function cardLines(g, text, maxW) {
+  const words = String(text).split(/\s+/), out = []; let line = '';
+  words.forEach(w => {
+    const t = line ? line + ' ' + w : w;
+    if (g.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t;
+  });
+  if (line) out.push(line);
+  return out;
+}
+/* Truncate to a measured pixel width. A character count cannot know how wide a glyph is:
+   "No phone in the first hour" was cut mid-word at 24 chars while shorter labels had room. */
+function cardClip(g, text, maxW) {
+  let t = String(text);
+  if (g.measureText(t).width <= maxW) return t;
+  while (t.length > 1 && g.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  return t.replace(/\s+$/, '') + '…';
+}
+function cardDrawLines(g, lines, x, y, lh, align) {
+  g.textAlign = align || 'left';
+  lines.forEach((l, i) => g.fillText(l, x, y + i * lh));
+  return y + lines.length * lh;
+}
+
+function cardChrome(g, H, subtitle) {
+  const grad = g.createLinearGradient(0, 0, CARD_W, H);
+  grad.addColorStop(0, CARD_BG); grad.addColorStop(1, CARD_BG2);
+  g.fillStyle = grad; g.fillRect(0, 0, CARD_W, H);
+  // signature stroke: high contrast on a muted ground is what survives a thumbnail
+  g.strokeStyle = CARD_ACCENT; g.lineWidth = 10;
+  roundRect(g, 34, 34, CARD_W - 68, H - 68, 44); g.stroke();
+  g.fillStyle = CARD_DIM; g.font = cardFont(34, 600); g.textAlign = 'left';
+  g.fillText('DAYLOG', 84, 118);
+  if (subtitle) { g.textAlign = 'right'; g.fillText(subtitle, CARD_W - 84, 118); }
+  g.textAlign = 'left';
+}
+
+function cardFooter(g, H, line) {
+  g.fillStyle = CARD_DIM; g.font = cardFont(30, 500); g.textAlign = 'center';
+  g.fillText(line || 'Private life tracker · no account, no cloud', CARD_W / 2, H - 86);
+  g.textAlign = 'left';
+}
+
+/* A big number with a label under it — the only pattern that reads at thumbnail size. */
+function cardHero(g, y, value, label, colour) {
+  g.textAlign = 'center';
+  g.fillStyle = colour || CARD_INK; g.font = cardFont(232, 800);
+  g.fillText(String(value), CARD_W / 2, y);
+  g.fillStyle = CARD_DIM; g.font = cardFont(46, 600);
+  g.fillText(label, CARD_W / 2, y + 74);
+  g.textAlign = 'left';
+  return y + 150;
+}
+
+function moodColour(v) {
+  if (v == null) return '#232a3d';
+  const t = Math.max(1, Math.min(10, +v));
+  const stops = [[1,'#e2574c'],[4,'#e9b53a'],[7,'#4ad6c0'],[10,'#6d8cff']];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t <= stops[i + 1][0]) return stops[t - stops[i][0] < stops[i + 1][0] - t ? i : i + 1][1];
+  }
+  return stops[stops.length - 1][1];
+}
+
+/* ---- the five designs ---- */
+const CARD_KINDS = [
+  { k: 'streak',  label: '🔥 Streak' },
+  { k: 'pixels',  label: '🎨 Year' },
+  { k: 'habit',   label: '✅ Habits' },
+  { k: 'insight', label: '💡 Insight' },
+  { k: 'award',   label: '🏆 Award' },
+];
+
+function drawStreak(g, H) {
+  cardChrome(g, H, shortDate(todayStr()));
+  const st = loggedStreak(), e = DB.entries();
+  g.textAlign = 'center'; g.fillStyle = CARD_WARM; g.font = cardFont(120, 400);
+  const sh = bodyTop(H);
+  g.fillText('🔥', CARD_W / 2, sh + CARD_BODY * 0.175);
+  let y = cardHero(g, sh + CARD_BODY * 0.335, st, st === 1 ? 'day logged' : 'day streak', CARD_WARM);
+
+  // A 90-day dot grid is this card's stand-in for Strava's route line: a SHAPE, not a
+  // fourth number. 18 x 5 lands exactly on 90 cells with no ragged final row.
+  const cols = 18, cell = 42, gap = 11;
+  const gw = cols * cell + (cols - 1) * gap, gx = (CARD_W - gw) / 2;
+  let gy = y + 46;
+  for (let i = 0; i < 90; i++) {
+    const d = addDays(todayStr(), -(89 - i));
+    const cx = gx + (i % cols) * (cell + gap), cy = gy + Math.floor(i / cols) * (cell + gap);
+    const en = e[d];
+    g.fillStyle = en ? moodColour(en.mood != null && en.mood !== '' ? +en.mood : 7) : '#1d2436';
+    roundRect(g, cx, cy, cell, cell, 12); g.fill();
+  }
+  gy += Math.ceil(90 / cols) * (cell + gap) + 44;
+  g.fillStyle = CARD_DIM; g.font = cardFont(32, 500); g.textAlign = 'center';
+  g.fillText('the last 90 days · colour is mood', CARD_W / 2, gy);
+
+  // Two supporting numbers, no more. Four numbers on a card is a dashboard.
+  const days = Object.keys(e).length;
+  const done = Object.keys(e).reduce((n, d) => n + (e[d].habits
+    ? Object.keys(e[d].habits).filter(k => hVal(e[d], k) === H_DONE).length : 0), 0);
+  const sy = gy + 130;
+  g.strokeStyle = 'rgba(255,255,255,.10)'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(150, sy - 78); g.lineTo(CARD_W - 150, sy - 78); g.stroke();
+  const pair = (x, v, l) => {
+    g.fillStyle = CARD_INK; g.font = cardFont(62, 800); g.fillText(v, x, sy);
+    g.fillStyle = CARD_DIM; g.font = cardFont(30, 500); g.fillText(l, x, sy + 44);
+  };
+  pair(CARD_W * 0.31, days.toLocaleString(), 'days logged');
+  pair(CARD_W * 0.69, done.toLocaleString(), 'habits ticked');
+  cardFooter(g, H);
+}
+
+function drawPixels(g, H) {
+  const yr = new Date().getFullYear();
+  cardChrome(g, H, String(yr));
+  const e = DB.entries();
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(66, 800);
+  const sh = bodyTop(H);
+  g.fillText('Year in pixels', CARD_W / 2, sh + CARD_BODY * 0.185);
+
+  // 31 columns (days) x 12 rows (months) — the same shape the app itself draws, so the
+  // card reads as Daylog and not a generic heatmap. The 53-week GitHub grid this replaced
+  // was 1532px wide and ran straight off both edges of a 1080px card.
+  const pad = 88, lab = 74, gap = 4;
+  const cell = Math.floor((CARD_W - pad * 2 - lab - gap * 30) / 31);
+  const gx = pad + lab, rowH = cell + gap + 3;
+  const gy = sh + CARD_BODY * 0.235;
+  let logged = 0, sum = 0;
+  for (let mon = 0; mon < 12; mon++) {
+    const ry = gy + mon * rowH;
+    g.textAlign = 'right'; g.fillStyle = CARD_DIM; g.font = cardFont(24, 600);
+    g.fillText(MON[mon], gx - 16, ry + cell - 3);
+    for (let day = 1; day <= 31; day++) {
+      if (new Date(yr, mon, day).getMonth() !== mon) continue;
+      const ds = yr + '-' + String(mon + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      const en = e[ds];
+      const m = en && en.mood != null && en.mood !== '' ? +en.mood : null;
+      if (en) logged++;
+      if (m != null) sum += m;
+      g.fillStyle = en ? moodColour(m != null ? m : 7) : '#1a2133';
+      roundRect(g, gx + (day - 1) * (cell + gap), ry, cell, cell, 5); g.fill();
+    }
+  }
+  let y = gy + 12 * rowH + 56;
+  g.fillStyle = CARD_DIM; g.font = cardFont(30, 500); g.textAlign = 'center';
+  g.fillText('one square per day · colour is mood', CARD_W / 2, y);
+  y = cardHero(g, y + 178, logged, logged === 1 ? 'day logged this year' : 'days logged this year', CARD_ACCENT);
+  if (sum && logged) {
+    g.fillStyle = CARD_INK; g.font = cardFont(40, 700); g.textAlign = 'center';
+    g.fillText('average mood ' + (sum / logged).toFixed(1) + ' / 10', CARD_W / 2, y + 40);
+  }
+  cardFooter(g, H);
+}
+
+function drawHabit(g, H) {
+  cardChrome(g, H, 'last 90 days');
+  const cfg = habitCfg().filter(h => !h.hidden).slice(0, 6), e = DB.entries();
+  g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(66, 800);
+  const sh = bodyTop(H);
+  g.fillText('Habits', CARD_W / 2, sh + CARD_BODY * 0.19);
+
+  const cols = 30, cell = 22, gap = 5;
+  const gw = cols * (cell + gap) - gap, gx = (CARD_W - gw) / 2;
+  let y = sh + CARD_BODY * 0.25;
+  cfg.forEach(h => {
+    let strength = 0; try { strength = Math.round(habitStrength(h.key)); } catch (er) {}
+    g.textAlign = 'left'; g.fillStyle = CARD_INK; g.font = cardFont(38, 700);
+    g.fillText(cardClip(g, (h.emoji ? h.emoji + '  ' : '') + h.label, gw - 130), gx, y);
+    g.textAlign = 'right'; g.fillStyle = CARD_GOOD; g.font = cardFont(36, 700);
+    g.fillText(strength + '%', gx + gw, y);
+    y += 22;
+    for (let i = 0; i < 90; i++) {
+      const d = addDays(todayStr(), -(89 - i));
+      const st = hVal(e[d], h.key);
+      const cx = gx + (i % cols) * (cell + gap), cy = y + Math.floor(i / cols) * (cell + gap);
+      g.fillStyle = st === H_DONE ? CARD_GOOD : st === H_SKIP ? '#38415c' : '#1a2133';
+      roundRect(g, cx, cy, cell, cell, 6); g.fill();
+    }
+    y += 3 * (cell + gap) + 44;
+  });
+  cardFooter(g, H, 'green = done · grey = skipped, guilt-free');
+}
+
+function drawInsight(g, H) {
+  cardChrome(g, H, 'what my own data says');
+  let ps = []; try { ps = computePatterns() || []; } catch (e) {}
+  const strip = t => String(t || '').replace(/<[^>]*>/g, '');
+  g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(62, 800);
+  const sh = bodyTop(H);
+  g.fillText('What I learned', CARD_W / 2, sh + CARD_BODY * 0.17);
+  if (!ps.length) {
+    g.fillStyle = CARD_DIM; g.font = cardFont(42, 500);
+    g.fillText('Keep logging — patterns need a few weeks.', CARD_W / 2, H * 0.5);
+    cardFooter(g, H); return;
+  }
+
+  // ONE headline insight, sized to its own text. The previous version used a fixed 250px
+  // box for three insights, so every sub-line overflowed its card and the last one
+  // collided with the footer. Measure, then draw.
+  const top = ps[0];
+  const boxW = CARD_W - 176, innerW = boxW - 120;
+  const bx = 88; let by = sh + CARD_BODY * 0.235;
+  g.font = cardFont(50, 700);
+  const headL = cardLines(g, strip(top.head), innerW);
+  g.font = cardFont(32, 400);
+  const subL = cardLines(g, strip(top.sub), innerW).slice(0, 5);
+  const boxH = 64 + headL.length * 62 + 20 + subL.length * 44 + 52;
+
+  g.fillStyle = 'rgba(109,140,255,.10)';
+  roundRect(g, bx, by, boxW, boxH, 32); g.fill();
+  g.strokeStyle = CARD_ACCENT; g.lineWidth = 5;
+  roundRect(g, bx, by, boxW, boxH, 32); g.stroke();
+  g.fillStyle = CARD_INK; g.font = cardFont(50, 700);
+  let ty = cardDrawLines(g, headL, CARD_W / 2, by + 106, 62, 'center');
+  g.fillStyle = CARD_DIM; g.font = cardFont(32, 400);
+  cardDrawLines(g, subL, CARD_W / 2, ty + 34, 44, 'center');
+  by += boxH + 46;
+
+  // The rest as single measured lines — they fit or they are not drawn at all.
+  const room = sh + CARD_BODY - 190 - by;
+  const maxMore = Math.max(0, Math.floor(room / 66));
+  ps.slice(1, 1 + Math.min(4, maxMore)).forEach(p => {
+    g.fillStyle = CARD_ACCENT; g.font = cardFont(34, 800); g.textAlign = 'left';
+    g.fillText('·', bx + 18, by + 8);
+    g.fillStyle = CARD_INK; g.font = cardFont(34, 600);
+    g.fillText(cardClip(g, strip(p.head), boxW - 70), bx + 48, by + 8);
+    by += 66;
+  });
+  cardFooter(g, H, 'measured on my own phone, not guessed');
+}
+
+function drawAward(g, H, id) {
+  const a = awardList().find(x => x.id === id) || awardList().filter(x => x.earned).slice(-1)[0];
+  cardChrome(g, H, a && a.on ? prettyDate(a.on) : '');
+  if (!a) {
+    g.textAlign = 'center'; g.fillStyle = CARD_DIM; g.font = cardFont(44, 500);
+    g.fillText('No awards yet — keep logging.', CARD_W / 2, H / 2); cardFooter(g, H); return;
+  }
+  g.textAlign = 'center';
+  const sh = bodyTop(H);
+  g.font = cardFont(240, 400); g.fillText(a.ico, CARD_W / 2, sh + CARD_BODY * 0.36);
+  g.fillStyle = CARD_DIM; g.font = cardFont(40, 600);
+  g.fillText(a.title.toUpperCase(), CARD_W / 2, sh + CARD_BODY * 0.45);
+  g.fillStyle = CARD_INK; g.font = cardFont(96, 800);
+  cardWrap(g, awardName(a), CARD_W / 2, sh + CARD_BODY * 0.55, CARD_W - 220, 112, 'center');
+  // the tier ladder, so the card shows a journey rather than a single trophy
+  const fam = AWARD_FAMILIES.find(f => f.grp === a.grp);
+  if (fam) {
+    const done = fam.tiers.filter(t => t <= a.cur).length;
+    const y = sh + CARD_BODY * 0.7, bw = CARD_W - 260;
+    g.fillStyle = '#1d2436'; roundRect(g, 130, y, bw, 26, 13); g.fill();
+    g.fillStyle = CARD_WARM;
+    roundRect(g, 130, y, Math.max(26, bw * done / fam.tiers.length), 26, 13); g.fill();
+    g.fillStyle = CARD_DIM; g.font = cardFont(34, 500);
+    g.fillText(`tier ${done} of ${fam.tiers.length}`, CARD_W / 2, y + 74);
+  }
+  cardFooter(g, H);
+}
+
+async function buildCardBlob(kind, ratio, arg) {
+  await cardFontsReady();
+  const H = CARD_RATIOS[ratio] || CARD_RATIOS['4:5'];
+  const cv = document.createElement('canvas');
+  cv.width = CARD_W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.textBaseline = 'alphabetic';
+  ({ streak: drawStreak, pixels: drawPixels, habit: drawHabit, insight: drawInsight,
+     award: (gg, hh) => drawAward(gg, hh, arg) }[kind] || drawStreak)(g, H);
+  return await new Promise(res => {
+    if (cv.toBlob) cv.toBlob(b => res(b), 'image/png');
+    else res(null);
+  });
+}
+
+/* ---------- Delivery ----------
+   Four paths, best first. This ladder exists because Android WebView implements NO Web
+   Share API — not Level 2 (files), not even Level 1 (text) — so the branch that works on
+   every other platform is dead code inside our own shell. Verified, not assumed.
+     1. native shareImage() through our own plugin  (needs the next native build)
+     2. Web Share Level 2                            (Chrome/Safari on the open web)
+     3. an <a download>                              (desktop browsers)
+     4. an in-app viewer with long-press to save     (Android WebView today)
+   The bitmap is what travels. The data never leaves the device on any of these paths. */
+async function blobToB64(blob) {
+  return await new Promise(res => {
+    const r = new FileReader();
+    r.onloadend = () => res(String(r.result).replace(/^data:[^,]+,/, ''));
+    r.readAsDataURL(blob);
+  });
+}
+
+function nativeSharePlugin() {
+  const p = window.Capacitor && Capacitor.Plugins;
+  const fs = p && p.FullScreenAlarm;
+  return (fs && typeof fs.shareImage === 'function') ? fs : null;
+}
+
+async function deliverCard(blob, fname) {
+  if (!blob) { toast('Could not build the card', true); return 'fail'; }
+
+  const nat = nativeSharePlugin();
+  if (nat) {
+    try {
+      const r = await nat.shareImage({ base64: await blobToB64(blob), filename: fname });
+      if (r && r.ok !== false) return 'native';
+    } catch (e) {}
+  }
+
+  try {
+    const file = new File([blob], fname, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      return 'webshare';
+    }
+  } catch (e) { if (e && e.name === 'AbortError') return 'cancel'; }
+
+  // Desktop browsers: a real download. A Capacitor WebView swallows this, which is
+  // exactly why path 4 exists rather than us pretending this one always works.
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; document.body.appendChild(a);
+    a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 20000);
+    if (!nativeShell()) { toast('Card saved to your downloads'); return 'download'; }
+  } catch (e) {}
+
+  return 'viewer';
+}
+
+/* ---------- Share sheet ---------- */
+function shareSheetOpen(kind, arg) {
+  cardState.kind = kind || 'streak';
+  cardState.arg = arg || null;
+  let el = document.getElementById('sharesheet');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sharesheet'; el.className = 'sharesheet';
+    document.body.appendChild(el);
+  }
+  el.classList.add('on');
+  shareSheetRender();
+  cardPreview();
+}
+
+function shareSheetClose() {
+  const el = document.getElementById('sharesheet');
+  if (el) el.classList.remove('on');
+  if (cardState.url) { try { URL.revokeObjectURL(cardState.url); } catch (e) {} cardState.url = null; }
+}
+
+function shareSheetRender() {
+  const el = document.getElementById('sharesheet');
+  if (!el) return;
+  el.innerHTML = `<div class="ss-inner">
+    <div class="ss-head">
+      <span>Share card</span>
+      <button type="button" class="ss-x" id="ss-close" aria-label="Close">✕</button>
+    </div>
+    <div class="ss-stage"><div class="ss-canvas" id="ss-stage">
+      ${cardState.url ? `<img src="${cardState.url}" alt="Your share card">`
+                      : '<div class="ss-load">Rendering…</div>'}
+    </div></div>
+    <div class="ss-pick">${CARD_KINDS.map(c => `<button type="button"
+      class="ss-chip ${cardState.kind === c.k ? 'on' : ''}" data-card-kind="${c.k}">${c.label}</button>`).join('')}</div>
+    <div class="ss-pick">${Object.keys(CARD_RATIOS).map(r => `<button type="button"
+      class="ss-chip ${cardState.ratio === r ? 'on' : ''}" data-card-ratio="${r}">${r === '4:5' ? 'Post 4:5' : 'Story 9:16'}</button>`).join('')}</div>
+    <div class="ss-acts">
+      <button type="button" class="btn btn-primary" id="ss-send" ${cardState.busy ? 'disabled' : ''}>
+        ${nativeSharePlugin() || (navigator.canShare) ? 'Share' : 'Save image'}</button>
+    </div>
+    <div class="hint ss-note">Only the picture is shared. Your entries never leave the phone.</div>
+  </div>`;
+}
+
+async function cardPreview() {
+  if (cardState.busy) return;
+  cardState.busy = true;
+  try {
+    const blob = await buildCardBlob(cardState.kind, cardState.ratio, cardState.arg);
+    if (cardState.url) { try { URL.revokeObjectURL(cardState.url); } catch (e) {} }
+    cardState.blob = blob;
+    cardState.url = blob ? URL.createObjectURL(blob) : null;
+  } catch (e) {
+    cardState.blob = null; cardState.url = null;
+  }
+  cardState.busy = false;
+  shareSheetRender();
+}
+
+document.addEventListener('click', async (ev) => {
+  const t = ev.target;
+  if (!t || !t.closest) return;
+
+  const aw = t.closest('[data-aw-share]');
+  if (aw) {
+    const ms = document.getElementById('milestone'); if (ms) ms.classList.remove('on');
+    shareSheetOpen('award', aw.dataset.awShare); buzz(10); return;
+  }
+
+  const sh = t.closest('[data-share-card]');
+  if (sh) { shareSheetOpen(sh.dataset.shareCard || 'streak'); buzz(10); return; }
+
+  if (t.id === 'ss-close' || t.id === 'sharesheet') { shareSheetClose(); return; }
+
+  const kb = t.closest('[data-card-kind]');
+  if (kb) { cardState.kind = kb.dataset.cardKind; shareSheetRender(); cardPreview(); return; }
+
+  const rb = t.closest('[data-card-ratio]');
+  if (rb) { cardState.ratio = rb.dataset.cardRatio; shareSheetRender(); cardPreview(); return; }
+
+  if (t.id === 'ss-send') {
+    if (!cardState.blob) { toast('Still rendering — one second', true); return; }
+    const name = 'daylog-' + cardState.kind + '-' + todayStr() + '.png';
+    const how = await deliverCard(cardState.blob, name);
+    if (how === 'viewer') toast('Long-press the image to save or share it');
+    else if (how !== 'cancel' && how !== 'fail') { buzz(14); shareSheetClose(); }
+    return;
+  }
 });
 
 function alarmHealthHTML() {

@@ -49,6 +49,22 @@ for VP in "320 640" "360 740" "412 820"; do
   $B js "show('today'); window.scrollTo(0, document.documentElement.scrollHeight); 'ok'" >/dev/null 2>&1
   R=$($B eval "$PWD/tools/evals/checks.js" 2>/dev/null | tail -1)
   case "$R" in \{*) echo "," >> "$OUT"; printf '{"screen":"today-bottom","w":%s,"h":%s,"r":%s}' "$W" "$H" "$R" >> "$OUT";; esac
+
+  # Stats sub-tabs are not reachable through show(), so drive dashTab directly. Without
+  # this the trophy case and the health charts were never measured at any width.
+  for T in awards health check time; do
+    $B js "try{ dashTab='$T'; show('dash'); renderDash(); window.scrollTo(0,0); }catch(e){} 'ok'" >/dev/null 2>&1
+    R=$($B eval "$PWD/tools/evals/checks.js" 2>/dev/null | tail -1)
+    case "$R" in \{*) echo "," >> "$OUT"; printf '{"screen":"dash-%s","w":%s,"h":%s,"r":%s}' "$T" "$W" "$H" "$R" >> "$OUT";; esac
+  done
+
+  # The share sheet is a full-screen overlay with its own palette on a dark scrim, so it
+  # cannot inherit the app's contrast guarantees — it needs measuring in its own right.
+  $B js "try{ dashTab='overview'; show('dash'); shareSheetOpen('streak'); }catch(e){} 'ok'" >/dev/null 2>&1
+  sleep 3
+  R=$($B eval "$PWD/tools/evals/checks.js" 2>/dev/null | tail -1)
+  case "$R" in \{*) echo "," >> "$OUT"; printf '{"screen":"share-sheet","w":%s,"h":%s,"r":%s}' "$W" "$H" "$R" >> "$OUT";; esac
+  $B js "try{ shareSheetClose(); }catch(e){} 'ok'" >/dev/null 2>&1
 done
 echo "]" >> "$OUT"
 python3 tools/evals/report.py "$OUT"
