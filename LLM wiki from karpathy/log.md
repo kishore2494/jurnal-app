@@ -1,3 +1,45 @@
+## 2026-08-26 (later) — in-app alarm sound picker · web v146 + bundle 111/71
+
+Kishore asked for an in-app sound change, in the Customize section. Built it using
+**Android's own ringtone picker** rather than bundling audio: the user gets every alarm tone
+already on their phone plus their own files, at zero app-size cost and with no licensing
+questions.
+
+**Design point worth keeping:** the chosen tone lives in **SharedPreferences**, not in the
+WebView, because both `AlarmActivity` *and* the fallback notification channel must read it
+while the app process is dead. That also means **this is the only native change the sound
+feature will ever need** — the web layer can change tone/vibration freely from here on.
+
+- `pickAlarmSound()` → `ACTION_RINGTONE_PICKER` on the alarm stream, via `@ActivityCallback`
+- `getAlarmSound()` / `setAlarmSound()` → tone, display name, vibrate flag
+- `previewAlarmSound()` / `stopPreview()` → hear it before committing
+- `AlarmActivity` plays the chosen tone and honours the vibrate switch
+- Web: **Customize ▸ Alarm sound** — current tone, Choose, Preview/Stop, vibrate toggle,
+  reset to phone default; degrades to an explanatory hint in a browser tab
+
+**Android gotcha handled:** a `NotificationChannel`'s sound is **frozen at creation** — you
+cannot change it later. So the audible channel's id is derived from
+`hash(soundUri + vibrateFlag)`, and stale `dp_alarm_audible*` channels are deleted on each
+fire. Without this, changing the sound would silently keep ringing the old one through the
+fallback path (the path that matters most on Android 14+).
+
+**Verified:** every JS path in the harness (pick / preview / stop / vibrate toggle / reset /
+browser fallback), 55/55 tests, 17 screens clean; 111/71 builds, installs on the POCO
+(versionCode confirmed 111), launches with zero logcat errors, and
+`ACTION_RINGTONE_PICKER` resolves to 12 activities on-device.
+**Not yet verified:** the picker round-trip by hand on a real device — both phones went to
+sleep and stopped responding to `KEYCODE_WAKEUP` before I could tap through it.
+
+### ⚠️ Another session is committing to this repo
+Commits `740e0b1` and `5894c0e` ("PIS sync — push your days straight into the Personal
+Intelligence System", plus its own v144 bump) were made by a different session, not me. They
+are ancestors of my HEAD so nothing was lost, but **assume concurrent edits**: my What's-new
+insert failed once because its anchor text had moved. Re-read `app.js` before anchored edits,
+and prefer `tools/bump.sh` over hand-editing versions.
+
+**Pages deployment lock recurred again** (74cd465 failed: "in progress deployment ... cancel
+0b7c15a first"). One `workflow_dispatch` re-dispatch fixed it, as documented.
+
 ## 2026-08-26 — ALARM FIX VERIFIED ON ANDROID 15 (Samsung SM-M146B) — the platform that was broken
 
 Tested 110/70 on Kishore's personal Samsung Galaxy M14 (SM-M146B, **Android 15 / API 35**),
