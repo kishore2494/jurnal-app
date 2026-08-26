@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v143';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v144';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -766,8 +766,10 @@ function renderDeepSections() {
    Testers get silent web updates; this makes improvements visible so they keep
    giving feedback. Bump WHATS_NEW.v to re-show with new items. */
 const WHATS_NEW = {
-  v: 'w12',
+  v: 'w13',
   items: [
+    '🧠 <b>PIS sync</b> — Daylog now talks to your <b>Personal Intelligence System</b> directly. Settings ▸ PIS sync ▸ “Push my days to PIS” sends every logged day (mood, energy, focus, sleep, deep work, habits, journal) to PIS on this computer in one tap — no files, no sheet.',
+    '😴 <b>Sleep &amp; deep work reach your PIS Trends</b> — the sleep hours and deep-work hours you log now show up as a dedicated chart in PIS ▸ Trends.',
     '⏰ <b>Alarms fixed properly — please update in the Play Store</b> — reminders now ring even while your phone is asleep, and they make a sound even when Android blocks the full-screen alarm. Daylog also asks once for the “Alarms &amp; reminders” permission so your reminder lands on the exact minute.',
     '👀 <b>Readability fixes</b> — the Snooze button on the alarm screen was invisible in light mode, and streak numbers, counters and totals were too faint. All fixed and checked against accessibility contrast standards.',
     '⏰ <b>Alarm fix — please update in the Play Store</b> — on Android 14+ Android blocks exact alarms by default, so some reminders never fired and nothing told you. Settings now shows a warning with a one-tap fix, alarms survive a restart, and they ring loudly even when the full-screen alarm is blocked.',
