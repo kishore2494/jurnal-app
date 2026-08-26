@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v166';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v169';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -445,12 +445,22 @@ function habitStreak(key) {
 /* Habit strength 0-100: exponential moving average with a 13-day half-life for a daily
    habit (Loop Habit Tracker's model). One perfect day can't max it and one miss can't
    zero it — it measures the trend, not the last tick. Skipped days are passed over. */
-function habitStrength(key) {
-  const e = DB.entries(); const dates = Object.keys(e).sort();
+function habitStrength(key, ents) {
+  const e = ents || DB.entries(); const dates = Object.keys(e).sort();
   if (!dates.length) return 0;
   const mult = Math.pow(0.5, 1 / 13);
-  let s = 0, cur = dates[0], end = todayStr(), guard = 0;
-  while (cur <= end && guard++ < 4000) {
+  const end = todayStr();
+  /* Clamp the START of the walk, never the end. The old guard bailed after 4000 forward
+     steps and returned the value from ~11 years BEFORE today as if it were current: one
+     entry mis-dated to 2010 (the date input has max but no min, and the Android year wheel
+     is easy to mis-scroll) reported strength 0 and silently erased every strength award.
+     With a 13-day half-life anything older than ~3.3 years carries weight ~1e-28, so
+     starting late costs nothing. 1200 days, not 400, because a long run of H_SKIP days
+     deliberately does not decay and must still carry forward. Self-healing: a store that
+     already holds a stray old date reads correctly on the next render, no migration. */
+  const floor = addDays(end, -1200);
+  let s = 0, cur = (dates[0] < floor ? floor : dates[0]), guard = 0;
+  while (cur <= end && guard++ < 1300) {
     const v = hVal(e[cur], key);
     if (v !== H_SKIP) s = s * mult + hFrac(e[cur], key) * (1 - mult);
     cur = addDays(cur, 1);
@@ -1259,7 +1269,9 @@ document.addEventListener('click', (ev) => {
     const label = ha.dataset.hgAdd;
     const preset = HABIT_PRESETS.flatMap(x => x.items).find(i => i.label === label); if (!preset) return;
     const cfg = habitCfg();
-    const item = { key: 'ch' + Date.now(), emoji: preset.emoji, label: preset.label, custom: true };
+    // `added` scopes the 'perfect day' award: a habit created today must not demote every
+    // past day for not containing it.
+    const item = { key: 'ch' + Date.now(), emoji: preset.emoji, label: preset.label, custom: true, added: todayStr() };
     if (preset.goal) item.goal = Object.assign({}, preset.goal);
     cfg.push(item); saveHabitCfg(cfg);
     buzz(14); ha.textContent = '✓ added'; ha.disabled = true; ha.classList.remove('btn-primary'); ha.classList.add('btn-ghost');
@@ -1517,9 +1529,27 @@ function checkStreakMilestone() {
 /* Awards can be earned by editing ANY past day, not just today, so this runs on every
    save. Only genuinely new awards are announced, and at most one at a time — a batch of
    popups is a punishment, not a reward. */
-function checkNewAwards() {
+/* saveDraftNow fires on every habit tap and every pause in typing, and the award scan was
+   measured at 71% of it (25ms of 35ms at 1000 entries). Coalesce bursts into one trailing
+   run ~2s later; awardsFlush() forces it when the user is about to SEE the result. */
+let _awTimer = null, _awDate = null;
+// Backgrounding or closing the app must not eat a pending scan — Android can kill the
+// WebView at any point after onPause, and a dropped timer would lose the award silently.
+document.addEventListener('visibilitychange', () => { if (document.hidden) { try { awardsFlush(); } catch (e) {} } });
+window.addEventListener('pagehide', () => { try { awardsFlush(); } catch (e) {} });
+function checkNewAwardsSoon(savedDate) {
+  _awDate = savedDate || _awDate;
+  if (_awTimer) clearTimeout(_awTimer);
+  _awTimer = setTimeout(() => { _awTimer = null; checkNewAwards(_awDate); _awDate = null; }, 2000);
+}
+function awardsFlush() {
+  if (!_awTimer) return;
+  clearTimeout(_awTimer); _awTimer = null;
+  checkNewAwards(_awDate); _awDate = null;
+}
+function checkNewAwards(savedDate) {
   let fresh = [];
-  try { fresh = syncAwards(); } catch (e) { return; }
+  try { fresh = syncAwards(savedDate); } catch (e) { return; }
   if (!fresh.length) return;
   // Rank by how deep the tier is within its own family. Sorting on the raw number made a
   // 250,000-step badge always outrank a 365-day streak, which is backwards.
@@ -1577,7 +1607,7 @@ function saveDraftNow(date, d) {
   DB.putEntry(date, d);
   refreshStreak();
   if (date === todayStr()) checkStreakMilestone();   // full-screen reward at 3/5/7/10/14… days
-  checkNewAwards();                                  // tiered awards can land on any date edited
+  checkNewAwardsSoon(date);                          // tiered awards can land on any date edited
   pushWidgetData();                                  // keep the (future native) home-screen widget fresh
   scheduleInactivityReminder();
   syncEntry(date, d);
@@ -1635,7 +1665,7 @@ document.addEventListener('click', (ev) => {
   if (ev.target.id === 'log-habit-add') {
     const inp = document.getElementById('log-habit-input'); const raw = (inp && inp.value || '').trim(); if (!raw) return;
     const em = emojiSplit(raw); const cfg = habitCfg();
-    cfg.push({ key: 'ch' + Date.now(), emoji: em.emoji, label: em.name, custom: true });
+    cfg.push({ key: 'ch' + Date.now(), emoji: em.emoji, label: em.name, custom: true, added: todayStr() });
     saveHabitCfg(cfg); renderToday();
     document.body.classList.remove('kbd-open');
     toast('Checklist item added'); return;
@@ -3450,6 +3480,9 @@ function renderDash() {
   // The other tabs are pre-built STRINGS; the trophy case is a function, so it is called
   // here rather than put in the map — a function reference would stringify its own source
   // into the page. It is also the only tab that replays full history, so it stays lazy.
+  // Flush any pending award scan before drawing the case, or a just-earned badge is missing
+  // from the very screen the user opened to look for it.
+  if (dashTab === 'awards') { try { awardsFlush(); } catch (e) {} }
   const body = dashTab === 'awards' ? awardsHTML()
     : ({ overview: overviewHTML, time: timeHTML, check: checkHTML, health: healthHTML }[dashTab] || overviewHTML);
   document.getElementById('s-dash').innerHTML = `
@@ -3985,7 +4018,7 @@ document.addEventListener('click', (ev) => {
     const inp = document.getElementById('cfg-new-habit'); const raw = inp.value.trim(); if (!raw) return;
     const m = raw.match(/^(\p{Extended_Pictographic}[️‍\p{Extended_Pictographic}]*)\s*(.*)$/u);
     const cfg = habitCfg();
-    cfg.push({ key: 'ch' + Date.now(), emoji: (m && m[2]) ? m[1] : '⭐', label: (m && m[2]) ? m[2] : raw, custom: true });
+    cfg.push({ key: 'ch' + Date.now(), emoji: (m && m[2]) ? m[1] : '⭐', label: (m && m[2]) ? m[2] : raw, custom: true, added: todayStr() });
     saveHabitCfg(cfg); renderCustom(); toast('Habit added'); return;
   }
   if (ev.target.id === 'cfg-add-act') {
@@ -5388,7 +5421,11 @@ async function syncHealth(opts) {
     return store[key];
   } catch (e) { if (!opts.silent) toast('Health sync failed', true); return null; }
 }
-const fmtMin = m => m == null ? null : (Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0') + 'm');
+/* Under an hour, drop the "0h": "29m" reads better than "0h29m" and, at 320px, "0h29m"
+   overflowed its stat column and got clipped. */
+const fmtMin = m => m == null ? null
+  : (m < 60 ? (Math.round(m) + 'm')
+            : (Math.floor(m / 60) + 'h' + String(Math.round(m) % 60).padStart(2, '0') + 'm'));
 /* ---------- Sample data preview (auto-tracking) ----------
    Seeds 14 PAST days (skipping yesterday & the day before, so the logged-streak
    and today's real sync are untouched) of realistic health + focus + entry data,
@@ -5753,19 +5790,36 @@ const AWARD_FAMILIES = [
    Trophy Case show the real date an award was earned instead of the day the feature
    shipped. 'strength' is the one exception — the EMA would have to be recomputed for
    every past day, so it reports current value only and its date reads "earned earlier". */
-function awardSeries(grp) {
-  const e = DB.entries(), dates = Object.keys(e).sort();
+function awardSeries(grp, ents, health) {
+  const e = ents || DB.entries(), dates = Object.keys(e).sort();
   const out = []; let acc = 0;
   if (grp === 'days')    { dates.forEach(d => out.push([d, ++acc])); return out; }
   if (grp === 'journal') { dates.forEach(d => { if ((e[d].journal || '').trim()) acc++; out.push([d, acc]); }); return out; }
   if (grp === 'habits')  { dates.forEach(d => { const h = e[d].habits || {};
       acc += Object.keys(h).filter(k => hVal(e[d], k) === H_DONE).length; out.push([d, acc]); }); return out; }
-  if (grp === 'perfect') { const keys = habitCfg().filter(h => !h.hidden).map(h => h.key);
-      if (!keys.length) return [];
-      dates.forEach(d => { if (keys.every(k => hVal(e[d], k) === H_DONE)) acc++; out.push([d, acc]); }); return out; }
+  if (grp === 'perfect') {
+      /* A day is judged only against the habits that EXISTED on it. Keying off today's
+         config meant adding one habit re-scored all of history: every past perfect day
+         instantly stopped being perfect and the badges vanished. Habit configs carry no
+         creation date historically, so the first date a key ever appears in the log is the
+         earliest day it can fairly be held against you; `added` is stamped on new habits
+         going forward and wins when present. The semantics stay strict — an untouched habit
+         still breaks the day, so nothing is inflated. */
+      const cfg = habitCfg().filter(h => !h.hidden);
+      if (!cfg.length) return [];
+      const first = {};
+      dates.forEach(d => { const h = e[d].habits || {};
+        cfg.forEach(c => { if ((c.key in h) && first[c.key] == null) first[c.key] = d; }); });
+      const since = c => c.added || first[c.key] || null;
+      dates.forEach(d => {
+        const req = cfg.filter(c => since(c) && since(c) <= d).map(c => c.key);
+        if (req.length && req.every(k => hVal(e[d], k) === H_DONE)) acc++;
+        out.push([d, acc]);
+      });
+      return out; }
   if (grp === 'focus')   { dates.forEach(d => { const raw = e[d].deepWorkHours;
       if (raw != null && raw !== '' && !isNaN(+raw)) acc += +raw; out.push([d, Math.round(acc)]); }); return out; }
-  if (grp === 'steps')   { const hs = healthStore();
+  if (grp === 'steps')   { const hs = health || healthStore();
       Object.keys(hs).sort().forEach(d => { const v = hs[d] && hs[d].steps;
         if (v != null && !isNaN(+v)) acc += +v; out.push([d, acc]); }); return out; }
   if (grp === 'streak')  { let run = 0, prev = null;
@@ -5774,26 +5828,66 @@ function awardSeries(grp) {
   return [];
 }
 
-function bestHabitStrength() {
+/* Advances every habit's EMA in ONE pass over the day range instead of walking the whole
+   history once per habit — O(days) rather than O(habits x days). This was the single
+   biggest cost on the entry-save path. Same clamped window and same skip semantics as
+   habitStrength(), which stays the canonical single-habit version. */
+function bestHabitStrength(ents) {
+  const e = ents || DB.entries();
   const keys = habitCfg().filter(h => !h.hidden).map(h => h.key);
+  const dates = Object.keys(e).sort();
+  if (!keys.length || !dates.length) return 0;
+  const mult = Math.pow(0.5, 1 / 13);
+  const end = todayStr(), floor = addDays(end, -1200);
+  const s = {}; keys.forEach(k => { s[k] = 0; });
+  let cur = (dates[0] < floor ? floor : dates[0]), guard = 0;
+  while (cur <= end && guard++ < 1300) {
+    const en = e[cur];
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (hVal(en, k) !== H_SKIP) s[k] = s[k] * mult + hFrac(en, k) * (1 - mult);
+    }
+    cur = addDays(cur, 1);
+  }
   let best = 0;
-  keys.forEach(k => { try { const v = habitStrength(k); if (v > best) best = v; } catch (e) {} });
-  return Math.round(best);
+  keys.forEach(k => { if (s[k] > best) best = s[k]; });
+  return Math.round(best * 100);
 }
 
-function awardList() {
+/* `ents` lets the caller pass ONE snapshot of the store through every family instead of
+   each of the seven series re-reading and re-parsing localStorage. */
+function awardList(ents) {
   const out = [];
+  const e = ents || DB.entries();
+  const hs = healthStore();
+  const seen = awardLog();                    // the ledger: award id -> date first earned
   AWARD_FAMILIES.forEach(f => {
-    const ser = f.grp === 'strength' ? [] : awardSeries(f.grp);
+    const ser = f.grp === 'strength' ? [] : awardSeries(f.grp, e, hs);
     let cur = 0;
-    if (f.grp === 'strength') cur = bestHabitStrength();
+    if (f.grp === 'strength') cur = bestHabitStrength(e);
     else if (ser.length) cur = f.mode === 'peak'
       ? ser.reduce((m, p) => p[1] > m ? p[1] : m, 0)          // reduce, not Math.max(...) — a
       : ser[ser.length - 1][1];                                // long history would blow the stack
+
+    /* NOTHING IS EVER REVOKED — and this is what actually enforces it. `earned` used to be
+       recomputed as `cur >= t` alone, which is fine for the cumulative families (they only
+       grow) and for 'streak' (mode 'peak' takes the max over all history), but 'strength' is
+       an instantaneous EMA: ten quiet days took it from 100 to 59 and the 75/90/100 badges
+       silently disappeared from the trophy case while dp.awards still listed them. Unioning
+       the ledger in makes the promise real for every family. */
+    const held = f.tiers.filter(t => cur >= t || seen[f.grp + ':' + t]);
+    const hi = held.length ? held[held.length - 1] : 0;       // high-water tier, for display
+
     f.tiers.forEach(t => {
+      const id = f.grp + ':' + t;
       const hit = ser.find(p => p[1] >= t);
-      out.push({ id: f.grp + ':' + t, grp: f.grp, ico: f.ico, title: f.title, unit: f.unit,
-                 tier: t, cur, earned: cur >= t, on: hit ? hit[0] : null });
+      out.push({ id, grp: f.grp, ico: f.ico, title: f.title, unit: f.unit, tier: t,
+                 cur, hi: Math.max(cur, hi),
+                 earned: cur >= t || !!seen[id],
+                 /* Replayed history is the only truthful date. The ledger stamps todayStr()
+                    for 'strength' (it has no series), so falling back to it there would tell
+                    a long-time user they hit 100% today — keep "earned earlier" instead. */
+                 on: hit ? hit[0] : (f.grp === 'strength' ? null : (seen[id] || null)) });
     });
   });
   return out;
@@ -5804,10 +5898,26 @@ function awardLog() { try { return safeParse(localStorage.getItem('dp.awards'), 
 /* Records which awards have already been announced. On the very first run every existing
    award is recorded SILENTLY — an established user opening this for the first time should
    see a full Trophy Case, not forty stacked celebration popups. */
-function syncAwards() {
+function syncAwards(savedDate) {
+  /* Never record awards earned off SAMPLE data. The preview writes weeks of generated
+     entries, which is easily enough for several tiers, and the ledger is permanent by
+     design — so a two-tap preview would have burned real badges that the user then owns
+     forever without having earned them. Doubly wrong now that the ledger makes awards
+     un-revocable. Clearing the sample cannot undo a ledger write, so simply never write. */
+  if (localStorage.getItem('dp.sampleMeta')) return [];
   const seen = awardLog(), fresh = [];
-  const firstRun = !localStorage.getItem('dp.awardsInit');
-  awardList().filter(a => a.earned).forEach(a => {
+  /* The silent absorb exists for an ESTABLISHED log meeting awards for the first time — an
+     old user should not get forty stacked popups. But it keyed off the marker alone, so a
+     brand-new install whose very first save already earned something got nothing: a perfect
+     day is tier 1, reachable on day one, and the most engaged possible new user — the one
+     who ticks everything immediately — was the one told nothing. Require history that
+     PREDATES the day just written, which also behaves correctly when the first save is a
+     backfilled past date. */
+  const sd = savedDate || todayStr();
+  const ents = DB.entries();                  // read the store ONCE for the whole scan
+  const firstRun = !localStorage.getItem('dp.awardsInit') &&
+                   Object.keys(ents).some(d => d !== sd);
+  awardList(ents).filter(a => a.earned).forEach(a => {
     if (seen[a.id]) return;
     seen[a.id] = a.on || todayStr();
     if (!firstRun) fresh.push(a);
@@ -5827,7 +5937,7 @@ function awardName(a) {
 
 /* ---------- Trophy Case ---------- */
 function awardsHTML() {
-  const list = awardList(), seen = awardLog();
+  const list = awardList();
   const earned = list.filter(a => a.earned);
   if (!earned.length && !Object.keys(DB.entries()).length) {
     return `<div class="card"><h2 class="h2-icon">${hicon('star')}<span>Trophy case</span></h2>
@@ -5839,7 +5949,7 @@ function awardsHTML() {
     const t = list.filter(a => a.grp === f.grp && !a.earned).sort((a, b) => a.tier - b.tier)[0];
     if (t) next.push(t);
   });
-  next.sort((a, b) => (b.cur / b.tier) - (a.cur / a.tier));
+  next.sort((a, b) => (b.hi / b.tier) - (a.hi / a.tier));
 
   const byGrp = {};
   earned.forEach(a => { (byGrp[a.grp] = byGrp[a.grp] || []).push(a); });
@@ -5852,16 +5962,16 @@ function awardsHTML() {
         <div class="aw-grp-h">${f.ico} ${f.title}</div>
         <div class="aw-list">${byGrp[f.grp].sort((a, b) => b.tier - a.tier).map(a => `
           <button type="button" class="aw-badge" data-aw-share="${a.id}">
-            <span class="aw-t">${awardName(a)}</span>
-            <span class="aw-d">${a.on ? shortDate(a.on) : 'earned earlier'}</span>
+            <span class="awb-t">${awardName(a)}</span>
+            <span class="awb-d">${a.on ? shortDate(a.on) : 'earned earlier'}</span>
           </button>`).join('')}</div>
       </div>`).join('')}
     ${earned.length ? '<div class="hint aw-tip">Tap any award to make a share card.</div>' : ''}
   </div>
   ${next.length ? `<div class="card">
     <h2 class="h2-icon">${hicon('target')}<span>Next up</span></h2>
-    ${next.slice(0, 6).map(a => { const pct = Math.max(2, Math.min(100, Math.round(a.cur / a.tier * 100)));
-      const left = a.tier - a.cur;
+    ${next.slice(0, 6).map(a => { const pct = Math.max(2, Math.min(100, Math.round(a.hi / a.tier * 100)));
+      const left = Math.max(0, a.tier - a.hi);
       return `<div class="aw-next">
         <div class="aw-next-h"><span>${a.ico} ${awardName(a)}</span>
           <span class="aw-next-n">${left.toLocaleString()} to go</span></div>
@@ -5891,7 +6001,7 @@ function bodyTop(H) { return (H - CARD_BODY) / 2; }
 const CARD_INK = '#f2f5ff', CARD_DIM = '#8f9bbd', CARD_BG = '#0d1220', CARD_BG2 = '#141b2e';
 const CARD_ACCENT = '#6d8cff', CARD_WARM = '#fbbf24', CARD_GOOD = '#4ad6c0';
 
-let cardState = { kind: 'streak', ratio: '4:5', arg: null, blob: null, busy: false };
+let cardState = { kind: 'streak', ratio: '4:5', arg: null, blob: null, busy: false, hint: '', sending: false };
 
 function cardFont(px, weight) { return `${weight || 400} ${px}px "DM Sans", "Twemoji Mozilla", system-ui, sans-serif`; }
 
@@ -5982,6 +6092,11 @@ function cardHero(g, y, value, label, colour) {
   return y + 150;
 }
 
+/* '#3d4666' is "logged, but no mood recorded" — deliberately distinct from the unlogged
+   '#1a2133'/'#1d2436' AND from every mood colour. The grids used to paint such days as
+   mood 7 (a pleasant teal), which invented data the user never entered, on a card they
+   might well post publicly. */
+const CARD_NOMOOD = '#3d4666';
 function moodColour(v) {
   if (v == null) return '#232a3d';
   const t = Math.max(1, Math.min(10, +v));
@@ -6018,7 +6133,8 @@ function drawStreak(g, H) {
     const d = addDays(todayStr(), -(89 - i));
     const cx = gx + (i % cols) * (cell + gap), cy = gy + Math.floor(i / cols) * (cell + gap);
     const en = e[d];
-    g.fillStyle = en ? moodColour(en.mood != null && en.mood !== '' ? +en.mood : 7) : '#1d2436';
+    const mv = en && en.mood != null && en.mood !== '' ? +en.mood : null;
+    g.fillStyle = en ? (mv != null ? moodColour(mv) : CARD_NOMOOD) : '#1d2436';
     roundRect(g, cx, cy, cell, cell, 12); g.fill();
   }
   gy += Math.ceil(90 / cols) * (cell + gap) + 44;
@@ -6057,7 +6173,7 @@ function drawPixels(g, H) {
   const cell = Math.floor((CARD_W - pad * 2 - lab - gap * 30) / 31);
   const gx = pad + lab, rowH = cell + gap + 3;
   const gy = sh + CARD_BODY * 0.235;
-  let logged = 0, sum = 0;
+  let logged = 0, sum = 0, moodDays = 0;
   for (let mon = 0; mon < 12; mon++) {
     const ry = gy + mon * rowH;
     g.textAlign = 'right'; g.fillStyle = CARD_DIM; g.font = cardFont(24, 600);
@@ -6068,8 +6184,8 @@ function drawPixels(g, H) {
       const en = e[ds];
       const m = en && en.mood != null && en.mood !== '' ? +en.mood : null;
       if (en) logged++;
-      if (m != null) sum += m;
-      g.fillStyle = en ? moodColour(m != null ? m : 7) : '#1a2133';
+      if (m != null) { sum += m; moodDays++; }
+      g.fillStyle = en ? (m != null ? moodColour(m) : CARD_NOMOOD) : '#1a2133';
       roundRect(g, gx + (day - 1) * (cell + gap), ry, cell, cell, 5); g.fill();
     }
   }
@@ -6077,9 +6193,11 @@ function drawPixels(g, H) {
   g.fillStyle = CARD_DIM; g.font = cardFont(30, 500); g.textAlign = 'center';
   g.fillText('one square per day · colour is mood', CARD_W / 2, y);
   y = cardHero(g, y + 178, logged, logged === 1 ? 'day logged this year' : 'days logged this year', CARD_ACCENT);
-  if (sum && logged) {
+  // Divide by the days that HAVE a mood, not by every logged day — mixing the two
+  // understated the average for anyone who logs habits without rating their mood.
+  if (moodDays) {
     g.fillStyle = CARD_INK; g.font = cardFont(40, 700); g.textAlign = 'center';
-    g.fillText('average mood ' + (sum / logged).toFixed(1) + ' / 10', CARD_W / 2, y + 40);
+    g.fillText('average mood ' + (sum / moodDays).toFixed(1) + ' / 10', CARD_W / 2, y + 40);
   }
   cardFooter(g, H);
 }
@@ -6088,6 +6206,12 @@ function drawHabit(g, H) {
   cardChrome(g, H, 'last 90 days');
   const cfg = habitCfg().filter(h => !h.hidden).slice(0, 6), e = DB.entries();
   g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(66, 800);
+  if (!cfg.length) {
+    g.fillText('Habits', CARD_W / 2, H * 0.19);
+    g.fillStyle = CARD_DIM; g.font = cardFont(42, 500);
+    g.fillText('No habits set up yet.', CARD_W / 2, H / 2);
+    cardFooter(g, H); return;
+  }
   const sh = bodyTop(H);
   g.fillText('Habits', CARD_W / 2, sh + CARD_BODY * 0.19);
 
@@ -6116,7 +6240,14 @@ function drawHabit(g, H) {
 function drawInsight(g, H) {
   cardChrome(g, H, 'what my own data says');
   let ps = []; try { ps = computePatterns() || []; } catch (e) {}
-  const strip = t => String(t || '').replace(/<[^>]*>/g, '');
+  /* Insight text is built as HTML, so a habit called "Gym & Run" arrives as "Gym &amp; Run".
+     Canvas has no HTML parser — printing it raw put the entity on the card. Strip tags, then
+     decode entities via the DOM, which handles every named and numeric form. */
+  const strip = t => {
+    const noTags = String(t || '').replace(/<[^>]*>/g, '');
+    try { const d = document.createElement('textarea'); d.innerHTML = noTags; return d.value; }
+    catch (e) { return noTags; }
+  };
   g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(62, 800);
   const sh = bodyTop(H);
   g.fillText('What I learned', CARD_W / 2, sh + CARD_BODY * 0.17);
@@ -6162,7 +6293,11 @@ function drawInsight(g, H) {
 }
 
 function drawAward(g, H, id) {
-  const a = awardList().find(x => x.id === id) || awardList().filter(x => x.earned).slice(-1)[0];
+  /* With no id passed, show the most recently EARNED award. `.slice(-1)` picked whatever sat
+     last in AWARD_FAMILIES order — usually a low steps tier — not anything just achieved. */
+  const all = awardList();
+  const a = all.find(x => x.id === id) || all.filter(x => x.earned)
+    .sort((p, q) => String(q.on || '').localeCompare(String(p.on || '')) || q.tier - p.tier)[0];
   cardChrome(g, H, a && a.on ? prettyDate(a.on) : '');
   if (!a) {
     g.textAlign = 'center'; g.fillStyle = CARD_DIM; g.font = cardFont(44, 500);
@@ -6178,7 +6313,7 @@ function drawAward(g, H, id) {
   // the tier ladder, so the card shows a journey rather than a single trophy
   const fam = AWARD_FAMILIES.find(f => f.grp === a.grp);
   if (fam) {
-    const done = fam.tiers.filter(t => t <= a.cur).length;
+    const done = fam.tiers.filter(t => t <= a.hi).length;
     const y = sh + CARD_BODY * 0.7, bw = CARD_W - 260;
     g.fillStyle = '#1d2436'; roundRect(g, 130, y, bw, 26, 13); g.fill();
     g.fillStyle = CARD_WARM;
@@ -6214,10 +6349,20 @@ async function buildCardBlob(kind, ratio, arg) {
      4. an in-app viewer with long-press to save     (Android WebView today)
    The bitmap is what travels. The data never leaves the device on any of these paths. */
 async function blobToB64(blob) {
-  return await new Promise(res => {
+  return await new Promise((res, rej) => {
     const r = new FileReader();
-    r.onloadend = () => res(String(r.result).replace(/^data:[^,]+,/, ''));
-    r.readAsDataURL(blob);
+    // On failure r.result is null and String(null) is "null" — four characters of base64 that
+    // decode to garbage and would be handed to the share sheet as an image. Reject instead,
+    // so deliverCard falls through to the next rung rather than shipping a broken file.
+    r.onerror = () => rej(new Error('read failed'));
+    r.onabort = () => rej(new Error('read aborted'));
+    r.onloadend = () => {
+      if (r.result == null) { rej(new Error('empty read')); return; }
+      const m = String(r.result).match(/^data:[^,]*,(.*)$/);
+      if (!m || !m[1]) { rej(new Error('not a data url')); return; }
+      res(m[1]);
+    };
+    try { r.readAsDataURL(blob); } catch (e) { rej(e); }
   });
 }
 
@@ -6268,6 +6413,8 @@ async function deliverCard(blob, fname) {
 function shareSheetOpen(kind, arg) {
   cardState.kind = kind || 'streak';
   cardState.arg = arg || null;
+  cardState.hint = '';                              // never show a stale instruction
+  cardState.sending = false;
   let el = document.getElementById('sharesheet');
   if (!el) {
     el = document.createElement('div');
@@ -6282,7 +6429,9 @@ function shareSheetOpen(kind, arg) {
 function shareSheetClose() {
   const el = document.getElementById('sharesheet');
   if (el) el.classList.remove('on');
+  cardSeq++;                                        // invalidate anything still rendering
   if (cardState.url) { try { URL.revokeObjectURL(cardState.url); } catch (e) {} cardState.url = null; }
+  cardState.blob = null; cardState.busy = false; cardState.hint = '';
 }
 
 function shareSheetRender() {
@@ -6305,21 +6454,38 @@ function shareSheetRender() {
       <button type="button" class="btn btn-primary" id="ss-send" ${cardState.busy ? 'disabled' : ''}>
         ${nativeSharePlugin() || (navigator.canShare) ? 'Share' : 'Save image'}</button>
     </div>
+    ${cardState.hint ? `<div class="ss-hint">${escapeHtml(cardState.hint)}</div>` : ''}
     <div class="hint ss-note">Only the picture is shared. Your entries never leave the phone.</div>
   </div>`;
 }
 
+/* Monotonic token. The old `if (cardState.busy) return` DROPPED the newest request instead
+   of the oldest, so tapping two design chips quickly left the first card in cardState while
+   the chips showed the second — and Share then exported a card the user had not chosen. A
+   token means the last request always wins and every stale result is discarded. */
+let cardSeq = 0;
 async function cardPreview() {
-  if (cardState.busy) return;
+  const my = ++cardSeq;
   cardState.busy = true;
-  try {
-    const blob = await buildCardBlob(cardState.kind, cardState.ratio, cardState.arg);
-    if (cardState.url) { try { URL.revokeObjectURL(cardState.url); } catch (e) {} }
-    cardState.blob = blob;
-    cardState.url = blob ? URL.createObjectURL(blob) : null;
-  } catch (e) {
-    cardState.blob = null; cardState.url = null;
+  // Clear the stale preview immediately so the sheet cannot show, or send, the previous card
+  // while a new one renders.
+  if (cardState.url) { try { URL.revokeObjectURL(cardState.url); } catch (e) {} }
+  cardState.blob = null; cardState.url = null;
+  shareSheetRender();
+
+  let blob = null;
+  try { blob = await buildCardBlob(cardState.kind, cardState.ratio, cardState.arg); } catch (e) {}
+  if (my !== cardSeq) return;                       // superseded — drop this result entirely
+
+  const el = document.getElementById('sharesheet');
+  if (!el || !el.classList.contains('on')) {
+    // Closed while rendering. Do not create an object URL nothing will revoke, and do not
+    // repaint hidden markup.
+    cardState.blob = null; cardState.url = null; cardState.busy = false;
+    return;
   }
+  cardState.blob = blob;
+  cardState.url = blob ? URL.createObjectURL(blob) : null;
   cardState.busy = false;
   shareSheetRender();
 }
@@ -6346,11 +6512,24 @@ document.addEventListener('click', async (ev) => {
   if (rb) { cardState.ratio = rb.dataset.cardRatio; shareSheetRender(); cardPreview(); return; }
 
   if (t.id === 'ss-send') {
-    if (!cardState.blob) { toast('Still rendering — one second', true); return; }
-    const name = 'daylog-' + cardState.kind + '-' + todayStr() + '.png';
-    const how = await deliverCard(cardState.blob, name);
-    if (how === 'viewer') toast('Long-press the image to save or share it');
-    else if (how !== 'cancel' && how !== 'fail') { buzz(14); shareSheetClose(); }
+    // Re-entrancy guard: deliverCard awaits, and a second tap during that await fired a
+    // second share whose result then overwrote the first one's outcome.
+    if (cardState.sending) return;
+    if (cardState.busy || !cardState.blob) { toast('Still rendering — one second', true); return; }
+    cardState.sending = true;
+    const sent = cardState.blob;                    // pin it; a chip tap could swap it mid-await
+    try {
+      const name = 'daylog-' + cardState.kind + '-' + todayStr() + '.png';
+      const how = await deliverCard(sent, name);
+      if (how === 'viewer') {
+        /* The last rung. Inside the Capacitor shell there is no share sheet and no download,
+           so the image stays on screen and the instruction has to stay with it — a toast is
+           invisible under the sheet and gone in two seconds. Persist it in the sheet itself. */
+        cardState.hint = 'Saving needs the next app update. For now, screenshot this card.';
+        shareSheetRender();
+        toast('Screenshot the card to keep it');
+      } else if (how !== 'cancel' && how !== 'fail') { buzz(14); shareSheetClose(); }
+    } finally { cardState.sending = false; }
     return;
   }
 });
@@ -6689,7 +6868,13 @@ document.addEventListener('click', (ev) => {
 function handleBack() {
   // 0) a ringing alarm owns the screen — back must never dismiss it or poke things behind it
   const alarm = document.getElementById('alarm'); if (alarm && alarm.classList.contains('on')) return;
-  // 1) an open overlay always closes first
+  // 1) an open overlay always closes first.
+  //    The share sheet sits at z-index 95, above every overlay below it, so it must be
+  //    checked FIRST. Omitting it meant back fell through to the exit dialog, which is a
+  //    .copy-modal at z-index 70 and therefore painted UNDERNEATH the sheet's blurred
+  //    scrim — the user pressed back and nothing appeared to happen at all.
+  const ssh = document.getElementById('sharesheet');
+  if (ssh && ssh.classList.contains('on')) { shareSheetClose(); return; }
   const tr = document.getElementById('tour'); if (tr) { endTour(); return; }
   const wn = document.getElementById('wn-pop'); if (wn) { localStorage.setItem('dp.whatsnew', WHATS_NEW.v); wn.remove(); return; }
   const drawer = document.getElementById('drawer');
@@ -6793,7 +6978,18 @@ document.addEventListener('click', (ev) => {
     return;
   }
   const dt = ev.target.closest('[data-dashtab]');
-  if (dt) { dashTab = dt.dataset.dashtab; renderDash(); window.scrollTo(0, 0); }
+  if (dt) {
+    dashTab = dt.dataset.dashtab; renderDash();
+    /* renderDash() rewrites #s-dash, so this is a brand-new .seg-row at scrollLeft 0. With
+       five tabs the row scrolls, and without this the tab you just picked lands off-screen
+       (Health at 360px). Centring it also pulls the neighbouring tabs into view, which is
+       the only affordance that the row scrolls at all. scrollLeft arithmetic, not
+       scrollIntoView — the latter scrolls every ancestor including the document. */
+    const row = document.querySelector('#s-dash .seg-row');
+    const on = row && row.querySelector('.seg-btn.on');
+    if (on) row.scrollLeft = Math.max(0, on.offsetLeft + on.offsetWidth / 2 - row.clientWidth / 2);
+    window.scrollTo(0, 0);
+  }
 });
 function navigateTo(name) {
   if (name === 'today') logDate = todayStr();               // Log always opens today
@@ -6995,7 +7191,7 @@ document.addEventListener('click', (ev) => {
     const inp = document.getElementById('ob-new-habit'); const raw = (inp.value || '').trim(); if (!raw) return;
     const m = raw.match(/^(\p{Extended_Pictographic}[️‍\p{Extended_Pictographic}]*)\s*(.*)$/u);
     const cfg = habitCfg();
-    cfg.push({ key: 'ch' + Date.now(), emoji: (m && m[2]) ? m[1] : '⭐', label: (m && m[2]) ? m[2] : raw, custom: true });
+    cfg.push({ key: 'ch' + Date.now(), emoji: (m && m[2]) ? m[1] : '⭐', label: (m && m[2]) ? m[2] : raw, custom: true, added: todayStr() });
     saveHabitCfg(cfg); renderOnboard(); return;   // new item shows selected (not in obHideH)
   }
   if (ev.target.id === 'ob-add-act') {

@@ -414,7 +414,12 @@ textarea { resize: vertical; min-height: 64px; }
   border: 1px solid rgba(52, 211, 153, .4);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   padding: 12px 20px; border-radius: 14px; font-weight: 600; font-size: 14px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, .5); z-index: 50; opacity: 0;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .5); opacity: 0;
+  /* z-index 96: above .sharesheet and .tour (95), .milestone/.onboard (90), .copy-modal (70)
+     and .drawer (61); still below the alarm overlay (100) and the report view (200). A toast
+     raised while any of those was open was completely invisible — including the only
+     instruction the share sheet had for saving a card. Safe to raise: pointer-events none. */
+  z-index: 96;
   transition: opacity .25s, transform .25s; pointer-events: none; max-width: 88vw;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
@@ -1319,8 +1324,12 @@ input[type="range"] { height: 30px; }
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px;
   padding: 7px 11px; cursor: pointer; min-height: 44px; text-align: left; font: inherit; }
 .aw-badge:active { opacity: .6; }
-.aw-t { font-size: 13px; font-weight: 700; color: var(--text); }
-.aw-d { font-size: 10.5px; color: var(--text-faint); }
+/* Scoped to .aw-badge and renamed: .aw-t/.aw-d were ALREADY taken by the alarm-health
+   warning rows defined earlier in this file. Identical specificity plus later source order
+   meant the trophy case silently restyled that warning's body text down to 10.5px in the
+   faintest ink — a multi-sentence message the user has to act on. Fourth class collision. */
+.aw-badge .awb-t { font-size: 13px; font-weight: 700; color: var(--text); }
+.aw-badge .awb-d { font-size: 10.5px; margin-top: 2px; color: var(--text-faint); }
 .aw-tip { margin-top: 12px; }
 .aw-next { margin-top: 11px; }
 .aw-next-h { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 650; color: var(--text); }
@@ -1367,3 +1376,10 @@ input[type="range"] { height: 30px; }
 @media (max-width: 360px) { .seg-btn { padding-left: 10px; padding-right: 10px; font-size: 12.5px; } }
 /* The icons stay at every width now that nothing is being squeezed. */
 @media (max-width: 360px) { .seg-btn .ic { display: inline-block; } }
+
+/* The persistent save instruction inside the share sheet. A toast cannot carry this: it is
+   gone in two seconds, and on Android WebView it is the only thing telling the user how to
+   keep their card. */
+.ss-hint { margin-top: 10px; padding: 10px 12px; border-radius: 12px;
+  background: rgba(251,191,36,.14); border: 1px solid rgba(251,191,36,.4);
+  color: #fde68a; font-size: 12.5px; font-weight: 600; text-align: center; }
