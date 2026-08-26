@@ -727,7 +727,10 @@ img, svg, table, pre, .chart { max-width: 100%; }
   --border: #dfe4ee; --border-hi: #cfd6e4; --text: #101626; --text-dim: #4a5570; --text-faint: #8b95ab;
   --line: #dfe4ee; --shadow: 0 10px 34px rgba(30,42,70,.12); --shadow-card: 0 2px 12px rgba(30,42,70,.07);
   --good-ink: #047857; --warn-ink: #a3560c; --bad-ink: #b91c1c; --accent-ink: #3b5bdb;
-  --text-faint: #6b7280;   /* was #8b95ab = 3.01:1 on white; this is ~4.8:1 */
+  /* 4.8:1 on WHITE, but the page ground is --bg #f4f6fb and chips sit on --bg-input
+     #eef1f7, where #6b7280 fell to 4.43:1 and 4.27:1 — under the 4.5 floor. Darkened so
+     it clears 4.5 on the tinted grounds it is actually painted on, not just on white. */
+  --text-faint: #646b79;
 }
 /* light: fix elements that hard-code dark colours */
 :root[data-mode="light"] body::before { opacity: .5; }
@@ -914,7 +917,7 @@ body.kbd-open .nav { transform: translateY(120%); pointer-events: none; }
 .wow-vals { font-size: 13px; font-weight: 600; }
 .wow-delta { flex: 0 0 auto; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 3px 8px; }
 .wow-delta.up { color: var(--good-ink); background: color-mix(in srgb, var(--good) 14%, transparent); }
-.wow-delta.down { color: #f87171; background: color-mix(in srgb, #f87171 14%, transparent); }
+.wow-delta.down { color: var(--bad-ink); background: color-mix(in srgb, #f87171 14%, transparent); }
 
 .milestone { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center;
   background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); overflow: hidden; }
@@ -1281,3 +1284,28 @@ input[type="range"] { height: 30px; }
   color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snd-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .snd-btns .btn { flex: 0 0 auto; }
+
+/* ---- Best Efforts (personal records) ---- */
+.be-row { padding: 10px 0; border-top: 1px solid var(--border); }
+.be-row:first-of-type { border-top: 0; }
+.be-head { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; color: var(--text); }
+.be-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.be-item { display: inline-flex; align-items: baseline; gap: 4px; cursor: pointer;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 99px;
+  padding: 4px 10px; font-size: 12.5px; min-height: 30px; }
+.be-item.gold { border-color: var(--warn-ink); }
+.be-item b { font-weight: 700; color: var(--text); }
+.be-item em { font-style: normal; font-size: 11px; color: var(--text-faint); }
+.be-item:active { opacity: .6; }
+.be-year { font-size: 11.5px; color: var(--text-dim); margin-top: 6px; }
+
+/* Mood-meter label inks. MM_QUAD.c is a fill colour and fails WCAG as small text; these
+   are the text-safe equivalents, dark-mode default with a light-mode override. */
+.mm-head b.mmq-red { color: #e2574c; }
+.mm-head b.mmq-yellow { color: #e9b53a; }
+.mm-head b.mmq-blue { color: #4a7fd0; }
+.mm-head b.mmq-green { color: #3fa87a; }
+:root[data-mode="light"] .mm-head b.mmq-red { color: #b4271d; }
+:root[data-mode="light"] .mm-head b.mmq-yellow { color: #8a6410; }
+:root[data-mode="light"] .mm-head b.mmq-blue { color: #2f5fa8; }
+:root[data-mode="light"] .mm-head b.mmq-green { color: #1f7a54; }

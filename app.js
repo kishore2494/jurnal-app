@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v148';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v153';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -770,8 +770,6 @@ const WHATS_NEW = {
   items: [
     '❤️ <b>Real auto-tracking</b> — steps, distance, calories, sleep, workouts and heart rate now come from <b>Health Connect</b>, alongside the automatic screen time. Settings ▸ Auto-tracking ▸ Connect Health Connect. Every metric is a separate switch, and anything you don\'t allow simply stays blank.',
     '🔔 <b>Pick your own alarm sound</b> — Customize ▸ Alarm sound. Choose any alarm tone on your phone (or your own audio file), preview it, and turn vibration on or off. Needs the Play Store update.',
-    '🧠 <b>PIS sync</b> — Daylog now talks to your <b>Personal Intelligence System</b> directly. Settings ▸ PIS sync ▸ “Push my days to PIS” sends every logged day (mood, energy, focus, sleep, deep work, habits, journal) to PIS on this computer in one tap — no files, no sheet.',
-    '😴 <b>Sleep &amp; deep work reach your PIS Trends</b> — the sleep hours and deep-work hours you log now show up as a dedicated chart in PIS ▸ Trends.',
     '⏰ <b>Alarms fixed properly — please update in the Play Store</b> — reminders now ring even while your phone is asleep, and they make a sound even when Android blocks the full-screen alarm. Daylog also asks once for the “Alarms &amp; reminders” permission so your reminder lands on the exact minute.',
     '👀 <b>Readability fixes</b> — the Snooze button on the alarm screen was invisible in light mode, and streak numbers, counters and totals were too faint. All fixed and checked against accessibility contrast standards.',
     '⏰ <b>Alarm fix — please update in the Play Store</b> — on Android 14+ Android blocks exact alarms by default, so some reminders never fired and nothing told you. Settings now shows a warning with a one-tap fix, alarms survive a restart, and they ring loudly even when the full-screen alarm is blocked.',
@@ -898,7 +896,10 @@ function moodMeterHTML() {
   let words = '', head = 'Tap the square that fits how you feel';
   if (m != null && en != null) {
     const key = mmQuad(m, en), q = MM_QUAD[key];
-    head = `<b style="color:${q.c}">${q.label}</b> · mood ${m}, energy ${en}`;
+    // The quadrant colour is tuned for the CELL FILL. As 12.5px label text on white it
+    // only reaches 4.01:1, so the label takes a mode-aware ink class instead (same split
+    // as --good-ink / --bad-ink). Do not put q.c back on text.
+    head = `<b class="mmq-${key}">${q.label}</b> · mood ${m}, energy ${en}`;
     const jl = (draft.journal || '').toLowerCase();
     words = `<div class="mm-words">${q.words.map(w => { const sel = jl.includes('#' + w.toLowerCase());
       return `<button type="button" class="mm-word ${sel ? 'on' : ''}" data-mmword="${w}"
@@ -2580,6 +2581,102 @@ function computePatterns() {
   }
 
   // 6 — what heavy screen days cost you (top vs bottom third)
+  // ---- Health Connect insights. These were dead until v148 because every sensor metric
+  // came back null; now they are the strongest signals in the engine because they need no
+  // manual logging at all. Same honesty rules as the rest: real minimum samples, and we
+  // never claim a direction we cannot see.
+  (function healthInsights() {
+    const hs = healthStore();
+    const has = (k) => Object.keys(hs).filter(d => hs[d] && hs[d][k] != null).length;
+
+    // Split on the user's OWN median, never a magazine number. Somebody who averages
+    // 3,000 steps still has active days, and a fixed 8,000 cutoff would have told them
+    // nothing, ever — the insight would silently never appear.
+    const stepMed = dpMedian(Object.keys(hs).map(d => hs[d].steps).filter(v => v != null));
+
+    // 1 — how much longer you sleep after an active day
+    if (has('steps') >= 8 && has('sleepMin') >= 8 && stepMed) {
+      const act = [], quiet = [];
+      Object.keys(hs).sort().forEach(d => {
+        const st = hs[d].steps, nextS = (hs[addDays(d, 1)] || {}).sleepMin;
+        if (st == null || nextS == null) return;
+        (st > stepMed ? act : quiet).push(nextS);
+      });
+      if (act.length >= 4 && quiet.length >= 4) {
+        const diff = avg(act) - avg(quiet);
+        if (Math.abs(diff) >= 12) {
+          out.push({ ico: 'moon', w: 6,
+            head: `Active days buy you ${Math.abs(Math.round(diff))} min ${diff > 0 ? 'more' : 'less'} sleep`,
+            sub: `After your more active days (over ${Math.round(stepMed).toLocaleString()} steps) you sleep <b>${fmtMin(Math.round(avg(act)))}</b>, versus <b>${fmtMin(Math.round(avg(quiet)))}</b> after quieter days (${act.length}+${quiet.length} nights).` });
+        }
+      }
+    }
+
+    // 2 — what a heavy screen day costs the NIGHT that FOLLOWS it.
+    // `sleepMin` for a day is the night that ENDED that morning (HealthReader looks back
+    // 18h), so comparing it against the same day's screen time would measure the screen
+    // time that came AFTER the sleep — backwards. Use the next day's night instead.
+    if (has('screenMin') >= 8 && has('sleepMin') >= 8) {
+      const heavy = [], light = [];
+      const vals = Object.keys(hs).filter(d => hs[d].screenMin != null).map(d => hs[d].screenMin);
+      const med = dpMedian(vals);
+      Object.keys(hs).forEach(d => {
+        const sc = hs[d].screenMin, sl = (hs[addDays(d, 1)] || {}).sleepMin;
+        if (sc == null || sl == null || med == null) return;
+        (sc > med ? heavy : light).push(sl);
+      });
+      if (heavy.length >= 4 && light.length >= 4) {
+        const diff = avg(light) - avg(heavy);
+        if (diff >= 12) {
+          out.push({ ico: 'phone', w: 6,
+            head: `Heavy screen days cost you ${Math.round(diff)} min of sleep`,
+            sub: `After a heavier-screen day (over <b>${fmtMin(Math.round(med))}</b>) you sleep <b>${fmtMin(Math.round(avg(heavy)))}</b>, against <b>${fmtMin(Math.round(avg(light)))}</b> after lighter ones (${heavy.length}+${light.length} nights).` });
+        }
+      }
+    }
+
+    // 3 — resting heart rate against sleep: the clearest recovery signal we can see
+    const slMed = dpMedian(Object.keys(hs).map(d => hs[d].sleepMin).filter(v => v != null));
+    if (has('hr') >= 8 && has('sleepMin') >= 8 && slMed) {
+      const rested = [], short = [];
+      Object.keys(hs).forEach(d => {
+        const h = hs[d].hr, sl = hs[d].sleepMin;
+        if (h == null || sl == null) return;
+        (sl > slMed ? rested : short).push(h);
+      });
+      if (rested.length >= 4 && short.length >= 4) {
+        const diff = avg(short) - avg(rested);
+        if (Math.abs(diff) >= 2) {
+          out.push({ ico: 'heart', w: 5,
+            head: `Your heart rate runs ${Math.abs(diff).toFixed(1)} bpm ${diff > 0 ? 'higher' : 'lower'} on short sleep`,
+            sub: `On your longer nights (over <b>${fmtMin(Math.round(slMed))}</b>) it averages <b>${avg(rested).toFixed(1)}</b> bpm; on shorter ones <b>${avg(short).toFixed(1)}</b> (${rested.length}+${short.length} days).` });
+        }
+      }
+    }
+
+    // 4 — steps today vs mood TOMORROW. A next-day effect cannot be explained by mood
+    // causing the activity, which is the whole reason this one is worth showing.
+    if (has('steps') >= 10 && stepMed) {
+      const after = [], other = [];
+      Object.keys(hs).forEach(d => {
+        const st = hs[d].steps; const m = num(addDays(d, 1), 'mood');
+        if (st == null || m == null) return;
+        (st > stepMed ? after : other).push(m);
+      });
+      if (after.length >= 4 && other.length >= 4) {
+        const diff = avg(after) - avg(other);
+        const sd = dpStd(after.concat(other)) || 1;
+        const conf = (after.length + other.length >= 30 && Math.abs(diff) / sd >= 0.5) ? 'high'
+                   : (after.length + other.length >= 14 ? 'medium' : 'low');
+        if (Math.abs(diff) >= 0.4 && conf !== 'low') {
+          out.push({ ico: 'trending', w: 6,
+            head: `Walking today → mood ${diff > 0 ? '+' : '−'}${Math.abs(diff).toFixed(1)} tomorrow`,
+            sub: `The day after your more active days (over ${Math.round(stepMed).toLocaleString()} steps) your mood averages <b>${diff > 0 ? '+' : '−'}${Math.abs(diff).toFixed(1)}</b> versus other days (${after.length + other.length} days · ${conf} confidence).` });
+        }
+      }
+    }
+  })();
+
   const hsAll = healthStore(); const scrPairs = [];
   Object.keys(hsAll).forEach(d => { const sc = hsAll[d].screenMin, m = num(d, 'mood'); if (sc != null && m != null) scrPairs.push([sc, m]); });
   if (scrPairs.length >= 6) { const sorted = [...scrPairs].sort((a, b) => a[0] - b[0]); const third = Math.floor(sorted.length / 3);
@@ -3194,6 +3291,7 @@ function renderDash() {
 
     <div class="card"><h2>🕸️ Connections <span class="hint">your journal graph</span></h2><div id="graph-wrap">${graphSVG()}</div></div>
 
+    ${bestEfforts()}
     ${yearPixelsHTML()}`;
 
   const timeHTML = `
@@ -3260,7 +3358,15 @@ function renderDash() {
     .filter(d => hstore[d][hkey] != null && e[d] && e[d][ekey] != null && e[d][ekey] !== '')
     .map(d => [+hstore[d][hkey], +e[d][ekey]]);
   const hCorrRows = [];
-  [['screenMin', 'mood', '📱 Screen time → Mood'], ['steps', 'mood', '👟 Steps → Mood'], ['steps', 'energy', '👟 Steps → Energy'], ['exerciseMin', 'energy', '🏃 Active mins → Energy']]
+  [['screenMin', 'mood', '📱 Screen time → Mood'], ['steps', 'mood', '👟 Steps → Mood'],
+   ['steps', 'energy', '👟 Steps → Energy'], ['exerciseMin', 'energy', '🏃 Active mins → Energy'],
+   ['sleepMin', 'mood', '😴 Sleep → Mood'], ['sleepMin', 'energy', '😴 Sleep → Energy'],
+   ['screenMin', 'energy', '📱 Screen time → Energy'],
+   ['steps', 'deepWorkHours', '👟 Steps → Deep work'],
+   ['exerciseMin', 'mood', '🏃 Active mins → Mood'], ['hr', 'energy', '❤️ Heart rate → Energy'],
+   ['calories', 'energy', '🔥 Calories → Energy'],
+   ['sleepMin', 'deepWorkHours', '😴 Sleep → Deep work'],
+   ['hr', 'mood', '❤️ Heart rate → Mood']]
   .forEach(([hk, ek, label]) => {
     const ps = hPairs(hk, ek); if (ps.length < 5) return;
     const r = pearson(ps); if (r == null) return;
@@ -4485,6 +4591,11 @@ function renderSettings() {
   // (Google Sign-In + pay-what-you-want) — see the wiki roadmap. Existing sync users'
   // saved syncUrl keeps working silently; only the UI is hidden.
   const SHOW_SYNC = false;
+  // PIS sync was added by a different session and pushes to http://127.0.0.1:5001 — a
+  // localhost-only integration with another of the owner's apps. It is meaningless (and
+  // confusing) to public Play Store users, so it is hidden rather than deleted: the code
+  // stays intact for whoever owns it, but it is not part of the shipped product.
+  const SHOW_PIS = false;
   if (!s.ntfyTopic) { s.ntfyTopic = 'dp-' + randomToken(); DB.saveSettings(s); }   // one secret topic per user
   document.getElementById('s-settings').innerHTML = `
     <div class="card" style="padding:6px 10px">
@@ -4611,7 +4722,7 @@ function renderSettings() {
       </div>
       <input type="file" id="import-file" accept="application/json" style="display:none">
     </div>
-    <div class="card">
+    ${SHOW_PIS ? `<div class="card">
       <h2>🧠 PIS sync <span class="hint" id="pis-status">not connected</span></h2>
       <div class="hint" style="margin-bottom:8px">Push your Daylog days straight into your <b>Personal Intelligence System</b> (the PIS app on this computer — server running at <b>localhost:5001</b>) so its Mirror, Trends, and chat can analyze your life. On your phone, use the Google Sheet link instead.</div>
       <div class="task-add" style="margin-top:8px">
@@ -4623,7 +4734,7 @@ function renderSettings() {
         <button class="btn btn-ghost btn-sm" id="pis-check">Check connection</button>
       </div>
       <div class="hint" id="pis-result" style="margin-top:8px"></div>
-    </div>
+    </div>` : ""}
     <div class="card"><h2>ℹ️ About</h2>
       <div class="hint">Daylog · <b>${APP_VERSION}</b> · local-first. Your data stays on this device${s.syncUrl?' and syncs to your Google Sheet':''}.
       Add to Home Screen to use it like a native app, offline. · <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div></div>
@@ -5499,6 +5610,58 @@ document.addEventListener('click', async (ev) => {
       toast(next ? 'Vibration on' : 'Vibration off');
     } catch (e) {}
   }
+});
+
+/* ---------- Best Efforts (personal records) ----------
+   From the Strava teardown: a top-3 LADDER per benchmark, not a single "record", so second
+   and third best still register — and an "this year" column so somebody who peaked long ago
+   can still win something today. Deliberately no comparison to anyone else: every number
+   here is the user against their own past, which is the evidence-backed substitute for a
+   leaderboard. Reads only data we already store; adds no tracking. */
+function bestEfforts() {
+  const e = DB.entries(), hs = healthStore();
+  const yr = String(new Date().getFullYear());
+  const rows = [];
+
+  const add = (label, ico, unit, pairs, fmt) => {
+    const all = pairs.filter(p => p[1] != null && !isNaN(+p[1])).map(p => [p[0], +p[1]]);
+    if (all.length < 3) return;
+    const top = all.slice().sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const thisYear = all.filter(p => p[0].startsWith(yr)).sort((a, b) => b[1] - a[1])[0] || null;
+    rows.push({ label, ico, unit, top, thisYear, fmt: fmt || (v => String(Math.round(v))) });
+  };
+
+  add('Most steps', 'trending', '', Object.keys(hs).map(d => [d, hs[d].steps]));
+  add('Longest sleep', 'moon', '', Object.keys(hs).map(d => [d, hs[d].sleepMin]), v => fmtMin(Math.round(v)));
+  add('Most active minutes', 'dumbbell', '', Object.keys(hs).map(d => [d, hs[d].exerciseMin]), v => fmtMin(Math.round(v)));
+  add('Least screen time', 'phone', '', Object.keys(hs).filter(d => hs[d].screenMin != null)
+      .map(d => [d, -hs[d].screenMin]), v => fmtMin(Math.round(-v)));
+  add('Deepest focus day', 'target', 'h', Object.keys(e).map(d => [d, e[d].deepWork]), v => v.toFixed(1) + 'h');
+  add('Best mood', 'smile', '', Object.keys(e).map(d => [d, e[d].mood]), v => String(v) + '/10');
+  add('Most habits done', 'check', '', Object.keys(e).map(d => [d,
+      e[d].habits ? Object.keys(e[d].habits).filter(k => hVal(e[d], k) === H_DONE).length : null]));
+
+  if (!rows.length) return '';
+  const medal = i => ['🥇', '🥈', '🥉'][i] || '';
+  return `<div class="card">
+    <h2 class="h2-icon">${hicon('target')}<span>Your best ever</span>
+      <span class="hint" style="margin-left:auto">you vs your own past</span></h2>
+    ${rows.map(r => `<div class="be-row">
+      <div class="be-head">${icon(r.ico, 15)} <span>${r.label}</span></div>
+      <div class="be-list">${r.top.map((t, i) => `<span class="be-item${i === 0 ? ' gold' : ''}"
+        data-be-open="${t[0]}" title="${prettyDate(t[0])}">${medal(i)} <b>${r.fmt(t[1])}</b>
+        <em>${prettyDate(t[0]).replace(/,.*$/, '')}</em></span>`).join('')}</div>
+      ${r.thisYear && r.thisYear[0] !== r.top[0][0]
+        ? `<div class="be-year">Best this year: <b>${r.fmt(r.thisYear[1])}</b> · ${prettyDate(r.thisYear[0])}</div>` : ''}
+    </div>`).join('')}
+  </div>`;
+}
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest && ev.target.closest('[data-be-open]');
+  if (!b) return;
+  const d = b.dataset.beOpen;
+  if (!DB.entry(d)) { toast('Nothing logged on ' + prettyDate(d)); return; }
+  logDate = d; loadDraft(); show('today'); buzz(12); toast('Opened ' + prettyDate(d));
 });
 
 function alarmHealthHTML() {
