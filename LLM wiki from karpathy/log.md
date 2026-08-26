@@ -1060,3 +1060,32 @@ Shipped v59 (Customize→hub of sub-pages; Settings reorg w/ menu-rows, Sync hid
 
 ## 2026-07-30 — Theme modes + overflow fix (v61)
 Added appearance MODES (settings.mode: navy default / black AMOLED / light) on top of the 6 accent colours. applyTheme() sets data-mode on <html>; CSS overrides base vars per mode + fixes hard-coded dark bits in light (topbar bg/gradient-title, nav, btn-ghost). Selector in Customize ▸ Theme. Also fixed stray horizontal scroll on some screens via overflow-x:clip on .app/.screen (clip, not hidden, to preserve the sticky topbar). Verified all 7 screens overflow-free + light/black render clean.
+
+## 2026-08-26 — analytics depth, trophy case, share cards, and a deploy that lies
+
+**Ingested:** this session's work and its failures.
+
+- **Analytics.** Health-Connect insights wired up for real (4 insights, 13 correlations),
+  Best Efforts podium added. Three wrong-field bugs found (`deepWork` vs `deepWorkHours`,
+  `'focus'` as a field), plus a **causality bug** — the screen-time insight compared a day's
+  screen time against the night that had already *ended* that morning.
+- **Thresholds.** Fixed 8,000-step / 7-hour splits meant anyone below those lines would
+  never see the insight at all. Everything now splits on the user's own median.
+- **Trophy case + share cards.** 54 tiered awards derived from the log (nothing storable,
+  nothing losable), five canvas share designs at two ratios, four-rung delivery ladder
+  because Android WebView has no Web Share API. `SharePlugin.java` added for the native rung.
+- **Eval probe.** Two more false-positive classes (horizontal-scroller `past-viewport`;
+  un-composited translucent backgrounds) and one blind spot (overlays never measured).
+  Runner now covers all four Stats sub-tabs and the share sheet. Errors held at 8 documented
+  accepted cases; penalty 878 vs a 923 baseline while measuring five new surfaces.
+- **The important one:** all of v149–v164 was pushed to `origin` while the live app loads
+  from `prod`. The site served **v146** the whole time and every command reported success.
+  `on: push` also failed to trigger a run at all. `tools/deploy.sh` now proves deployment by
+  polling the live URL. See `gotchas.md`.
+- **Backups.** `daily-pulse-native` and `daily-pulse-android` had **no backup of any kind**.
+  New private repo `kishore2494/daylog-native` + `sync.sh`. 109 retroactive `web-vN` tags on
+  both web remotes. **The upload keystore is still unbacked** — new `backups.md` and
+  `KEYSTORE.md` state the risk and the fix.
+
+**New pages:** `backups.md`. **Updated:** `gotchas.md` (7 entries), `index.md`, `log.md`.
+

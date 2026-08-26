@@ -13,3 +13,4 @@ One-line catalog of every page. Start here.
 
 **Current build:** v120 (bump `APP_VERSION` in `app.js` AND `CACHE` in `sw.js` together every release).
 **Live:** production https://kishore2494.github.io/daily-pulse/ · dev https://kishore2494.github.io/jurnal-app/
+- [backups.md](backups.md) — where every version lives, how snapshots are made, and the one unbacked file that matters

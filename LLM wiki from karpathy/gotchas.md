@@ -96,3 +96,97 @@ other tweak combined. `tools/evals/` prints this breakdown; use it.
 text, unreadable truncation, tiny tap targets and scroll bloat across 320/360/412px — the
 class of bug that otherwise reaches the user's phone. Its README lists the two false
 positives already fixed and the findings deliberately accepted.
+
+## Two remotes, and only one of them is production (2026-08-26)
+
+`daily-pulse-app` has **two** git remotes and they are not interchangeable:
+
+| remote | repo | role |
+|---|---|---|
+| `origin` | `kishore2494/jurnal-app` | source mirror |
+| `prod` | `kishore2494/daily-pulse` | **what the installed app actually loads** |
+
+`capacitor.config.json` sets `server.url` to `https://kishore2494.github.io/daily-pulse/`,
+which is the **prod** remote. `git push origin` therefore succeeds loudly and changes nothing
+for a single real user. This happened: v149–v164 (analytics, trophy case, share cards) all
+landed on `origin` while the live site kept serving **v146**, and every command reported
+success. Nothing in git's output can tell you about it.
+
+**Worse, `on: push` cannot be trusted either.** A push to `prod/main` landed and registered
+**no workflow run at all** — the site silently kept serving the old bundle. The Pages
+workflow has to be dispatched explicitly.
+
+**Always deploy with `tools/deploy.sh`.** It pushes both remotes, dispatches the workflow,
+waits for the build, then polls the LIVE url until it serves the expected `APP_VERSION`, and
+exits non-zero otherwise. It refuses to run on a dirty tree. Never report something as
+shipped on the strength of a `git push` exit code.
+
+## zsh does not word-split unquoted `$VAR` (again, twice)
+
+Bitten twice more today:
+- `set -- $r` inside a `for r in "9:16 st" ...` loop left `$1` as the whole string and `$2`
+  empty, so exported files were written to the wrong names and I compared **stale** PNGs
+  against new code, concluding a fix hadn't worked when it had.
+- `git show "$C:app.js"` applied zsh's `:a` **history modifier** to `$C`, producing
+  `/Users/.../<sha>pp.js`. Version extraction silently returned zero results.
+
+`tools/*.sh` have `#!/usr/bin/env bash`, so they are fine. It is the **interactive
+Bash-tool** calls that run under zsh. For anything with word-splitting or `$var:suffix`,
+wrap it: `bash -c '...'`.
+
+## Wrong entry-field names silently disable features
+
+`deepWork` vs `deepWorkHours` cost three separate bugs in one day:
+- Two new health correlations keyed `'focus'` — not a field at all. Zero rows, no error.
+- `bestEfforts()` read `e[d].deepWork` — the "Deepest focus day" record was dead for every
+  real user.
+- **The eval seed itself** wrote `deepWork`, so the fixture agreed with the bug and no test
+  or eval run ever noticed. A fixture that shares the code's mistake hides it.
+
+The real keys come from `FIELDS` (~line 90): `mood`, `energy`, `sleepHours`,
+`deepWorkHours`, `tasksDone`, `tasksPlanned`. Grep `FIELDS` before inventing a key.
+
+## A flat fixture tests nothing
+
+The eval seed wrote `sleepMin: 420` for **every** day — zero variance — so every sensor
+correlation and all four health insights were untestable, and the code paths read as "not
+firing" rather than "never exercised". A fixture needs real spread and **known**
+relationships, generated from a fixed-seed PRNG so runs stay reproducible.
+
+## Hardcoded thresholds silently exclude people
+
+The health insights split on `steps >= 8000` and `sleep >= 420`. Anyone whose average sits
+below those lines would **never** see the insight — not "rarely", *never*. Every split now
+uses the user's **own median**. Absolute thresholds are only honest when the number itself is
+the point (an award tier); for "your active days" they are a bug.
+
+## Passing a function where a string is expected renders its source
+
+`renderDash` builds `{ overview: overviewHTML, time: timeHTML, ... }[dashTab]` where those
+are pre-computed **strings**. Adding `awards: awardsHTML` (a function reference) put the
+function's own source text on screen, complete with visible `${...}` templates. It looked
+like a template-literal escaping bug and was not.
+
+## `prettyDate()` leads with the weekday
+
+`prettyDate('2026-03-05')` → `"Thu, Mar 5"`. `.replace(/,.*$/, '')` — which reads like
+"drop the year" — leaves a bare `"Thu"`. Two features shipped with useless dates before this
+was spotted. Use `shortDate()` for compact dates; it adds the year only when it is not the
+current one.
+
+## Eval probe false positives (rounds 4 and 5)
+
+Two more, both the same shape as the earlier three — the probe cannot see the real ground:
+- **`past-viewport` inside a horizontal scroller.** Children of `overflow-x: auto` are
+  *supposed* to sit outside the viewport; that is what makes them swipeable. 66 bogus errors
+  the moment the Stats tab row was made scrollable. Now exempted (the page-level
+  `page-hscroll` check still catches genuine horizontal scroll).
+- **`contrast-invisible` on translucent layers.** The probe skipped any background with
+  alpha < 0.9 and walked past it, so a chip on `rgba(255,255,255,.07)` over an
+  `rgba(6,10,20,.82)` scrim was compared against the *light page body far below* → 1.10:1
+  for near-white-on-near-black. Layers are now composited.
+
+And one blind spot: **overlays were never measured at all** — the probe read the screen
+behind them. A visible overlay is now the probe root, which is how the share sheet's own
+40px chips surfaced. The runner also only ever measured Stats' *default* tab; it now drives
+all four sub-tabs plus the share sheet.
