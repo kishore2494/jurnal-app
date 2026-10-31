@@ -4426,7 +4426,7 @@ function renderSearch() {
   document.getElementById('s-search').innerHTML = sampleBannerHTML('these results') + `
     <div class="card">
       <div class="task-add">
-        <input type="text" id="search-q" placeholder="Search journals, tasks, notes… or #tag" autocomplete="off" value="${escapeHtml(searchQ)}">
+        <input type="text" id="search-q" placeholder="Search journals, notes, photo captions… or #tag" autocomplete="off" value="${escapeHtml(searchQ)}">
       </div>
     </div>
     <div id="search-results">${searchQ ? runSearch(searchQ) : '<div class="empty">Type at least 2 characters. Tip: search a <b>#tag</b> to see every day you mentioned it.</div>'}</div>`;
@@ -4473,6 +4473,14 @@ function runSearch(q) {
   const evRows = DB.events().filter(x => hit(x.label)).map(x =>
     `<div class="sr-row" data-sr="event" data-d="${x.date}"><span class="sr-when">${x.date}${x.time ? ' ' + x.time : ''}</span><span class="sr-snip">${snippet(x.label, q)}</span></div>`);
   if (evRows.length) groups.push(['📌 Events', evRows]);
+  // Photo captions: the thumbnail opens the photo, the rest of the row opens its day.
+  const capRows = [];
+  _media.forEach(r => { if (r.kind === 'photo' && hit(r.caption)) capRows.push(r); });
+  capRows.sort((a, b) => b.day.localeCompare(a.day));
+  if (capRows.length) groups.push(['📷 Photo captions', capRows.map(r =>
+    `<div class="sr-row sr-photo" data-sr="${r.ctx === 'log' ? 'log' : 'note'}" data-d="${r.day}">
+      <button class="mthumb sr-thumb" data-mview="${r.id}" aria-label="Open photo"><img src="${mediaUrl(r, 't')}" alt="" loading="lazy"></button>
+      <span class="sr-when">${prettyDate(r.day).replace(/, \d{4}$/, '')}</span><span class="sr-snip">${snippet(r.caption, q)}</span></div>`)]);
   if (!groups.length) return `<div class="empty">Nothing found for “${escapeHtml(q)}”.</div>`;
   const total = groups.reduce((s, [, r]) => s + r.length, 0);
   return `<div class="hint" style="margin:2px 4px 8px">${total} result${total === 1 ? '' : 's'}</div>` +
@@ -4490,6 +4498,7 @@ document.addEventListener('click', (ev) => {
   const tc = ev.target.closest('.tag-chip[data-searchtag]');
   if (tc) { searchQ = tc.dataset.searchtag; navigateTo('search'); return; }
   const row = ev.target.closest('.sr-row'); if (!row || !document.getElementById('s-search').classList.contains('on')) return;
+  if (ev.target.closest('[data-mview]')) return;   // a caption hit's thumbnail opens the photo, not the day
   const kind = row.dataset.sr;
   if (kind === 'log') { logDate = row.dataset.d; show('today'); }
   else if (kind === 'task') show('tasks');

@@ -1985,6 +1985,10 @@
     mediaViewClose();
     histTab = 'days'; show('history');
     ok('Photos is a share-card kind', CARD_KINDS.some(c => c.k === 'photos'));
+    _media.get('mt1').caption = 'Sunset over the lake';
+    const sr = runSearch('sunset');
+    ok('search finds a photo by its caption', /Photo captions/.test(sr) && /data-mview="mt1"/.test(sr), sr.slice(0, 160));
+    delete _media.get('mt1').caption;
     _media.delete('mt5');
     ['mt1', 'mt2', 'mt3', 'mt4'].forEach(id => _media.delete(id)); _mediaUrls.clear();
     _mediaReady = readySnap; window.mediaSupported = supSnap; URL.createObjectURL = urlSnap;
