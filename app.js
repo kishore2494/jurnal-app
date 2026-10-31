@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v249';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v250';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -5556,9 +5556,8 @@ document.addEventListener('click', (ev) => {
 /* ============================================================
    SCREEN: SETTINGS / MORE
    ============================================================ */
+let settingsPage = null;   // which Settings page is open; null = the grouped home
 function renderSettings() {
-  document.getElementById('screen-title').textContent = 'Settings';
-  document.getElementById('screen-sub').textContent = 'Customize, reminders, data';
   const s = DB.settings();
   /* SYNC IS HIDDEN AGAIN (v222) — offered only to users who already connected it.
 
@@ -5584,20 +5583,9 @@ function renderSettings() {
   // stays intact for whoever owns it, but it is not part of the shipped product.
   const SHOW_PIS = false;
   if (!s.ntfyTopic) { s.ntfyTopic = 'dp-' + randomToken(); DB.saveSettings(s); }   // one secret topic per user
-  document.getElementById('s-settings').innerHTML = `
-    <div class="card" style="padding:6px 10px">
-      <button class="menu-row" id="open-custom"><span class="menu-ico">🎨</span>
-        <span class="menu-txt"><span class="menu-lbl">Customize</span><span class="menu-sub">tabs, habits, log fields, gym, deep log, theme</span></span><span class="menu-go">›</span></button>
-      <button class="menu-row" id="open-report"><span class="menu-ico">📄</span>
-        <span class="menu-txt"><span class="menu-lbl">Download report (PDF)</span><span class="menu-sub">your full stats as a printable report</span></span><span class="menu-go">›</span></button>
-      <button class="menu-row" id="open-tour"><span class="menu-ico">🎓</span>
-        <span class="menu-txt"><span class="menu-lbl">Take the app tour</span><span class="menu-sub">60-second guided walkthrough</span></span><span class="menu-go">›</span></button>
-      <a class="menu-row" href="guide.html"><span class="menu-ico">📖</span>
-        <span class="menu-txt"><span class="menu-lbl">How to use Daylog</span><span class="menu-sub">a quick illustrated tour</span></span><span class="menu-go">›</span></a>
-      ${tipPlugin() ? `<button class="menu-row" id="open-tip"><span class="menu-ico">💛</span>
-        <span class="menu-txt"><span class="menu-lbl">Support Daylog</span><span class="menu-sub">an optional tip · unlocks nothing</span></span><span class="menu-go">›</span></button>` : ''}
-    </div>
-    <div class="card">
+  /* Every card is built on each render (cheap), then the page decides which to show. */
+  const C = {
+    feedback: `    <div class="card">
       <h2>💬 Feedback <span class="hint">no account · goes to one person</span></h2>
       <div class="hint" style="margin-bottom:9px">Daylog is built by <b>one person</b>, in their
         own time, with no company and no funding behind it. There is no support team reading
@@ -5608,8 +5596,8 @@ function renderSettings() {
       <div class="hint" style="margin-top:8px">No account and no sign-in. This opens your mail
         app with the message ready to send — so it does need a mail app, and I will see the
         address you send from. If you would rather stay anonymous, say so and I will not reply.</div>
-    </div>
-    ${SHOW_SYNC ? `<div class="card">
+    </div>`,
+    sync: SHOW_SYNC ? `<div class="card">
       <h2>☁️ Sync &amp; login <span class="hint">${s.syncUrl ? 'connected ●' : 'not connected'}</span></h2>
       <div class="field"><label>Your sheet link = your login key <span class="hint">paste it on any device to load your data</span></label>
         <input type="url" id="sync-url" placeholder="https://script.google.com/macros/s/…/exec" value="${escapeHtml(s.syncUrl)}"></div>
@@ -5631,8 +5619,8 @@ function renderSettings() {
           <p><a href="sheets-setup.html">How to set it up (5 minutes)</a></p>
         </div>
       </details>
-    </div>` : ''}
-    ${(() => { const at = autoTrackCfg();
+    </div>` : '',
+    tracking: (() => { const at = autoTrackCfg();
       const row = (k, label, sub) => `<div class="at-row ${at.on ? '' : 'at-dim'}">
         <div class="at-txt"><div class="at-lbl">${label}</div>${sub ? `<div class="at-sub">${sub}</div>` : ''}</div>
         <button class="at-tog ${at[k] ? 'on' : ''}" data-at-toggle="${k}" ${!at.on && k !== 'on' ? 'disabled' : ''}><span class="at-knob"></span></button>
@@ -5652,8 +5640,8 @@ function renderSettings() {
       ${row('hr', '❤️ Heart rate', 'needs a watch/band')}
       ${row('screentime', '📱 Screen time', 'daily phone usage')}
       <div class="hint" style="margin-top:8px">Everything stays on your phone. Sensor data needs the Play-update version of the app; these switches control what it's allowed to collect.</div>
-    </div>`; })()}
-    ${(() => {
+    </div>`; })(),
+    widgets: (() => {
       // Every widget with a "hide" link must be re-enableable here, or hiding it is a
       // one-way door. Stored flags are inverted (dp.*Off), so the switch shows !flag.
       const secRow = (id, label, sub) => { const on = !logSecHidden(id);
@@ -5674,9 +5662,9 @@ function renderSettings() {
         ${flagRow('dp.hapticsOff', '📳 Haptic buzz', 'a short vibration when you complete something')}
         ${flagRow('dp.nudgeOff', '👋 Nudge after 2 quiet days', 'one notification if you have not logged in two days — nothing else ever')}
         <div class="hint" style="margin-top:8px">To reorder or hide <b>any</b> Log card — tasks, checklist, workout, reflection, deep log — use <b>Customize ▸ Log screen sections</b>.</div>
-      </div>`; })()}
-    ${alarmHealthHTML()}
-    <div class="card">
+      </div>`; })(),
+    alarmHealth: alarmHealthHTML(),
+    reminders: `    <div class="card">
       <h2>⏰ Reminders <span class="hint">${DB.reminders().length} set</span></h2>
       ${DB.reminders().length ? `<div class="rem-list">` + DB.reminders().map(r => `
         <div class="rem ${r.enabled?'':'off'}" data-remid="${r.id}">
@@ -5712,8 +5700,8 @@ function renderSettings() {
         <button class="btn btn-ghost btn-sm" id="rem-calendar">📅 Add to phone calendar</button>
       </div>
       <div class="hint" style="margin-top:8px">The full-screen alarm fires while the app is open, and catches missed ones when you reopen. For alarms even when the app is fully closed, tap <b>Add to phone calendar</b> (adds daily repeating alerts your phone rings natively).</div>
-    </div>
-    ${nativeShell() ? '' : `<div class="card">
+    </div>`,
+    ntfy: nativeShell() ? '' : `<div class="card">
       <h2>🔔 Background alarms · ntfy <span class="hint">${s.ntfyOn ? 'ON ●' : 'off'}</span></h2>
       <div class="hint">Rings even when this app is <b>closed & your phone is locked</b>. One-time setup with the free <b>ntfy</b> app.</div>
       <div class="hint" style="margin-top:6px; border-left:3px solid var(--accent); padding-left:8px">
@@ -5732,8 +5720,8 @@ function renderSettings() {
         <button class="btn btn-ghost btn-sm" id="ntfy-test">Test push</button>
       </div>
       <div class="hint" style="margin-top:8px"><b>Setup:</b> ① Install <b>ntfy</b> (Play Store / App&nbsp;Store). ② In ntfy tap ➕ and subscribe to the topic <b>${escapeHtml(s.ntfyTopic || '—')}</b>. ③ Come back, tap <b>Turn ON</b>, then <b>Test push</b> — your phone should buzz. Reminders are sent up to 3 days ahead, so open this app at least every few days.</div>
-    </div>`}
-    <div class="card">
+    </div>`,
+    backup: `    <div class="card">
       <h2>💾 Backup &amp; restore <span class="hint">last: ${(() => { const t = +localStorage.getItem('dp.lastBackup') || 0; if (!t) return 'never'; const d = Math.floor((Date.now() - t) / 86400000); return d === 0 ? 'today ✅' : d + 'd ago' + (d > 7 ? ' ⚠️' : ''); })()}</span></h2>
       <div class="hint" style="margin-bottom:8px">A backup file is the only way to move your data to a new phone or recover it after a reinstall (the PDF report is just for reading, it can't be restored). Keep one in Drive/email.</div>
       <div class="btn-row">
@@ -5757,8 +5745,8 @@ function renderSettings() {
           <button class="btn btn-primary btn-sm" id="set-restore-pull" style="margin-top:8px;min-height:44px">Restore from the link</button>
         </div>
       </details>`}
-    </div>
-    ${/* An app that holds a private journal has to let you destroy it without uninstalling —
+    </div>`,
+    wipe: `    ${/* An app that holds a private journal has to let you destroy it without uninstalling —
          but two taps was far too little friction for something with no undo. This is a
          deliberate gauntlet: four separate confirmations, a countdown you cannot skip, and a
          typed word. Every stage resets on the slightest hesitation. */''}
@@ -5769,8 +5757,8 @@ function renderSettings() {
         It does not touch any backup file you have already saved. <b>Export a backup first</b>
         if there is any chance you will want this back.</div>
       ${wipeStageHTML()}
-    </div>
-    ${SHOW_PIS ? `<div class="card">
+    </div>`,
+    pis: SHOW_PIS ? `<div class="card">
       <h2>🧠 PIS sync <span class="hint" id="pis-status">not connected</span></h2>
       <div class="hint" style="margin-bottom:8px">Push your Daylog days straight into your <b>Personal Intelligence System</b> (the PIS app on this computer — server running at <b>localhost:5001</b>) so its Mirror, Trends, and chat can analyze your life. On your phone, use the Google Sheet link instead.</div>
       <div class="task-add" style="margin-top:8px">
@@ -5782,11 +5770,50 @@ function renderSettings() {
         <button class="btn btn-ghost btn-sm" id="pis-check">Check connection</button>
       </div>
       <div class="hint" id="pis-result" style="margin-top:8px"></div>
-    </div>` : ""}
-    <div class="card"><h2>ℹ️ About</h2>
-      <div class="hint">Daylog · <b>${APP_VERSION}</b> · local-first. Your data stays on this device${s.syncUrl?' and syncs to your Google Sheet':''}.
-      Add to Home Screen to use it like a native app, offline. · <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></div></div>
-  `;
+    </div>` : ""
+  };
+  /* Settings used to be one long scroll of eleven unrelated cards — feedback in the middle,
+     reminders below the widget switches — so nobody could tell what lived where. Now a short
+     home page of labelled groups, each row opening a page that holds one thing. */
+  const at = autoTrackCfg(), nRem = DB.reminders().length;
+  const lastT = +localStorage.getItem('dp.lastBackup') || 0, lastD = lastT ? Math.floor((Date.now() - lastT) / 86400000) : -1;
+  const PAGES = {
+    widgets:   { t: 'Log screen',        sub: 'What shows on your Log tab',          html: C.widgets },
+    reminders: { t: 'Reminders',         sub: 'Alarms and notifications',            html: C.alarmHealth + C.reminders + C.ntfy },
+    tracking:  { t: 'Auto-tracking',     sub: 'Sleep, steps and screen time',        html: C.tracking },
+    data:      { t: 'Backup & restore',  sub: 'Keep a copy, move to a new phone',    html: C.backup + C.sync + C.pis },
+    wipe:      { t: 'Delete everything', sub: 'Erase all data on this phone',        html: C.wipe },
+    feedback:  { t: 'Send feedback',     sub: 'Straight to the person who makes it', html: C.feedback },
+  };
+  const pg = PAGES[settingsPage];
+  if (!pg) settingsPage = null;
+  document.getElementById('screen-title').textContent = pg ? pg.t : 'Settings';
+  document.getElementById('screen-sub').textContent = pg ? pg.sub : 'Customize, reminders, data';
+  const row = (attrs, ico, lbl, sub, cls = '') => `<button class="set-row ${cls}" ${attrs}>
+      <span class="set-ico">${icon(ico, 21)}</span>
+      <span class="set-txt"><span class="set-lbl">${lbl}</span><span class="set-sub">${sub}</span></span>
+      <span class="set-go" aria-hidden="true">›</span></button>`;
+  const group = (title, rows) => `<section class="set-group"><h3 class="set-h">${title}</h3><div class="set-card">${rows}</div></section>`;
+  document.getElementById('s-settings').innerHTML = pg
+    ? `<button class="back-btn set-back" id="set-back">← All settings</button>${pg.html}`
+    : `${C.alarmHealth}
+    ${group('Make it yours',
+      row('id="open-custom"', 'sparkle', 'Customize', 'Tabs, habits, log fields, gym, theme') +
+      row('data-set-page="widgets"', 'layers', 'Log screen', 'Show or hide the ring, mood grid and more'))}
+    ${group('Reminders &amp; tracking',
+      row('data-set-page="reminders"', 'bell', 'Reminders', nRem ? `${nRem} set` + (nativeShell() ? '' : ' · background alarms') : 'None yet · add a daily nudge') +
+      row('data-set-page="tracking"', 'heart', 'Auto-tracking', at.on ? 'On · sleep, steps, screen time from your phone' : 'Off · nothing is collected'))}
+    ${group('Your data',
+      row('data-set-page="data"', 'download', 'Backup &amp; restore', lastD < 0 ? 'No backup yet · do this once' : lastD === 0 ? 'Last backup today' : `Last backup ${lastD} day${lastD === 1 ? '' : 's'} ago`, lastD < 0 || lastD > 7 ? 'set-warn' : '') +
+      row('id="open-report"', 'note', 'Download report (PDF)', 'Your stats as a printable report') +
+      row('data-set-page="wipe"', 'trash', 'Delete everything', 'Erase all data on this phone', 'set-danger'))}
+    ${group('Help',
+      row('id="open-tour"', 'play', 'Take the app tour', '60-second guided walkthrough') +
+      `<a class="set-row" href="guide.html"><span class="set-ico">${icon('book', 21)}</span>
+        <span class="set-txt"><span class="set-lbl">How to use Daylog</span><span class="set-sub">A quick illustrated guide</span></span><span class="set-go" aria-hidden="true">›</span></a>` +
+      row('data-set-page="feedback"', 'message', 'Send feedback', 'Something broken or missing? Tell me'))}
+    ${tipPlugin() ? group('Support', row('id="open-tip"', 'heart', 'Support Daylog', 'An optional tip · unlocks nothing', 'set-tip')) : ''}
+    <p class="set-about">Daylog ${APP_VERSION} · Your data stays on this phone${s.syncUrl ? ' and your Google Sheet' : ''} · <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>`;
 }
 document.addEventListener('click', async (ev) => {
   const s = DB.settings();
@@ -5882,6 +5909,9 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (ev.target.closest('#open-custom')) { customPage = null; show('custom'); return; }
+  const sp = ev.target.closest('[data-set-page]');
+  if (sp) { settingsPage = sp.dataset.setPage; renderSettings(); window.scrollTo(0, 0); return; }
+  if (ev.target.closest('#set-back')) { settingsPage = null; renderSettings(); wipeAbandonIfAway(); window.scrollTo(0, 0); return; }
   if (ev.target.closest('#open-history')) { show('history'); return; }
   if (ev.target.id === 'export-quick') { exportData(); renderSettings(); return; }
   if (ev.target.id === 'fb-send') {
@@ -11578,24 +11608,22 @@ function renderDrawer() {
   const cur = ((document.querySelector('.screen.on') || {}).id || 's-today').replace('s-', '');
   // Menu lists only what's NOT already in the fixed bottom bar (#menu-3).
   const bottom = new Set(navCfg().filter(n => !n.hidden && n.primary).map(n => n.k));
-  /* Settings sits last, directly above "Edit tabs & this menu…" — the two configuration
-     rows belong together at the bottom. Enforced at RENDER time rather than by reordering
-     the stored config, because new tabs are appended to a saved config and would otherwise
-     keep landing after Settings on every future release (which is exactly how Projects,
-     Money and Ask ended up below it). */
-  const items = navCfg().filter(n => !n.hidden && !bottom.has(n.k))
-    .sort((a, b) => (a.k === 'settings' ? 1 : 0) - (b.k === 'settings' ? 1 : 0));
-  const rows = items.map(n => `<button class="drawer-row ${n.k === cur ? 'on' : ''}" data-screen="${n.k}">
-    <span class="drawer-ico">${icon(n.ico, 22)}</span><span class="drawer-lbl">${escapeHtml(n.label)}</span>
-    ${n.primary ? '<span class="drawer-pin">pinned</span>' : ''}</button>`).join('');
+  /* Settings is not a tab like the others — it lives in the footer with "Edit menu", pinned to
+     the bottom of the drawer, so the list above is only places you go to use the app. */
+  const items = navCfg().filter(n => !n.hidden && !bottom.has(n.k) && n.k !== 'settings');
+  const row = n => `<button class="drawer-row ${n.k === cur ? 'on' : ''}" data-screen="${n.k}">
+    <span class="drawer-ico">${icon(n.ico, 21)}</span><span class="drawer-lbl">${escapeHtml(n.label)}</span>
+    ${n.primary ? '<span class="drawer-pin">pinned</span>' : ''}</button>`;
   /* Everything switched off that could be switched on, described by what it DOES rather
      than named — a list of nouns is what made the full menu unreadable in the first place. */
   const off = navCfg().filter(n => n.hidden && NAV_DEF.some(d => d.k === n.k && d.adv));
+  const peek = off.slice(0, 2).map(n => n.label).join(', ') + (off.length > 2 ? ` and ${off.length - 2} more` : '');
   const more = off.length ? `
+    <h3 class="drawer-sec">Add more</h3>
     <div class="drawer-more">
-      <button class="drawer-row drawer-more-h" id="drawer-more-toggle">
-        <span class="drawer-ico">${icon('plus', 22)}</span>
-        <span class="drawer-lbl">More features</span>
+      <button class="drawer-row drawer-more-h" id="drawer-more-toggle" aria-expanded="${drawerMoreOpen}">
+        <span class="drawer-ico">${icon('plus', 21)}</span>
+        <span class="drawer-lbl"><span>More features</span><span class="drawer-peek">${escapeHtml(peek)}</span></span>
         <span class="drawer-pin">${off.length}</span>
       </button>
       ${drawerMoreOpen ? `<div class="drawer-more-list">${off.map(n => {
@@ -11606,8 +11634,16 @@ function renderDrawer() {
           <span class="drawer-add-go">Add</span></button>`;
       }).join('')}</div>` : ''}
     </div>` : '';
-  document.getElementById('drawer-list').innerHTML = rows + more +
-    `<button class="drawer-row drawer-edit" id="drawer-edit-tabs"><span class="drawer-ico">${icon('pencil', 22)}</span><span class="drawer-lbl">Edit tabs &amp; this menu…</span></button>`;
+  document.getElementById('drawer-list').innerHTML =
+    (items.length ? `<h3 class="drawer-sec">Your tabs</h3>${items.map(row).join('')}` : '') + more;
+  const st = navCfg().find(n => n.k === 'settings');
+  document.getElementById('drawer-foot').innerHTML =
+    `<button class="drawer-row ${cur === 'settings' || cur === 'custom' ? 'on' : ''}" data-screen="settings">
+      <span class="drawer-ico">${icon('settings', 21)}</span><span class="drawer-lbl">${escapeHtml((st && st.label) || 'Settings')}</span></button>
+    <button class="drawer-row drawer-edit" id="drawer-edit-tabs"><span class="drawer-ico">${icon('pencil', 21)}</span><span class="drawer-lbl">Edit this menu</span></button>`;
+  const sub = document.getElementById('drawer-sub');
+  if (sub) { const k = loggedStreak();
+    sub.innerHTML = k > 0 ? `${icon('flame', 14)} ${k}-day streak` : escapeHtml(new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })); }
 }
 let drawerMoreOpen = false;
 document.addEventListener('click', (ev) => {
@@ -11654,10 +11690,10 @@ function closeDrawer() {
 document.getElementById('drawer-scrim').addEventListener('click', closeDrawer);
 document.getElementById('drawer-close').addEventListener('click', closeDrawer);
 document.getElementById('nav-back').addEventListener('click', openDrawer);
-document.getElementById('drawer-list').addEventListener('click', (ev) => {
+['drawer-list', 'drawer-foot'].forEach(id => document.getElementById(id).addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-screen]'); if (!b) return;
   closeDrawer(); navigateTo(b.dataset.screen);
-});
+}));
 
 /* ---------- Android hardware back button ----------
    Close any open overlay first → else step back to the default tab →
@@ -11693,6 +11729,9 @@ function handleBack() {
   if (svh && svh.classList.contains('on')) { saveSheetClose(); return; }
   const mrd = document.getElementById('mrdeck');
   if (mrd && mrd.classList.contains('on')) { mrClose(); return; }
+  for (const id of ['tip-ask', 'rate-ask']) {   // the tip and review sheets
+    const x = document.getElementById(id); if (x && x.classList.contains('on')) { x.classList.remove('on'); return; }
+  }
   const tr = document.getElementById('tour'); if (tr) { endTour(); return; }
   const wn = document.getElementById('wn-pop'); if (wn) { localStorage.setItem('dp.whatsnew', WHATS_NEW.v); wn.remove(); return; }
   const drawer = document.getElementById('drawer');
@@ -11709,6 +11748,7 @@ function handleBack() {
   if (cur === 'gym' && gymView === 'day') { gymView = 'home'; renderGym(); return; }
   if (cur === 'custom' && customPage) { customPage = null; renderCustom(); return; }
   if (cur === 'custom') { show('settings'); return; }   // hub → Settings (mirrors the on-screen back)
+  if (cur === 'settings' && settingsPage) { settingsPage = null; renderSettings(); wipeAbandonIfAway(); window.scrollTo(0, 0); return; }
   // 3) not on the home tab → go back to it
   const home = defaultTab();
   if (cur !== home) { navigateTo(home); return; }
@@ -11780,7 +11820,7 @@ const RENDER = { awards: renderAwards, projects: renderProjects, money: renderMo
 function show(name) {
   // Leaving Settings abandons a half-finished delete. An in-progress irreversible action
   // must never survive navigating away and come back still armed.
-  if (name !== 'settings') { try { wipeReset(); } catch (e) {} }
+  if (name !== 'settings') { try { wipeReset(); } catch (e) {} settingsPage = null; }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
   const sec = document.getElementById('s-' + name);
   if (sec) sec.classList.add('on');
@@ -11875,6 +11915,10 @@ const ICONS = {
   plus:'<path d="M12 5v14"/><path d="M5 12h14"/>',
   dot:'<circle cx="12" cy="12" r="4"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/>',
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  message:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>',
 };
 // section id → icon, and default-habit key → icon (custom items keep their emoji)
 const SECTION_ICON = { mind:'lightbulb', wellbeing:'smile', health:'heart', work:'briefcase', learning:'book', finance:'wallet', digital:'phone', growth:'trending', haircare:'scissors', skincare:'droplet' };

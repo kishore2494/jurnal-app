@@ -47,6 +47,10 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   --font-display: 'Sora', 'DM Sans', 'Twemoji Mozilla', system-ui, sans-serif;
+  /* `font: 600 13px/1 inherit` is INVALID — a CSS-wide keyword cannot sit inside a shorthand —
+     so ten button styles were silently dropped and fell back to the browser's Arial/Roboto at
+     its own size and weight. Shorthands name this stack instead. */
+  --font-ui: 'DM Sans', 'Twemoji Mozilla', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; }
@@ -768,7 +772,7 @@ img, svg, table, pre, .chart { max-width: 100%; }
 /* ---------- v63: side drawer, back button, time picker ---------- */
 .topbar-l { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .nav-back { align-self: flex-start; background: none; border: none; color: var(--accent-ink);
-  font: 600 13px/1 inherit; padding: 2px 0 4px; cursor: pointer; }
+  font: 600 13px/1 var(--font-ui); padding: 2px 0 4px; cursor: pointer; }
 .nav-back[hidden] { display: none; }
 
 .drawer-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); opacity: 0; pointer-events: none;
@@ -786,7 +790,7 @@ img, svg, table, pre, .chart { max-width: 100%; }
 .drawer-x { background: none; border: none; color: var(--text-faint); font-size: 20px; cursor: pointer; padding: 4px 8px; }
 .drawer-list { flex: 1; overflow-y: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
 .drawer-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  background: none; border: none; color: var(--text); font: 500 15px/1 inherit;
+  background: none; border: none; color: var(--text); font: 500 15px/1 var(--font-ui);
   padding: 13px 12px; border-radius: 12px; cursor: pointer; }
 .drawer-row:hover { background: var(--bg-input); }
 .drawer-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-ink); }
@@ -815,7 +819,7 @@ img, svg, table, pre, .chart { max-width: 100%; }
 /* ---------- v65: Stats segmented control + bar charts ---------- */
 .seg-row { display: flex; gap: 4px; background: var(--bg-input, #0b1120); border: 1px solid var(--line, #24304a);
   border-radius: 12px; padding: 4px; margin-bottom: 12px; }
-.seg-btn { flex: 1; background: none; border: none; color: var(--text-dim, #9aa6bf); font: 600 13px/1 inherit;
+.seg-btn { flex: 1; background: none; border: none; color: var(--text-dim, #9aa6bf); font: 600 13px/1 var(--font-ui);
   padding: 9px 6px; border-radius: 9px; cursor: pointer; white-space: nowrap; }
 .seg-btn.on { background: var(--grad-accent, var(--accent)); color: #fff; box-shadow: var(--glow-accent); }
 .chart-bar { height: 118px; }
@@ -1710,7 +1714,7 @@ input[type="range"] { height: 30px; }
 .pj-sort { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 9px 0 3px;
   font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; color: var(--text-faint); font-weight: 700; }
 .pj-sortb { background: none; border: 1px solid var(--border); border-radius: 99px; padding: 5px 12px;
-  font: 600 12px/1 inherit; text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer;
+  font: 600 12px/1 var(--font-ui); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer;
   min-height: 44px; }
 /* The selected pill was white on --accent (#6d8cff in BOTH themes) = 3.07:1 — under 4.5:1 for
    12px text, so the label on the pill you had just tapped was the hardest one to read. It is
@@ -1795,11 +1799,11 @@ input[type="range"] { height: 30px; }
 .gap-why { font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
 .gap-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; }
 .gap-btns .btn { min-height: 44px; }
-.gap-skip { background: none; border: none; color: var(--text-faint); font: 600 12.5px/1 inherit;
+.gap-skip { background: none; border: none; color: var(--text-faint); font: 600 12.5px/1 var(--font-ui);
   cursor: pointer; text-decoration: underline; min-height: 44px; padding: 0 6px; }
 .gap-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .gap-act { background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px;
-  color: var(--text); font: 600 12.5px/1 inherit; padding: 0 11px; cursor: pointer; min-height: 44px; }
+  color: var(--text); font: 600 12.5px/1 var(--font-ui); padding: 0 11px; cursor: pointer; min-height: 44px; }
 .gap-act:hover { border-color: var(--accent); }
 .pj-chiprow-h { font-size: 11.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
   color: var(--text-faint); margin: 14px 0 7px; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -1947,7 +1951,7 @@ input[type="range"] { height: 30px; }
 
 .mn-quick { display: flex; flex-wrap: wrap; gap: 7px; }
 .mn-kbtn { background: var(--bg-input); border: 1px solid var(--border); border-radius: 11px;
-  color: var(--text); font: 600 12.5px/1 inherit; padding: 0 12px; min-height: 44px; cursor: pointer; }
+  color: var(--text); font: 600 12.5px/1 var(--font-ui); padding: 0 12px; min-height: 44px; cursor: pointer; }
 .mn-kbtn:hover { border-color: var(--accent); }
 .mn-form { margin-top: 10px; padding-top: 11px; border-top: 1px solid var(--border); }
 
@@ -2076,7 +2080,7 @@ input[type="range"] { height: 30px; }
 
 /* ---------- v242: the restore door in onboarding ---------- */
 .ob-restore-link { display: block; margin: 14px auto 0; background: none; border: none;
-  color: var(--text-dim); font: 500 13.5px/1.4 inherit; cursor: pointer; min-height: 44px; }
+  color: var(--text-dim); font: 500 13.5px/1.4 var(--font-ui); cursor: pointer; min-height: 44px; }
 .ob-restore-link b { color: var(--accent-ink); }
 #ob-restore-url { width: 100%; }
 
@@ -2084,7 +2088,7 @@ input[type="range"] { height: 30px; }
 .ask-intro .hint { line-height: 1.55; }
 .ask-chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .ask-chip { background: var(--bg-input); border: 1px solid var(--border); border-radius: 99px;
-  color: var(--text); font: 500 12.5px/1.3 inherit; padding: 0 13px; min-height: 44px; cursor: pointer;
+  color: var(--text); font: 500 12.5px/1.3 var(--font-ui); padding: 0 13px; min-height: 44px; cursor: pointer;
   text-align: left; }
 .ask-chip:hover { border-color: var(--accent); }
 .ask-sug-h { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
@@ -2182,3 +2186,61 @@ input[type="range"] { height: 30px; }
 
 /* Four tiles in a three-column grid left one orphan on its own row. */
 .stat-grid:has(> :nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ---------- v250: Settings as labelled groups, a proper side menu, bigger type ---------- */
+.set-group { margin: 0 0 22px; }
+.set-h { font-family: var(--font-display); font-size: 14px; font-weight: 650; color: var(--text-dim); margin: 0 4px 9px; letter-spacing: 0; }
+.set-card { background: var(--bg-card); border: 1px solid var(--border); border-top-color: var(--border-hi);
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-card); }
+.set-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 70px; padding: 12px 14px 12px 16px;
+  text-align: left; background: none; border: 0; border-bottom: 1px solid var(--border); color: var(--text);
+  font: inherit; cursor: pointer; text-decoration: none; }
+.set-row:last-child { border-bottom: 0; }
+.set-row:active { background: var(--bg-input); }
+.set-ico { flex: 0 0 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; color: var(--accent-ink);
+  background: rgba(109, 140, 255, .13); background: color-mix(in srgb, var(--accent-ink) 13%, transparent); }
+.set-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.set-lbl { font-family: var(--font-display); font-size: 16.5px; font-weight: 650; letter-spacing: -.2px; line-height: 1.25; }
+.set-sub { font-size: 14px; color: var(--text-dim); line-height: 1.35; }
+.set-go { flex: 0 0 auto; color: var(--text-faint); font-size: 26px; line-height: 1; margin-top: -2px; }
+.set-warn .set-sub { color: var(--warn-ink); }
+.set-danger .set-ico { color: var(--bad-ink); background: rgba(248, 113, 113, .13); background: color-mix(in srgb, var(--bad-ink) 13%, transparent); }
+.set-danger .set-lbl { color: var(--bad-ink); }
+.set-tip .set-ico { color: #f472b6; background: rgba(244, 114, 182, .14); }
+.set-about { text-align: center; font-size: 13.5px; line-height: 1.6; color: var(--text-faint); margin: 2px 8px 28px; }
+.set-about a { color: var(--accent-ink); }
+.set-back { font-size: 16px; min-height: 44px; padding-top: 2px; }
+/* The pages behind those rows were set in 12px hints and 14.5px headings — readable at a desk,
+   small on a 360px phone held at arm's length. */
+#s-settings .card h2 { font-size: 17px; }
+#s-settings .card .hint, #s-settings .hint { font-size: 14px; line-height: 1.55; color: var(--text-dim); }
+#s-settings .at-lbl { font-size: 16px; }
+#s-settings .at-sub { font-size: 13px; color: var(--text-dim); }
+#s-settings .at-row { padding: 12px 0; }
+
+.drawer { width: min(86vw, 340px); }
+.drawer-head { justify-content: flex-start; gap: 12px; padding: 18px 10px 16px 18px; }
+.drawer-logo { flex: 0 0 44px; width: 44px; height: 44px; border-radius: 12px; }
+.drawer-brand { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.drawer-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; letter-spacing: -.3px; line-height: 1.2; }
+.drawer-sub { display: inline-flex; align-items: center; gap: 4px; font-size: 13.5px; color: var(--text-dim); }
+.drawer-sub .ic { color: var(--warn-ink); }
+.drawer-x { flex: 0 0 44px; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 19px; padding: 0; }
+.drawer-x:active { background: var(--bg-input); }
+.drawer-list { padding: 4px 10px 10px; }
+.drawer-sec { font-family: var(--font-display); font-size: 13.5px; font-weight: 650; color: var(--text-faint); margin: 14px 8px 6px; }
+.drawer-row { min-height: 54px; gap: 14px; padding: 8px 10px; font-size: 16.5px; font-weight: 550; line-height: 1.25; }
+.drawer-ico { flex: 0 0 38px; width: 38px; height: 38px; border-radius: 11px; background: var(--bg-input); font-size: 19px; }
+.drawer-row.on .drawer-ico { background: rgba(109, 140, 255, .18); background: color-mix(in srgb, var(--accent-ink) 18%, transparent); }
+.drawer-lbl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.drawer-peek { font-size: 13px; font-weight: 400; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drawer-pin { font-size: 12px; padding: 3px 8px; }
+.drawer-more { border-top: 0; margin-top: 0; padding-top: 0; }
+.drawer-add-t b { font-size: 15.5px; }
+.drawer-add-t span { font-size: 13px; }
+.drawer-add-go { font-size: 13px; }
+.drawer-foot { border-top: 1px solid var(--border); padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); }
+.drawer-foot .drawer-edit { margin-top: 0; color: var(--text-dim); }
+.drawer-foot .drawer-edit::before { display: none; }
+#s-settings > .set-group:first-of-type { margin-top: 10px; }
+.set-about a { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 10px; }

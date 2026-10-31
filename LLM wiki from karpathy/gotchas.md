@@ -344,3 +344,10 @@ sub-tab the user last viewed. Fixes: retargeted selectors, an instant scroll + r
 rect (top AND left — the drawer slides sideways) stops moving, viewport-clamped spotlight,
 `dashTab = 'overview'` for Stats steps. Verify by comparing each step's spotlight rect with its
 target's rect, started from a non-default state.
+
+## `font: <weight> <size>/<lh> inherit` silently drops the whole rule
+A CSS-wide keyword (`inherit`, `initial`…) cannot be combined with other values in a shorthand.
+The declaration is thrown away at parse time with no warning, and a `<button>` then renders in
+the browser's own font (Arial on Mac, Roboto on Android) at its own size and weight. Nine
+styles had this until v250. Use `var(--font-ui)` (defined in :root) in shorthands; check with
+`grep -nE "font: [^;]* inherit;" styles.css` — it must print nothing.

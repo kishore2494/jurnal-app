@@ -640,7 +640,7 @@
     const rSnap = localStorage.getItem('dp.reminders');
     localStorage.setItem('dp.reminders', JSON.stringify(
       [{ id: 'remTEST1', time: '21:00', label: 'Log my day', enabled: true, mode: 'notify' }]));
-    renderSettings();
+    settingsPage = 'reminders'; renderSettings();   // Settings ▸ Reminders (v250)
     const card = [...document.querySelectorAll('#s-settings .card')]
       .find(c => /Reminders/.test((c.querySelector('h2') || {}).textContent || ''));
     ok('settings has a Reminders card', !!card);
@@ -662,6 +662,15 @@
     const h2 = card2 && card2.querySelector('.rem-add-h');
     ok('empty state says "Add a reminder", not "Add another"', !!h2 && /add a reminder/i.test(h2.textContent));
     if (rSnap != null) localStorage.setItem('dp.reminders', rSnap); else localStorage.removeItem('dp.reminders');
+    settingsPage = null; renderSettings();
+    /* Settings home is a short list of labelled groups; each row opens one page. */
+    const groups = [...document.querySelectorAll('#s-settings .set-h')].map(h => h.textContent);
+    ok('settings home is grouped', ['Make it yours', 'Reminders & tracking', 'Your data', 'Help'].every(g => groups.includes(g)), groups.join(' | '));
+    ok('the home holds no setting cards of its own', !document.querySelector('#s-settings .card:not(.alarm-warn)'));
+    const pages = [...document.querySelectorAll('#s-settings [data-set-page]')].map(b => b.dataset.setPage);
+    ok('every page row opens a page that renders', pages.length >= 6 && pages.every(k => {
+      settingsPage = k; renderSettings(); const ok1 = !!document.getElementById('set-back') && settingsPage === k;
+      settingsPage = null; return ok1; }), pages.join(','));
     renderSettings();
   })();
 
@@ -977,7 +986,7 @@
        a user who never connected, the FULL card for one who did — an off switch must never
        be hidden from the person who turned the thing on. */
     const sHid = DB.settings(); sHid.syncUrl = ''; DB.saveSettings(sHid);
-    renderSettings();
+    settingsPage = 'data'; renderSettings();   // Settings ▸ Backup & restore (v250)
     const findCard = () => [...document.querySelectorAll('#s-settings .card')]
       .find(c => /Sync/.test((c.querySelector('h2') || {}).textContent || ''));
     ok('sync is NOT offered while Data Safety says "collects no data"', !findCard());
@@ -1024,7 +1033,7 @@
     localStorage.removeItem('dp.awards');
 
     if (sSnap != null) localStorage.setItem('dp.settings', sSnap); else localStorage.removeItem('dp.settings');
-    renderSettings();
+    settingsPage = null; renderSettings();
   })();
 
   /* ---- MONEY ---- */
@@ -1397,13 +1406,14 @@
     ok('and it does replace the store it names', finTx().length === 1 && finTx()[0].id === 'n1');
 
     // --- the import picker must not filter its own files out ---
-    renderSettings();
+    settingsPage = 'data'; renderSettings();
     const inp = document.getElementById('import-file');
     ok('the import picker exists', !!inp);
     /* A bare accept="application/json" makes some Android pickers grey out every file, which
        reads as "no backups found". */
     ok('the import picker accepts .json by extension too',
       !!inp && /\.json/.test(inp.getAttribute('accept') || ''), inp && inp.getAttribute('accept'));
+    settingsPage = null;
 
     if (eSnap != null) localStorage.setItem('dp.entries', eSnap); else localStorage.removeItem('dp.entries');
     if (fSnap != null) localStorage.setItem('dp.fintx', fSnap); else localStorage.removeItem('dp.fintx');
@@ -1686,11 +1696,11 @@
       { k: 'money', ico: 'wallet', label: 'Money', primary: false },
     ]));
     renderDrawer();
-    const keys = [...document.querySelectorAll('#drawer-list [data-screen]')].map(b => b.dataset.screen);
+    const keys = [...document.querySelectorAll('#drawer-list [data-screen], #drawer-foot [data-screen]')].map(b => b.dataset.screen);
     ok('settings renders last in the menu', keys[keys.length - 1] === 'settings', keys.join(','));
     ok('and the edit-tabs row is still below it', !!document.getElementById('drawer-edit-tabs'));
     ok('it reads Settings in the menu',
-      /Settings/.test([...document.querySelectorAll('#drawer-list [data-screen="settings"]')][0].textContent));
+      /Settings/.test([...document.querySelectorAll('#drawer-foot [data-screen="settings"]')][0].textContent));
     if (nS != null) localStorage.setItem('dp.navcfg', nS); else localStorage.removeItem('dp.navcfg');
   })();
 

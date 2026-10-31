@@ -1,3 +1,17 @@
+## 2026-10-31 — v250: grouped Settings, a proper side menu, the app's own font on buttons
+
+Kishore: the side bar "was not good", Settings needed people to "know the difference", and "it all
+looks small". Settings home is now labelled groups (Make it yours · Reminders & tracking · Your
+data · Help · Support) of big rows; each row opens one page (`settingsPage`: widgets, reminders,
+tracking, data, wipe, feedback) with "← All settings"; Android back and leaving Settings return
+to the home. Inner pages got bigger type (h2 17px, hints 14px). Drawer: logo + streak header,
+"Your tabs" / "Add more" sections, Settings + Edit pinned in a footer, 54px rows.
+Found while doing it: `font: 600 13px/1 inherit` is invalid CSS, so 9 button styles (drawer
+rows, seg tabs, chips…) fell back to Arial/Roboto at the browser's size — now `var(--font-ui)`
+(see gotchas). Also: Android back now closes the tip and review sheets. Layout eval vs v247:
+penalty 1029 → 926, no new errors after the privacy-link fix; Money seg-btn "44x44" flags are
+the known sub-pixel noise. Tests 547 → 550.
+
 ## 2026-10-31 — v249: the tip card is a real bottom sheet
 
 Kishore: "the page was not good". The v246 card floated text on a full-screen blur with the lower
