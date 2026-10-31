@@ -61,3 +61,57 @@ each is bound by: `strava-build.md`.
 
 Supporting: `tools/deploy.sh` (proves the live URL serves the version), 159 unit tests, and
 an eval suite that now measures every Stats sub-tab and all four overlays.
+
+
+## Photos & voice notes (v251, 2026-11-01)
+
+**Storage:** IndexedDB `daylog-media`, object store `media` (keyPath `id`, indexes `day` and `ctx`).
+A record looks like this:
+`{ id, kind:'photo'|'voice', mime, blob, thumb?, day, ctx:'log'|'note:<noteId>', ts, w?, h?, dur?, size, caption? }`.
+At boot `mediaLoad()` reads every record into the in-memory map `_media`. IDB blobs are
+disk-backed handles, so this is cheap. After that, rendering is synchronous.
+
+- **Where it shows:**
+  - The Log section `media` ("Photos & voice", after Reflection). `logSecCfg()` now inserts a
+    newly added section after its predecessor in the defaults, not at the very bottom.
+  - Notes: Photo / Gallery / Voice each create a new note. The note is created only after the
+    media is written, so a cancelled camera leaves no empty note. Deleting a note deletes its
+    media.
+  - History row pills (📷 n 🎙 n), History ▸ Photos (by month), "On this day" (photo-only days
+    count), and the `photos` share card.
+- **Photos:**
+  - `mediaPhotoRecord()` decodes with `createImageBitmap(..., {imageOrientation:'from-image'})`
+    and re-encodes on a canvas to JPEG at q0.82 with a 1600px long edge, plus a 360px thumbnail.
+  - Typical size is 80–300 KB. Re-encoding also strips EXIF, so no GPS data is kept.
+  - Camera = `<input capture=environment>`; gallery = `multiple`.
+- **Voice:**
+  - MediaRecorder, preferring `audio/webm;codecs=opus` at 32 kbps (about 4 KB/s).
+  - An AnalyserNode drives a level meter. If the peak stayed below 0.02, the save toast says
+    the clip sounds silent.
+  - Notes under 0.7 s are dropped; recording stops at 10 minutes.
+  - Leaving the screen or the app, or pressing Android back, **saves** the recording.
+  - `dur` is stored because webm from MediaRecorder carries no duration.
+- **Viewer** (`#media-view`):
+  - Swipe left/right to page, swipe down to close.
+  - Caption (debounced put), "Open day", Share (native `DaylogShare.shareImage`, else Web Share,
+    else a download) and Delete.
+  - Android back closes it first. From History ▸ Photos it pages through the whole gallery
+    (`data-mset`).
+- **Writes:** `mediaWrite()` resolves on transaction **complete**, not on the request. A quota
+  abort lands after the request has "succeeded" (gotchas).
+- **Backup and wipe:**
+  - The backup carries `_media` as base64.
+  - Restore validates each item with `mediaItemValid()`, adds only missing ids, never
+    overwrites, and stops at the first quota failure. Its result is reported separately.
+  - Delete-everything closes the handle and calls `deleteDatabase` before reloading.
+- **Native:** no change was needed in build 118.
+  - CAMERA is not declared, so Capacitor's file chooser takes the image-capture intent path.
+  - RECORD_AUDIO and MODIFY_AUDIO_SETTINGS were already declared, so getUserMedia gets a
+    runtime prompt.
+  - The FileProvider `external-path "."` covers the capture file.
+- **Not done yet:**
+  - adding media to an existing note
+  - a Write/article image block
+  - search over captions
+  - a size cap or cleanup tool beyond the Backup card's MB count
+  - sharing voice notes in the native app (`shareImage` sets an image MIME type)

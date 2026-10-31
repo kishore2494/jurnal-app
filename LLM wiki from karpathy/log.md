@@ -1,3 +1,36 @@
+## 2026-11-01 (overnight) — v251: photos & voice notes, memories, distribution
+
+Kishore asked for photos and audio ("yes we need this"), then left the session overnight with
+"think out of the box … do something for distribution too … need ppl to install more".
+**Not deployed** (production is still v249; v250 + v251 wait for "deploy"). Every commit went to
+`origin` (jurnal-app mirror) as a backup; `prod` was not touched.
+
+- **Photos & voice notes** (features.md ▸ Photos & voice notes): IndexedDB `daylog-media`, a
+  Log section after Reflection, Notes Photo/Voice buttons, a full-screen viewer, backup as
+  `_media` (declared in the new `BACKUP_EXTRA`; check-backup-keys verifies both export and
+  import), and delete-everything removes the database. Works in Play build 118 with no native
+  change: camera capture uses Capacitor's file chooser intent (CAMERA not declared), and
+  RECORD_AUDIO was already declared. Verified end to end in headless Chrome with a fake camera
+  and mic.
+- **Memories:** "On this day" counts photo-only days and shows their photos; History has Days |
+  Photos tabs; there is a "month in photos" share card.
+- **Review of v250** (an independent agent): choosing Settings again kept you on a sub-page with
+  a delete still armed; two row subtitles were untrue; "Edit tabs" copy was stale; a second
+  resume listener wiped the feedback box; late async replies painted Settings over other
+  screens. All fixed, with tests that fail without the fix.
+- **Distribution** (distribution.md): QR code + "Daylog · on Google Play" on story share cards;
+  Invite card + Settings ▸ Support ▸ Tell a friend (WhatsApp / copy link); install referrers on
+  every Play link; landing.html had no Play link and still said "Coming soon" — fixed; Android
+  browser users get a one-time "Install the app" card; Play becomes the primary CTA on Android
+  across the 128 SEO pages; two new pages (lifelog-app, photo-voice-journal); llms.txt rewritten
+  (it still said "Daily Pulse").
+- **Store docs (proposals, nothing applied or posted):** `store/aso-2026-11.md` (live Play search:
+  Daylog is outside the top 30 for every target term after ten weeks; suggests the title
+  "Daylog: Lifelog, Mood & Habits") and `store/distribution-plan-2026-11.md` (ranked channels,
+  drafts, 14-day calendar).
+
+Tests 550 → 613 (4 timezones). Layout eval 926 → 864.
+
 ## 2026-10-31 — v250: grouped Settings, a proper side menu, the app's own font on buttons
 
 Kishore: the side bar "was not good", Settings needed people to "know the difference", and "it all

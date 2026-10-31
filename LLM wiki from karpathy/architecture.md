@@ -10,8 +10,11 @@ Vanilla HTML/CSS/JS — **no framework, no build step**. Three core files in `da
 
 ## Data model — local-first
 
-Everything is `localStorage`, one key per store, all prefixed `dp.`. There is no database, no
-IndexedDB, no server. **63 keys** as of v220, totalling ~17 KB on a store with two weeks of
+Everything is `localStorage`, one key per store, all prefixed `dp.`. There is no server.
+**The one exception (v251):** photos and voice notes live in IndexedDB (`daylog-media`, store
+`media`), because one photo is bigger than localStorage's whole budget. They are in no `dp.*`
+key, are never synced to the Sheet, and reach the backup file as `_media` (see `BACKUP_EXTRA`
+and features.md ▸ Photos & voice notes). **63 keys** as of v220, totalling ~17 KB on a store with two weeks of
 sample data — about **0.3% of the typical 5 MB origin quota**.
 
 ### How a read and a write actually work

@@ -351,3 +351,22 @@ The declaration is thrown away at parse time with no warning, and a `<button>` t
 the browser's own font (Arial on Mac, Roboto on Android) at its own size and weight. Nine
 styles had this until v250. Use `var(--font-ui)` (defined in :root) in shorthands; check with
 `grep -nE "font: [^;]* inherit;" styles.css` — it must print nothing.
+
+
+## An IndexedDB `put()` succeeding is not the write landing (2026-11-01)
+A quota failure **aborts the transaction after the request's `onsuccess` has fired**. Reporting
+"Photo saved" from the request handler is the same report-success-on-failure bug this app has
+fixed in its localStorage savers. `mediaWrite()` resolves on `tx.oncomplete` and rejects on
+`onerror`/`onabort`. Use it, or the same pattern, for any new IDB write.
+
+## Headless tests: the What's-new popup eats the first tap after a version bump
+Bumping `WHATS_NEW.v` makes the popup open 1.2 s after load. A CDP mouse click then lands on
+`.wn-item`, not on the button under it, while `el.click()` from script still "works". Before
+driving real taps, set `dp.whatsnew` to `WHATS_NEW.v` and remove `#wn-pop`. Also use
+`behavior:'instant'` when scrolling: `html { scroll-behavior: smooth }` means
+`getBoundingClientRect()` straight after a `scrollBy` still reads the old position.
+
+## Android WebView has no text share
+There is no Web Share API in the shell, and native `DaylogShare.shareImage` sends an image with
+no text. A link therefore travels either inside the picture (the QR code on share cards) or
+through `wa.me` / `market://`. The shell hands both to Android as intents.
