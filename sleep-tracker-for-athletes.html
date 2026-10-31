@@ -111,5 +111,7 @@
 
   <footer>Daylog — One tap to log your whole day. · <a href="https://kishore2494.github.io/daily-pulse/privacy.html">Privacy</a></footer>
 </div>
+<script>/* On Android the Play app is the better install (alarms, Health Connect, screen time): make it the primary button. */
+if(/Android/i.test(navigator.userAgent)){var dlP=document.querySelector('.row a[href*="play.google.com"]');if(dlP){var r=dlP.parentNode;r.querySelectorAll('a.cta').forEach(function(a){a.classList.add('ghost')});dlP.classList.remove('ghost');r.insertBefore(dlP,r.firstChild);document.querySelectorAll('.final a.cta').forEach(function(a){if(a.href.indexOf('play.google.com')<0){a.href=dlP.href;a.textContent='Get it on Google Play';}});}}</script>
 </body>
 </html>

@@ -21,7 +21,6 @@ const SITE = "https://kishore2494.github.io/daily-pulse/";
 // Pages that legitimately have no inbound link from another PAGE, each with a reason.
 const ALLOWED_ORPHANS = new Map([
   ["tablet-frame.html", "a device mock-up used to compose store screenshots, not a page"],
-  ["landing.html", "the marketing entry point; reached from search and the sitemap, not from another page"],
   ["sheets-setup.html", "linked from inside the app (app.js), which this file-level scan cannot see"],
   ["index.html", "the app itself — the root, so nothing links down to it"],
 ]);

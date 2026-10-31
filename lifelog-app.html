@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google-site-verification" content="NaRi1JakGHS3tfXnr7RHgNQvOsiUf2EZ5HSnGn1fLYs">
+<title>Lifelog app: a private, offline log of your days | Daylog</title>
+<meta name="description" content="Daylog is a private lifelog app for Android and the web: habits, mood, a journal with photos and voice notes, screen time and a 24-hour time log for every day. No account, works offline.">
+<link rel="canonical" href="https://kishore2494.github.io/daily-pulse/lifelog-app.html">
+<link rel="alternate" hreflang="x-default" href="https://kishore2494.github.io/daily-pulse/lifelog-app.html">
+<link rel="alternate" hreflang="en" href="https://kishore2494.github.io/daily-pulse/lifelog-app.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Lifelog app: a private, offline log of your days | Daylog">
+<meta property="og:image" content="https://kishore2494.github.io/daily-pulse/og-card.png">
+<meta property="og:site_name" content="Daylog">
+<meta name="twitter:image" content="https://kishore2494.github.io/daily-pulse/og-card.png">
+<meta property="og:description" content="Daylog is a private lifelog app for Android and the web: habits, mood, a journal with photos and voice notes, screen time and a 24-hour time log for every day. No account, works offline.">
+<meta property="og:url" content="https://kishore2494.github.io/daily-pulse/lifelog-app.html">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "What is a lifelog app?", "acceptedAnswer": {"@type": "Answer", "text": "A lifelog app keeps a record of your days: what you did, how you felt and what happened. Daylog combines a habit tracker, a mood journal, photos, voice notes, screen time and a time log in one daily record."}}, {"@type": "Question", "name": "Does Daylog need an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. There is no sign-up. Open it and start logging."}}, {"@type": "Question", "name": "Is my data private?", "acceptedAnswer": {"@type": "Answer", "text": "Entries, photos and voice notes are stored on your phone. Daylog has no account and no server of its own. The one optional exception is a sync to a Google Sheet that you own, and photos and voice notes are never sent there."}}, {"@type": "Question", "name": "What happens if I change phones?", "acceptedAnswer": {"@type": "Answer", "text": "Export a backup file from Settings ▸ Backup & restore and import it on the new phone. The backup includes your photos and voice notes. Because there is no cloud copy, uninstalling without a backup deletes your data."}}, {"@type": "Question", "name": "Is it free?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Nothing is locked behind a paywall and there are no ads. Optional tips through Google Play unlock nothing."}}, {"@type": "Question", "name": "Is there an iPhone app?", "acceptedAnswer": {"@type": "Answer", "text": "Not yet. On an iPhone you can use the web version and add it to your home screen."}}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Daylog", "applicationCategory": "LifestyleApplication", "operatingSystem": "Android, Web", "description": "Daylog is a private lifelog app for Android and the web: habits, mood, a journal with photos and voice notes, screen time and a 24-hour time log for every day. No account, works offline.", "url": "https://kishore2494.github.io/daily-pulse/lifelog-app.html", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BFV887LQYB"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BFV887LQYB');</script>
+<style>
+  :root{--bg:#0e1116;--card:#161b22;--line:#242c37;--ink:#e6edf3;--soft:#9aa7b4;--accent:#ff6b4a;--accent2:#4ac0ff;--ok:#41d18b}
+  @media (prefers-color-scheme:light){:root{--bg:#f7f8fa;--card:#fff;--line:#e6e9ee;--ink:#141a21;--soft:#5b6773;--accent:#e8542f;--accent2:#1f8fd0}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.6}
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+  header{padding:20px 0;display:flex;align-items:center;gap:10px;font-weight:700}
+  .dot{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 30% 30%,var(--accent),#c23);display:inline-block}
+  .hero{padding:44px 0 30px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600;margin:0 0 12px}
+  h1{font-size:clamp(30px,5vw,44px);line-height:1.08;margin:0 0 16px;letter-spacing:-.01em}
+  .sub{font-size:19px;color:var(--soft);margin:0 0 26px}
+  .cta{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;text-decoration:none;font-weight:650;padding:13px 22px;border-radius:10px;font-size:16px}
+  .cta.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);margin-left:10px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .qa{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent2);border-radius:10px;padding:18px 20px;margin:30px 0}
+  .qa h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent2);margin:0 0 8px}
+  section{padding:30px 0;border-bottom:1px solid var(--line)}
+  h2.sec{font-size:24px;margin:0 0 16px}
+  .feat{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .feat:last-child{border-bottom:none}
+  .feat .ic{flex:0 0 34px;height:34px;border-radius:8px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+  .feat b{display:block;margin-bottom:2px}
+  .feat p{margin:0;color:var(--soft);font-size:15px}
+  details{border-bottom:1px solid var(--line);padding:14px 0}
+  summary{cursor:pointer;font-weight:600;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  details p{color:var(--soft);margin:10px 0 0}
+  .final{text-align:center;padding:44px 0 10px}
+  .final h2{font-size:26px;margin:0 0 10px}
+  .final p{color:var(--soft);margin:0 0 22px}
+  .related{padding:24px 0}
+  .related a{color:var(--accent2);text-decoration:none;font-size:14px;display:inline-block;margin:0 14px 8px 0}
+  footer{color:var(--soft);font-size:13px;padding-top:24px;text-align:center}
+  a{color:var(--accent2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><span class="dot"></span> Daylog</header>
+
+  <div class="hero">
+    <p class="eyebrow">Lifelog · private and offline</p>
+    <h1>A lifelog for your days that stays on your phone</h1>
+    <p class="sub">What you did, how it felt, what it looked like and what you said about it. Daylog keeps one record per day, with habits, mood, a journal, photos, voice notes, screen time and where the hours went, without an account or a cloud.</p>
+    <div class="row">
+      <a class="cta" href="https://play.google.com/store/apps/details?id=io.github.kishore2494.dailypulse&amp;referrer=utm_source%3Dseo%26utm_medium%3Dweb%26utm_campaign%3Dlifelog-app-hero" onclick="if(window.gtag)gtag('event','play_click',{slug:'lifelog-app',cta:'hero'})">Get it on Google Play</a>
+      <a class="cta ghost" href="https://kishore2494.github.io/daily-pulse/" onclick="if(window.gtag)gtag('event','install_click',{slug:'lifelog-app',cta:'hero'})">Use it in your browser</a>
+    </div>
+  </div>
+
+  <div class="qa">
+    <h2>Quick answer</h2>
+    <p>Daylog is a free lifelog app for Android and the web. Each day holds your habits, mood and energy, a journal entry, photos and voice notes, automatic screen time, and a one-tap 24-hour time log. Everything stays on your phone, and the patterns are worked out on the device.</p>
+  </div>
+
+  <section>
+    <h2 class="sec">What goes into one day</h2>
+    <p style="color:var(--soft);margin-top:0">Most journaling apps keep words and most trackers keep numbers. A lifelog is both, and Daylog keeps them on the same day so you can look back and see the whole picture, not fragments spread across five apps.</p>
+    <div class="feat"><span class="ic">📷</span><div><b>Photos and voice notes</b><p>Add a photo from the camera or gallery and record a voice note. They are kept on the phone and saved in your backup file.</p></div></div>
+    <div class="feat"><span class="ic">😊</span><div><b>Mood, energy and a journal</b><p>One tap on the mood grid sets both, then write a few lines, by typing or with voice typing, and tag them with #topics.</p></div></div>
+    <div class="feat"><span class="ic">✅</span><div><b>Habits with streaks</b><p>A daily checklist with streaks, skip days for rest and a strength score, so one missed day does not erase months.</p></div></div>
+    <div class="feat"><span class="ic">📱</span><div><b>Screen time and Health Connect</b><p>Screen time is measured automatically, and steps and sleep come from Health Connect, each with its own switch.</p></div></div>
+    <div class="feat"><span class="ic">⏱️</span><div><b>A 24-hour time log</b><p>Tap what you are doing when you start; the day becomes a colour-coded timeline.</p></div></div>
+    <div class="feat"><span class="ic">🔁</span><div><b>On this day</b><p>The Log shows your entry and photos from a week, a month and a year ago.</p></div></div>
+  </section>
+
+  <section>
+    <h2 class="sec">Common questions</h2>
+    <details><summary>What is a lifelog app?</summary><p>A lifelog app keeps a record of your days: what you did, how you felt and what happened. Daylog combines a habit tracker, a mood journal, photos, voice notes, screen time and a time log in one daily record.</p></details>
+    <details><summary>Does Daylog need an account?</summary><p>No. There is no sign-up. Open it and start logging.</p></details>
+    <details><summary>Is my data private?</summary><p>Entries, photos and voice notes are stored on your phone. Daylog has no account and no server of its own. The one optional exception is a sync to a Google Sheet that you own, and photos and voice notes are never sent there.</p></details>
+    <details><summary>What happens if I change phones?</summary><p>Export a backup file from Settings ▸ Backup &amp; restore and import it on the new phone. The backup includes your photos and voice notes. Because there is no cloud copy, uninstalling without a backup deletes your data.</p></details>
+    <details><summary>Is it free?</summary><p>Yes. Nothing is locked behind a paywall and there are no ads. Optional tips through Google Play unlock nothing.</p></details>
+    <details><summary>Is there an iPhone app?</summary><p>Not yet. On an iPhone you can use the web version and add it to your home screen.</p></details>
+  </section>
+
+  <div class="final">
+    <h2>Start your lifelog today</h2>
+    <p>Free, offline, no account. Log your first day in under a minute.</p>
+    <a class="cta" href="https://play.google.com/store/apps/details?id=io.github.kishore2494.dailypulse&amp;referrer=utm_source%3Dseo%26utm_medium%3Dweb%26utm_campaign%3Dlifelog-app-footer" onclick="if(window.gtag)gtag('event','play_click',{slug:'lifelog-app',cta:'footer'})">Get it on Google Play</a>
+  </div>
+
+  <div class="related">
+    <p style="color:var(--soft);font-size:13px;text-transform:uppercase;letter-spacing:.06em">Related</p>
+    <a href="photo-voice-journal.html">Private photo and voice journal</a>
+    <a href="landing.html">Daylog overview</a>
+    <a href="journal-for-students.html">Daily journal for students</a>
+    <a href="habit-tracker-for-adhd.html">Habit tracker for ADHD</a>
+    <a href="daily-pulse-vs-daylio.html">Daylog vs Daylio</a>
+  </div>
+
+  <footer>Daylog: a private, offline life tracker · <a href="https://kishore2494.github.io/daily-pulse/landing.html">Overview</a> · <a href="https://kishore2494.github.io/daily-pulse/privacy.html">Privacy</a></footer>
+</div>
+</body>
+</html>

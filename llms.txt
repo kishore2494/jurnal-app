@@ -7,7 +7,7 @@ Daylog is free on Google Play and also runs in a browser as an installable web a
 ## Install
 - [Google Play (Android)](https://play.google.com/store/apps/details?id=io.github.kishore2494.dailypulse&referrer=utm_source%3Dllms%26utm_medium%3Dweb)
 - [Web app (any browser)](https://kishore2494.github.io/daily-pulse/)
-- [Overview page](https://kishore2494.github.io/daily-pulse/landing.html) · [How to use it](https://kishore2494.github.io/daily-pulse/guide.html) · [Privacy policy](https://kishore2494.github.io/daily-pulse/privacy.html)
+- [Overview page](https://kishore2494.github.io/daily-pulse/landing.html) · [Lifelog](https://kishore2494.github.io/daily-pulse/lifelog-app.html) · [Photo and voice journal](https://kishore2494.github.io/daily-pulse/photo-voice-journal.html) · [How to use it](https://kishore2494.github.io/daily-pulse/guide.html) · [Privacy policy](https://kishore2494.github.io/daily-pulse/privacy.html)
 
 ## What it does
 - Habit tracker: a daily checklist with streaks, skip days that keep a streak alive, weekly streaks (any 3 days), a 0-100 habit strength score, counted habits ("8 glasses of water"), and when-and-where cues.
