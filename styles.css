@@ -901,11 +901,16 @@ body.kbd-open .nav { transform: translateY(120%); pointer-events: none; }
 .at-txt { min-width: 0; }
 .at-lbl { font-size: 14.5px; }
 .at-sub { font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }
-.at-tog { flex: 0 0 auto; width: 46px; height: 26px; border-radius: 999px; border: 1px solid var(--border);
-  background: var(--bg-input); position: relative; cursor: pointer; transition: background .18s, border-color .18s; padding: 0; }
-.at-tog .at-knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+.at-tog { flex: 0 0 auto; width: 52px; height: 44px; border: 0; background: none;
+  position: relative; cursor: pointer; padding: 0; }
+/* The track is drawn by ::before so the BUTTON can be a 44px-tall target while the switch
+   still looks 46x26. A 26px-tall switch was the one tap-small finding on every Settings page. */
+.at-tog::before { content: ''; position: absolute; left: 3px; top: 9px; width: 46px; height: 26px;
+  box-sizing: border-box; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-input);
+  transition: background .18s, border-color .18s; }
+.at-tog .at-knob { position: absolute; top: 12px; left: 6px; width: 20px; height: 20px; border-radius: 50%;
   background: var(--text-faint); transition: transform .18s, background .18s; }
-.at-tog.on { background: color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
+.at-tog.on::before { background: rgba(109,140,255,.35); background: color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
 .at-tog.on .at-knob { transform: translateX(20px); background: var(--accent); }
 .at-tog[disabled] { opacity: .45; cursor: default; }
 .at-dim .at-txt { opacity: .55; }

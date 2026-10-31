@@ -4798,7 +4798,7 @@ function cfgSectionHTML(page) {
       <div class="at-row" style="margin-top:12px">
         <div class="at-txt"><div class="at-lbl">📳 Vibrate with the alarm</div>
           <div class="at-sub">turn off if you only want sound</div></div>
-        <button class="at-tog ${cached.vibrate === false ? '' : 'on'}" data-snd-vib><span class="at-knob"></span></button>
+        <button class="at-tog ${cached.vibrate === false ? '' : 'on'}" ${togAria(cached.vibrate !== false, 'Vibrate with the alarm')} data-snd-vib><span class="at-knob"></span></button>
       </div>
       <button class="btn btn-ghost btn-sm" id="snd-reset" style="margin-top:12px">↺ Back to the phone's default alarm</button>
       <div class="hint" style="margin-top:10px">Picks from every alarm tone already on your phone, plus your own audio files — nothing extra to download. The same tone is used whether the full-screen alarm opens or it rings as a notification.</div>
@@ -5652,6 +5652,12 @@ document.addEventListener('click', (ev) => {
    SCREEN: SETTINGS / MORE
    ============================================================ */
 let settingsPage = null;
+/* A switch has to SAY it is a switch and whether it is on; a bare button with a sliding dot
+   read to TalkBack as "button", with no state at all. */
+function togAria(on, label) {
+  const l = stripLeadEmoji(String(label || '').replace(/<[^>]*>/g, '')).trim();
+  return `role="switch" aria-checked="${on ? 'true' : 'false'}"${l ? ` aria-label="${escapeHtml(l)}"` : ''}`;
+}
 /* For async callbacks (a network reply, a permission sheet): the person may have left
    Settings meanwhile, and renderSettings() also rewrites the screen title. */
 function renderSettingsIfShown() {
@@ -5724,7 +5730,7 @@ function renderSettings() {
     tracking: (() => { const at = autoTrackCfg();
       const row = (k, label, sub) => `<div class="at-row ${at.on ? '' : 'at-dim'}">
         <div class="at-txt"><div class="at-lbl">${label}</div>${sub ? `<div class="at-sub">${sub}</div>` : ''}</div>
-        <button class="at-tog ${at[k] ? 'on' : ''}" data-at-toggle="${k}" ${!at.on && k !== 'on' ? 'disabled' : ''}><span class="at-knob"></span></button>
+        <button class="at-tog ${at[k] ? 'on' : ''}" ${togAria(at[k], label)} data-at-toggle="${k}" ${!at.on && k !== 'on' ? 'disabled' : ''}><span class="at-knob"></span></button>
       </div>`;
       return `<div class="card">
       <h2>📈 Auto-tracking <span class="hint">${hcPlugin() ? 'from your phone' : 'needs the Play Store app'}</span></h2>
@@ -5732,7 +5738,7 @@ function renderSettings() {
         ${(hcPlugin() && hcPlugin().requestHealthPermissions) ? '<button class="btn btn-ghost btn-sm" id="hc-connect" style="margin-bottom:10px">❤️ Connect Health Connect</button>' : '<div class="hint">Sensor metrics need the latest Play Store update.</div>'}` : ''}
       <div class="at-row">
         <div class="at-txt"><div class="at-lbl"><b>Auto health tracking</b></div><div class="at-sub">master switch — off = nothing is collected</div></div>
-        <button class="at-tog ${at.on ? 'on' : ''}" data-at-toggle="on"><span class="at-knob"></span></button>
+        <button class="at-tog ${at.on ? 'on' : ''}" ${togAria(at.on, 'Auto health tracking')} data-at-toggle="on"><span class="at-knob"></span></button>
       </div>
       ${row('sleep', '😴 Sleep', 'auto-fills your sleep from the phone')}
       ${row('steps', '👟 Steps & distance', '')}
@@ -5748,12 +5754,12 @@ function renderSettings() {
       const secRow = (id, label, sub) => { const on = !logSecHidden(id);
         return `<div class="at-row">
           <div class="at-txt"><div class="at-lbl">${label}</div>${sub ? `<div class="at-sub">${sub}</div>` : ''}</div>
-          <button class="at-tog ${on ? 'on' : ''}" data-sec-toggle="${id}"><span class="at-knob"></span></button>
+          <button class="at-tog ${on ? 'on' : ''}" ${togAria(on, label)} data-sec-toggle="${id}"><span class="at-knob"></span></button>
         </div>`; };
       const flagRow = (flag, label, sub) => { const on = localStorage.getItem(flag) !== '1';
         return `<div class="at-row">
           <div class="at-txt"><div class="at-lbl">${label}</div>${sub ? `<div class="at-sub">${sub}</div>` : ''}</div>
-          <button class="at-tog ${on ? 'on' : ''}" data-widget-toggle="${flag}"><span class="at-knob"></span></button>
+          <button class="at-tog ${on ? 'on' : ''}" ${togAria(on, label)} data-widget-toggle="${flag}"><span class="at-knob"></span></button>
         </div>`; };
       return `<div class="card">
         <h2>🎛 Log screen widgets <span class="hint">show or hide</span></h2>
@@ -6027,7 +6033,7 @@ document.addEventListener('click', async (ev) => {
   if (ev.target.closest('#open-report')) { downloadReport(); return; }
   const sct = ev.target.closest('[data-sec-toggle]');
   if (sct) { const id = sct.dataset.secToggle; const wasOn = !logSecHidden(id);
-    setLogSecHidden(id, wasOn); sct.classList.toggle('on', !wasOn);
+    setLogSecHidden(id, wasOn); sct.classList.toggle('on', !wasOn); sct.setAttribute('aria-checked', !wasOn ? 'true' : 'false');
     toast(wasOn ? 'Hidden' : 'Switched back on'); return; }
   const lsh = ev.target.closest('[data-logsec-hide]');
   if (lsh) { const id = lsh.dataset.logsecHide;
@@ -6038,7 +6044,7 @@ document.addEventListener('click', async (ev) => {
   if (wt) { const flag = wt.dataset.widgetToggle;
     const wasOn = localStorage.getItem(flag) !== '1';
     if (wasOn) safeSet(flag, '1'); else localStorage.removeItem(flag);
-    wt.classList.toggle('on', !wasOn);
+    wt.classList.toggle('on', !wasOn); wt.setAttribute('aria-checked', !wasOn ? 'true' : 'false');
     if (flag === 'dp.hapticsOff' && wasOn === false) buzz(18);
     if (flag === 'dp.nudgeOff') {
       /* An off switch has to take effect NOW. scheduleInactivityReminder only runs on save,
@@ -7726,7 +7732,7 @@ document.addEventListener('click', async (ev) => {
     const next = cur.vibrate === false;               // toggle
     try { const r = await FS.setAlarmSound({ uri: cur.uri || '', name: cur.name || '', vibrate: next });
       safeSet('dp.alarmSound', JSON.stringify(r));
-      vb.classList.toggle('on', next);
+      vb.classList.toggle('on', next); vb.setAttribute('aria-checked', next ? 'true' : 'false');
       if (next) buzz(22);
       toast(next ? 'Vibration on' : 'Vibration off');
     } catch (e) {}

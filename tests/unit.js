@@ -676,6 +676,19 @@
         && (document.getElementById('s-settings').textContent || '').trim().length > 120;
       settingsPage = null; return ok1; }), pages.join(','));
     renderSettings();
+    /* Every switch says it is a switch, whether it is on, and what it switches. */
+    settingsPage = 'tracking'; renderSettings();
+    const togs = [...document.querySelectorAll('#s-settings .at-tog')];
+    ok('settings switches are announced as switches with a state and a name', togs.length > 3 && togs.every(t =>
+      t.getAttribute('role') === 'switch' && /^(true|false)$/.test(t.getAttribute('aria-checked') || '') && (t.getAttribute('aria-label') || '').length > 1),
+      togs.map(t => t.outerHTML.slice(0, 90)));
+    settingsPage = 'widgets'; renderSettings();
+    const st0 = document.querySelector('#s-settings [data-sec-toggle]');
+    const was = st0.getAttribute('aria-checked'); st0.click();
+    const st1 = document.querySelector('#s-settings [data-sec-toggle="' + st0.dataset.secToggle + '"]');
+    ok('flipping a switch flips its announced state', st1.getAttribute('aria-checked') !== was);
+    st1.click();
+    settingsPage = null; renderSettings();
     /* Picking Settings again — menu, pinned tab, More — lands on the home and disarms a
        half-started delete. It used to redraw whichever page was open, still armed. */
     settingsPage = 'wipe'; renderSettings(); _wipeStage = 1; renderSettings();
