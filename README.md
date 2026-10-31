@@ -57,8 +57,13 @@ Sheet** to back-fill everything you've logged so far.
 - **Habits** — per-habit streaks 🔥 and 90-day consistency heatmaps.
 - **Stats** — streak, days logged, avg mood/energy, gym streak, workouts/30d; mood/energy &
   sleep/deep-work trend charts; 30-day habit completion bars.
-- **History** — every past day, tap to view/edit.
-- **More** — Sheet sync, daily reminder, JSON export/import backup.
+- **Photos & voice** (v251) — a Log card to add photos (camera or gallery) and record voice notes
+  for the day; Notes can be a photo or a voice clip too. Kept in IndexedDB (`daylog-media`), never
+  in localStorage and never sent to the Sheet; carried in the backup file as `_media`.
+  "On this day" shows old photos, and History has a Photos tab.
+- **History** — every past day, tap to view/edit; a Photos tab shows every Log photo by month.
+- **Settings** — grouped pages: Make it yours · Reminders & tracking · Your data (backup includes
+  photos and voice notes) · Help · Support (Tell a friend, optional tips).
 
 ## Notes
 - Data is stored locally in your browser (localStorage). **Export a backup** from
