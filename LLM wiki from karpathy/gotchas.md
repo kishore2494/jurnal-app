@@ -370,3 +370,12 @@ driving real taps, set `dp.whatsnew` to `WHATS_NEW.v` and remove `#wn-pop`. Also
 There is no Web Share API in the shell, and native `DaylogShare.shareImage` sends an image with
 no text. A link therefore travels either inside the picture (the QR code on share cards) or
 through `wa.me` / `market://`. The shell hands both to Android as intents.
+
+
+## "Save on hide" plus a screen timeout means the timeout decides (2026-11-01)
+Voice notes save when the page is hidden, which is right for leaving the app. But the phone's
+screen timeout also hides the page, so a recording stopped at whatever the timeout was
+(30 s on many phones) and nobody touched anything. Anything long-running that reacts to
+`visibilitychange` needs `navigator.wakeLock.request('screen')` while it runs, released when it
+ends. The same applies to the service worker's `controllerchange` → `location.reload()`: defer it
+while anything is only in memory (`mediaBusyNow()`).

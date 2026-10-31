@@ -1,3 +1,23 @@
+## 2026-11-01 (overnight, later) — v251: ten media defects from an independent review, async tests
+
+A read-only review agent went through the photos, voice and sharing commits. All ten findings
+are fixed (details in commit 94f0e96). The two worth remembering:
+- **The screen timeout decided where voice notes ended.** Hiding the page saves the note, and
+  nothing kept the screen on, so on a 30 s timeout every note stopped at 0:30. Fixed with a
+  wake lock while recording.
+- **An app update could reload the page in the middle of a recording.**
+
+Also fixed:
+- note media orphaned by delete order, sync or restore (now listed as "Unattached" on Notes)
+- backups with no size limit, plus an old build's copy-paste fallback that would have
+  "copied" megabytes
+- a double-tap starting two recorders
+- caption autosave bringing a deleted photo back
+- delete-everything reloading before the database was gone
+
+New: `tests/unit-async.js` (33 tests) drives the real IndexedDB code against an in-memory shim
+that fails like a full phone. Tests: 649.
+
 ## 2026-11-01 (overnight) — v251: photos & voice notes, memories, distribution
 
 Kishore asked for photos and audio ("yes we need this"), then left the session overnight with
