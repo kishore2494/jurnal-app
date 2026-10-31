@@ -1951,6 +1951,28 @@
     ok('the viewer pages only through that day’s photos', _mview && _mview.ids.length === 1, _mview && _mview.ids);
     handleBack();
     ok('Android back closes the viewer first', !mediaViewIsOpen());
+    /* Memories: a photo-only day still counts for "On this day", and History has a Photos tab. */
+    const wk = addDays(T0, -7);
+    _media.set('mt5', { id: 'mt5', kind: 'photo', mime: 'image/jpeg', blob: new Blob(['x']), day: wk, ctx: 'log', ts: 5, size: 1 });
+    const eSnap2 = localStorage.getItem('dp.entries');
+    const e2 = DB.entries(); delete e2[wk]; localStorage.setItem('dp.entries', JSON.stringify(e2));
+    const lsSnap2 = localStorage.getItem('dp.logsec'); localStorage.removeItem('dp.logsec');
+    logDate = T0;
+    const otd = throwbackHTML();
+    ok('"On this day" shows a day that has only a photo', /A week ago/.test(otd) && /data-mview="mt5"/.test(otd), otd.slice(0, 200));
+    if (eSnap2 != null) localStorage.setItem('dp.entries', eSnap2); else localStorage.removeItem('dp.entries');
+    if (lsSnap2 != null) localStorage.setItem('dp.logsec', lsSnap2);
+    histTab = 'photos'; show('history');
+    ok('History ▸ Photos lists Log photos by month', document.querySelectorAll('#s-history .hist-photos .mthumb').length === 3, document.querySelectorAll('#s-history .hist-photos .mthumb').length);
+    ok('…not a note’s photo', !document.querySelector('#s-history [data-mview="mt4"]'));
+    ok('…and its count matches the grid', /^3 photos$/.test(document.getElementById('screen-sub').textContent), document.getElementById('screen-sub').textContent);
+    mediaViewOpen('mt1', ['mt3', 'mt1', 'mt5']);
+    ok('the gallery viewer pages through the whole gallery', _mview && _mview.ids.length === 3 && _mview.i === 1);
+    ok('…and offers to open that day', !!document.querySelector('#media-view [data-mview-day]'));
+    mediaViewClose();
+    histTab = 'days'; show('history');
+    ok('Photos is a share-card kind', CARD_KINDS.some(c => c.k === 'photos'));
+    _media.delete('mt5');
     ['mt1', 'mt2', 'mt3', 'mt4'].forEach(id => _media.delete(id)); _mediaUrls.clear();
     _mediaReady = readySnap; window.mediaSupported = supSnap; URL.createObjectURL = urlSnap;
   })();

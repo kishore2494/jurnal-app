@@ -963,7 +963,8 @@ function renderDeepSections() {
 const WHATS_NEW = {
   v: 'w21',
   items: [
-    '📷 <b>Photos &amp; voice notes</b> — the Log has a new <b>Photos &amp; voice</b> card, under Reflection. Take a photo, add some from your gallery, or record a voice note while the day is still fresh, and tap any photo to see it full-screen, caption it or share it. On the Notes screen, <b>Photo</b> and <b>Voice</b> each save a new note. Everything stays on your phone. Photos are shrunk to a few hundred KB, still sharp full-screen, and their location data is removed. They go into your backup file, so a new phone gets them back. They are not sent to the Google Sheet.',
+    '📷 <b>Photos &amp; voice notes</b> — the Log has a new <b>Photos &amp; voice</b> card, under Reflection. Take a photo, add some from your gallery, or record a voice note while the day is still fresh, and tap any photo to see it full-screen, caption it or share it. On the Notes screen, <b>Photo</b> and <b>Voice</b> each save a new note. Everything stays on your phone. Photos are shrunk to a few hundred KB, still sharp full-screen, and their location data is removed. They go into your backup file, so a new phone gets them back. They are not sent to the Google Sheet. <b>On this day</b> now shows the photos you took a week, a month or a year ago; <b>History ▸ Photos</b> shows them all by month; and there is a <b>month-in-photos</b> share card.',
+    '💌 <b>Tell a friend</b> — Settings ▸ Support. Send an invite card or a link on WhatsApp. Daylog has no marketing budget, so people mostly find it this way. Story-shaped share cards now carry a small QR code to the Play Store too.',
     '\ud83e\udeb6 <b>A calmer start</b> \u2014 Daylog had grown to nineteen screens and a Log page that opened with <b>38 deep-log rating scales</b> switched on, before you had written a single thing. New installs now begin with the Log, Time, Focus, Stats and Habits; the other thirteen sit behind <b>More features</b> in the menu, each described by what it does, one tap to add. Setup went from five steps to three. <b>Nothing changed for you</b> \u2014 your menu, your Deep log and your layout are exactly as you left them; this only affects a fresh install.',
     '\ud83d\udcbe <b>Export a backup as a real file again</b> \u2014 please update in the Play Store. Inside the app, exporting could only ever offer \u201ccopy to clipboard\u201d, and the Share button next to it did nothing at all: Android\u2019s WebView has no share API and blocks ordinary downloads, and the failure was being swallowed silently. The new build writes the file straight to your <b>Downloads</b> folder, so Import can pick it like any other file. Until you update, the copy box now says why and the Share button tells you instead of failing quietly.',
     '\ud83d\udcca <b>Money now has a Charts tab</b> \u2014 net worth over 12 months, your spending so far this month drawn against the same point last month, income vs spending by month, a ranked category breakdown, a typical-spend-by-weekday profile, a calendar of every day\u2019s spending, and 12-month trends per category that only say \u201crising\u201d or \u201cfalling\u201d past a 15% change rather than dressing up noise as a trend.<br><br>Three things were wrong and are fixed: net worth used to show an account opened today as already holding its balance a year ago \u2014 accounts now have a start date and count for nothing before it. The weekday chart used the average, which one monthly rent payment could turn into \u201cFriday is your most expensive day\u201d; it now uses the middle day instead. And the spending calendar was washed out by a single big bill setting the scale, so it now scales to your ordinary days and marks where it clips.',
@@ -1079,10 +1080,12 @@ function throwbackHTML() {
     { d: addDays(logDate, -90),  label: '3 months ago' },
     { d: addDays(logDate, -365), label: 'A year ago' },
   ];
-  const hits = marks.filter(m => e[m.d]).slice(0, 2);
+  // A day with only a photo counts too: a picture from a year ago is the best "on this day".
+  const hits = marks.filter(m => e[m.d] || mediaDayCount(m.d).p).slice(0, 2);
   if (!hits.length) return '';
   const rows = hits.map(m => {
-    const en = e[m.d];
+    const en = e[m.d] || {};
+    const pics = mediaList('log', m.d).filter(r => r.kind === 'photo').slice(0, 3);
     const bits = [];
     if (en.mood != null) bits.push(`mood <b>${en.mood}</b>`);
     if (en.energy != null) bits.push(`energy <b>${en.energy}</b>`);
@@ -1095,6 +1098,7 @@ function throwbackHTML() {
       <div class="otd-when">${m.label}<span class="hint"> · ${prettyDate(m.d)}</span></div>
       ${bits.length ? `<div class="otd-stats">${bits.join(' · ')}</div>` : ''}
       ${quote}
+      ${pics.length ? `<div class="otd-pics">${pics.map(r => `<button class="mthumb" data-mview="${r.id}" aria-label="Photo from ${escapeHtml(prettyDate(m.d))}"><img src="${mediaUrl(r, 't')}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div>` : ''}
     </div>`;
   }).join('');
   return `<div class="card otd-card">
@@ -1107,7 +1111,7 @@ document.addEventListener('click', (ev) => {
   if (ev.target && ev.target.id === 'otd-hide') { ev.preventDefault();
     setLogSecHidden('onthisday', true); toast('Hidden — Customize ▸ Log screen sections to bring it back'); renderToday(); return; }
   const tb = ev.target.closest && ev.target.closest('[data-throwback]');
-  if (tb) { logDate = tb.dataset.throwback; loadDraft(); renderToday(); toast('Opened ' + prettyDate(logDate)); }
+  if (tb && !ev.target.closest('[data-mview]')) { logDate = tb.dataset.throwback; loadDraft(); renderToday(); toast('Opened ' + prettyDate(logDate)); }
 });
 
 /* ---------- Mood Meter (How We Feel / RULER's model) ----------
@@ -1694,7 +1698,7 @@ function renderToday() {
   const SEC = {
     fresh: () => freshHTML(),
     ring: () => todayRingHTML(),
-    onthisday: () => throwbackHTML(),
+    onthisday: () => `<div id="otd-slot">${throwbackHTML()}</div>`,
     core: () => `<div class="card">
       <div class="field"><label>Date</label>
         <input type="date" id="log-date" value="${logDate}" max="${todayStr()}"></div>
@@ -4498,12 +4502,42 @@ document.addEventListener('click', (ev) => {
 /* ============================================================
    SCREEN: HISTORY
    ============================================================ */
+let histTab = 'days';
+function monthLong(ym, withYear) {
+  try { return new Date(ym + '-15T12:00:00').toLocaleDateString('en', withYear ? { month: 'long', year: 'numeric' } : { month: 'long' }); }
+  catch (e) { return ym; }
+}
+/* Every Log photo, newest month first. A month is one card, so a long history stays a list of
+   short grids rather than one wall of thumbnails. */
+function historyPhotosHTML() {
+  if (!_mediaReady) return '<div class="empty">Loading…</div>';
+  const ph = [];
+  _media.forEach(r => { if (r.kind === 'photo' && r.ctx === 'log') ph.push(r); });
+  if (!ph.length) return `<div class="empty">No photos yet. Add one from the <b>Photos &amp; voice</b> card on the Log — a year from now, “On this day” will show it back to you.</div>`;
+  ph.sort((a, b) => b.day.localeCompare(a.day) || b.ts - a.ts);
+  const byMonth = {};
+  ph.forEach(r => (byMonth[r.day.slice(0, 7)] = byMonth[r.day.slice(0, 7)] || []).push(r));
+  return `<div data-mset="gallery">${Object.keys(byMonth).map(ym => `<div class="card hist-photos">
+    <h2>${escapeHtml(monthLong(ym, true))} <span class="hint">${byMonth[ym].length} photo${byMonth[ym].length === 1 ? '' : 's'}</span></h2>
+    <div class="mgrid">${byMonth[ym].map(r => `<button class="mthumb" data-mview="${r.id}" aria-label="Photo from ${escapeHtml(prettyDate(r.day))}"><img src="${mediaUrl(r, 't')}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div>
+  </div>`).join('')}</div>
+  <div class="ss-acts"><button class="btn btn-ghost" data-share-card="photos">${icon('share', 18)} Share a month as a card</button></div>`;
+}
 function renderHistory() {
   document.getElementById('screen-title').textContent = 'History';
   const e = DB.entries();
   const dates = Object.keys(e).sort().reverse();
+  const tabs = mediaSupported() ? `<div class="seg-row hist-tabs">
+    <button class="seg-btn ${histTab === 'days' ? 'on' : ''}" data-hist-tab="days">Days</button>
+    <button class="seg-btn ${histTab === 'photos' ? 'on' : ''}" data-hist-tab="photos">Photos</button></div>` : '';
+  if (histTab === 'photos' && mediaSupported()) {
+    let n = 0; _media.forEach(r => { if (r.kind === 'photo' && r.ctx === 'log') n++; });   // what the grid shows
+    document.getElementById('screen-sub').textContent = _mediaReady ? `${n} photo${n === 1 ? '' : 's'}` : '';
+    document.getElementById('s-history').innerHTML = tabs + historyPhotosHTML();
+    return;
+  }
   document.getElementById('screen-sub').textContent = `${dates.length} entries`;
-  if (!dates.length) { document.getElementById('s-history').innerHTML = '<div class="empty">No entries yet. Log your first day on the Log tab.</div>'; return; }
+  if (!dates.length) { document.getElementById('s-history').innerHTML = tabs + '<div class="empty">No entries yet. Log your first day on the Log tab.</div>'; return; }
   const items = dates.map(d => {
     const en = e[d];
     const hc = en.habits ? Object.values(en.habits).filter(Boolean).length : 0;
@@ -4513,8 +4547,12 @@ function renderHistory() {
       <div class="hist-moods"><span class="pill">😊 ${en.mood||'–'}</span><span class="pill">⚡ ${en.energy||'–'}</span><span class="pill">✅ ${hc}/${HABITS.length}</span>${(() => { const c = mediaDayCount(d); return c.p + c.v ? `<span class="pill">${c.p ? '📷 ' + c.p : ''}${c.p && c.v ? ' ' : ''}${c.v ? '🎙 ' + c.v : ''}</span>` : ''; })()}</div>
     </div>`;
   }).join('');
-  document.getElementById('s-history').innerHTML = sampleBannerHTML('these days') + `<div class="card">${items}</div>`;
+  document.getElementById('s-history').innerHTML = tabs + sampleBannerHTML('these days') + `<div class="card">${items}</div>`;
 }
+document.addEventListener('click', (ev) => {
+  const ht = ev.target.closest && ev.target.closest('[data-hist-tab]');
+  if (ht) { histTab = ht.dataset.histTab; renderHistory(); window.scrollTo(0, 0); }
+});
 document.addEventListener('click', (ev) => {
   const it = ev.target.closest('[data-open]');
   if (it) { logDate = it.dataset.open; show('today'); }
@@ -6310,6 +6348,8 @@ async function mediaLoad() {
   } catch (e) { /* stays empty; mediaSlotHTML says it cannot open storage */ }
   _mediaReady = true;
   refreshMediaSlots();
+  // "On this day" renders before IndexedDB answers; redraw just that card if a photo changes it.
+  try { const slot = document.getElementById('otd-slot'); if (slot) slot.innerHTML = throwbackHTML(); } catch (e) {}
 }
 function mediaQuotaMsg(e) {
   return e && /quota/i.test(String(e.name || '') + String(e.message || ''))
@@ -6639,9 +6679,10 @@ function mediaLogCardHTML(day) {
 
 /* ---------- full-screen photo viewer ---------- */
 let _mview = null;   // { ids, i }
-function mediaViewOpen(id) {
+function mediaViewOpen(id, set) {
   const rec = _media.get(id); if (!rec) return;
-  const ids = mediaList(rec.ctx, rec.ctx === 'log' ? rec.day : null).filter(r => r.kind === 'photo').map(r => r.id);
+  const ids = (set && set.length && set.includes(id)) ? set.slice()
+    : mediaList(rec.ctx, rec.ctx === 'log' ? rec.day : null).filter(r => r.kind === 'photo').map(r => r.id);
   _mview = { ids, i: Math.max(0, ids.indexOf(id)) };
   let el = document.getElementById('media-view');
   if (!el) { el = document.createElement('div'); el.id = 'media-view'; el.className = 'mview'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); document.body.appendChild(el); mediaSwipe(el); }
@@ -6666,6 +6707,8 @@ function mediaViewPaint() {
     <div class="mview-bar">
       <input class="mview-cap" type="text" maxlength="200" data-mcap="${rec.id}" placeholder="Add a caption…" value="${escapeHtml(rec.caption || '')}" aria-label="Caption">
       <div class="mview-acts">
+        ${rec.ctx === 'log' && !(logDate === rec.day && document.getElementById('s-today').classList.contains('on'))
+          ? `<button class="mview-btn" data-mview-day="${rec.day}">${icon('calendar', 18)}<span>Open day</span></button>` : ''}
         ${canShare ? `<button class="mview-btn" data-mshare="${rec.id}">${icon('share', 18)}<span>Share</span></button>` : ''}
         <button class="mview-btn danger" data-mdel="${rec.id}">${icon('trash', 18)}<span>Delete</span></button>
       </div>
@@ -6735,7 +6778,7 @@ async function mediaConfirmDelete(id) {
   toast(rec.kind === 'photo' ? 'Photo deleted' : 'Voice note deleted');
 }
 document.addEventListener('click', (ev) => {
-  const t = ev.target.closest && ev.target.closest('[data-madd],[data-mrec],[data-vrec-stop],[data-vrec-cancel],[data-vplay],[data-mview],[data-mdel],[data-mshare],[data-mview-close],[data-mview-step]');
+  const t = ev.target.closest && ev.target.closest('[data-madd],[data-mrec],[data-vrec-stop],[data-vrec-cancel],[data-vplay],[data-mview],[data-mdel],[data-mshare],[data-mview-close],[data-mview-step],[data-mview-day]');
   if (!t) {
     // a tap on the dark backdrop around the photo closes the viewer
     if (ev.target.id === 'media-view' || (ev.target.classList && ev.target.classList.contains('mview-stage'))) mediaViewClose();
@@ -6747,7 +6790,12 @@ document.addEventListener('click', (ev) => {
   if (d.vrecStop !== undefined) { voiceStop(false); return; }
   if (d.vrecCancel !== undefined) { voiceStop(true); return; }
   if (d.vplay) { voiceToggle(d.vplay); return; }
-  if (d.mview) { mediaViewOpen(d.mview); return; }
+  if (d.mview) {
+    const set = t.closest('[data-mset]');
+    mediaViewOpen(d.mview, set ? [...set.querySelectorAll('[data-mview]')].map(x => x.dataset.mview) : null);
+    return;
+  }
+  if (d.mviewDay) { logDate = d.mviewDay; show('today'); return; }   // show() closes the viewer
   if (d.mdel) { mediaConfirmDelete(d.mdel); return; }
   if (d.mshare) { mediaShare(d.mshare); return; }
   if (d.mviewClose !== undefined) { mediaViewClose(); return; }
@@ -9090,8 +9138,63 @@ const CARD_KINDS = [
   { k: 'habit',   label: '✅ Habits' },
   { k: 'insight', label: '💡 Insight' },
   { k: 'award',   label: '🏆 Award' },
+  { k: 'photos',  label: '📷 Photos' },
   { k: 'invite',  label: '💌 Invite' },
 ];
+
+/* "October in photos": up to nine of a month's Log photos, spread across the month rather
+   than the first nine. This month if it has four or more, otherwise the latest month that has
+   any. The only card that carries the user's own pictures — the sheet says so before Share. */
+async function cardPhotoSet() {
+  const ph = [];
+  _media.forEach(r => { if (r.kind === 'photo' && r.ctx === 'log') ph.push(r); });
+  const cur = todayStr().slice(0, 7);
+  if (!ph.length) return { ym: cur, bmps: [], total: 0 };
+  const months = {};
+  ph.forEach(r => (months[r.day.slice(0, 7)] = months[r.day.slice(0, 7)] || []).push(r));
+  // This month once it has four; otherwise the latest month that does; otherwise the fullest.
+  const keys = Object.keys(months).sort();
+  const ym = (months[cur] && months[cur].length >= 4) ? cur
+    : (keys.filter(k => months[k].length >= 4).pop() || keys.reduce((a, k) => months[k].length > months[a].length ? k : a, keys[0]));
+  const all = months[ym].sort((a, b) => a.day.localeCompare(b.day) || a.ts - b.ts);
+  const chosen = all.length <= 9 ? all : Array.from({ length: 9 }, (_, i) => all[Math.round(i * (all.length - 1) / 8)]);
+  const bmps = [];
+  for (const r of chosen) {
+    // Decode SMALL: nine full 1600px photos is ~70 MB of bitmap on a phone with 3 GB.
+    const k = 420 / Math.max(1, Math.min(r.w || 420, r.h || 420));
+    try { bmps.push(await createImageBitmap(r.blob, { resizeWidth: Math.round((r.w || 420) * k), resizeHeight: Math.round((r.h || 420) * k), resizeQuality: 'medium' })); }
+    catch (e) { try { if (r.thumb) bmps.push(await createImageBitmap(r.thumb)); } catch (e2) {} }
+  }
+  return { ym, bmps, total: all.length };
+}
+function drawPhotos(g, H, set) {
+  set = set || { ym: todayStr().slice(0, 7), bmps: [], total: 0 };
+  cardChrome(g, H, set.ym.slice(0, 4));
+  const sh = bodyTop(H);
+  g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(76, 800);
+  g.fillText(monthLong(set.ym) + ' in photos', CARD_W / 2, sh + 200);
+  if (!set.bmps.length) {
+    g.fillStyle = CARD_DIM; g.font = cardFont(40, 500);
+    g.fillText('No photos yet — add one on the Log.', CARD_W / 2, sh + 640);
+    cardFooter(g, H); return;
+  }
+  g.fillStyle = CARD_DIM; g.font = cardFont(36, 500);
+  g.fillText(set.total + ' photo' + (set.total === 1 ? '' : 's') + (set.ym === todayStr().slice(0, 7) ? ' this month' : ''), CARD_W / 2, sh + 258);
+  const n = set.bmps.length, cols = n === 4 || n === 2 ? 2 : n === 1 ? 1 : 3, rows = Math.ceil(n / cols), gap = 14;
+  const availH = CARD_BODY - 300 - 150;
+  const cell = Math.min((CARD_W - 168 - gap * (cols - 1)) / cols, (availH - gap * (rows - 1)) / rows);
+  const gridH = cell * rows + gap * (rows - 1);
+  const gx = (CARD_W - (cell * cols + gap * (cols - 1))) / 2, gy = sh + 300 + Math.max(0, (availH - gridH) / 2);
+  set.bmps.forEach((b, i) => {
+    const x = gx + (i % cols) * (cell + gap), y = gy + Math.floor(i / cols) * (cell + gap);
+    const s = Math.min(b.width, b.height);
+    g.save(); roundRect(g, x, y, cell, cell, 22); g.clip();
+    g.drawImage(b, (b.width - s) / 2, (b.height - s) / 2, s, s, x, y, cell, cell);
+    g.restore();
+    try { b.close(); } catch (e) {}
+  });
+  cardFooter(g, H, 'kept on my phone, nowhere else');
+}
 
 function inviteText(source) {
   return 'I use Daylog to keep track of my habits, mood and days. It is private: no account, no ads, '
@@ -9345,10 +9448,12 @@ async function buildCardBlob(kind, ratio, arg) {
   const g = cv.getContext('2d');
   g.textBaseline = 'alphabetic';
   const q = (kind === 'invite' || H - CARD_BODY >= 500) ? await cardQR(kind === 'invite' ? 'invite' : 'card') : null;
+  const pset = kind === 'photos' ? await cardPhotoSet() : null;
   _cardQR = kind === 'invite' ? null : q;      // the invite draws its own, bigger one
   try {
     ({ streak: drawStreak, pixels: drawPixels, habit: drawHabit, insight: drawInsight,
-       award: (gg, hh) => drawAward(gg, hh, arg), invite: (gg, hh) => drawInvite(gg, hh, q) }[kind] || drawStreak)(g, H);
+       award: (gg, hh) => drawAward(gg, hh, arg), invite: (gg, hh) => drawInvite(gg, hh, q),
+       photos: (gg, hh) => drawPhotos(gg, hh, pset) }[kind] || drawStreak)(g, H);
   } finally { _cardQR = null; }
   return await new Promise(res => {
     if (cv.toBlob) cv.toBlob(b => res(b), 'image/png');
@@ -9481,7 +9586,9 @@ function shareSheetRender() {
       <button type="button" class="btn btn-ghost" id="ss-wa">Send the link on WhatsApp</button>
       <button type="button" class="btn btn-ghost" id="ss-copy">Copy link</button></div>` : ''}
     ${cardState.hint ? `<div class="ss-hint">${escapeHtml(cardState.hint)}</div>` : ''}
-    <div class="hint ss-note">${cardState.kind === 'invite' ? 'The card and the link say nothing about your entries.' : 'Only the picture is shared. Your entries never leave the phone.'}</div>
+    <div class="hint ss-note">${cardState.kind === 'invite' ? 'The card and the link say nothing about your entries.'
+      : cardState.kind === 'photos' ? '<b>This card shows your own photos.</b> Look through it before you share it.'
+      : 'Only the picture is shared. Your entries never leave the phone.'}</div>
   </div>`;
 }
 

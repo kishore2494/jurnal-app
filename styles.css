@@ -2322,3 +2322,8 @@ input[type="range"] { height: 30px; }
 .play-nudge .pn-dim { color: var(--text-dim); font-size: 14px; }
 .play-nudge .pn-btns { display: grid; grid-template-columns: 1.6fr 1fr; gap: 8px; }
 .play-nudge .pn-btns .btn { min-height: 48px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.otd-pics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; max-width: 320px; }
+.hist-tabs { display: flex; margin: 0 0 12px; }
+.hist-tabs .seg-btn { flex: 1 1 0; min-height: 44px; font-size: 15px; }
+.hist-photos .mgrid { grid-template-columns: repeat(4, 1fr); }
+.mview-acts .mview-btn { min-width: 0; padding: 0 8px; }
