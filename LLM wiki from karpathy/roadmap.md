@@ -28,6 +28,14 @@
 - **Google Play Billing** — ₹9/mo sub w/ 30-day trial, OR simpler ₹99 one-time "Pro" unlock. Needs merchant profile (PAN + bank) in Play Console; then wire the Digital Goods API purchase + gate Pro features. Purchases auto-follow the user's Google account across devices.
 - **Foreground service for the running-timer** — current timer notification with Pause/Stop works while the app process is alive; if Android fully kills the app, actions only apply on relaunch. A true always-live control needs a native foreground service (Java, + Android 14 foregroundServiceType declaration).
 
+## Photos & voice: next steps (from v251, 2026-11-01)
+- **Share INTO Daylog** from Google Photos and the gallery: an `ACTION_SEND image/*` intent
+  filter plus a small plugin that hands the file to the web layer. Needs a native build.
+- **Sharing voice notes in the app:** `DaylogShare.shareImage` hard-codes an image MIME type, so
+  the viewer offers Share for photos only. Add `shareFile({base64, mime, filename})`. Native build.
+- Media on an existing note (today only new notes get Photo/Voice), and an image block in Write.
+- Optionally export media as a SEPARATE file once libraries get big; the guard asks past ~35 MB.
+
 ## User action items (only they can do)
 - Finish Google Play identity verification (blocking everything).
 - Deploy `Code.gs` (latest) + redeploy new version → unlocks Time Log / Events / Articles Sheet tabs.
