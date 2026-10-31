@@ -1858,6 +1858,86 @@
     if (eS != null) localStorage.setItem('dp.entries', eS); else localStorage.removeItem('dp.entries');
   })();
 
+  // ---- Photos & voice notes (v251) ----
+  (function () {
+    ok('mediaFit never upscales', (() => { const f = mediaFit(800, 600, 1600); return f.w === 800 && f.h === 600; })());
+    ok('mediaFit caps a portrait long edge', (() => { const f = mediaFit(3000, 4000, 1600); return f.w === 1200 && f.h === 1600; })());
+    ok('mediaFit caps a landscape long edge', (() => { const f = mediaFit(4032, 3024, 1600); return f.w === 1600 && f.h === 1200; })());
+    ok('mediaFit survives a zero-size image', (() => { const f = mediaFit(0, 0, 1600); return f.w >= 1 && f.h >= 1; })());
+    ok('fmtClipLen 65s → 1:05', fmtClipLen(65000) === '1:05', fmtClipLen(65000));
+    ok('fmtClipLen rounds to the second', fmtClipLen(2600) === '0:03', fmtClipLen(2600));
+    ok('fmtBytes', fmtBytes(500) === '500 B' && fmtBytes(2048) === '2 KB' && fmtBytes(5 * 1048576) === '5.0 MB' && fmtBytes(30 * 1048576) === '30 MB',
+      [fmtBytes(500), fmtBytes(2048), fmtBytes(5 * 1048576), fmtBytes(30 * 1048576)]);
+    ok('count text', mediaCountText({ p: 1, v: 2 }) === '1 photo · 2 voice notes', mediaCountText({ p: 1, v: 2 }));
+
+    /* A backup is the one file the user hands back to us; a damaged or hostile item must be
+       refused, not written into the database. */
+    const good = { id: 'mabc123', kind: 'photo', mime: 'image/jpeg', day: '2026-10-31', ctx: 'log', ts: 1, data: 'AAAA' };
+    ok('a well-formed backup item passes', mediaItemValid(good));
+    ok('a note voice item passes', mediaItemValid(Object.assign({}, good, { ctx: 'note:n123', kind: 'voice', mime: 'audio/webm;codecs=opus' })));
+    [['a path in its id', { id: '../evil' }], ['an unknown kind', { kind: 'video' }], ['a bad day', { day: '31/10/2026' }],
+     ['an unknown context', { ctx: 'doc:x' }], ['no data', { data: '' }], ['an html mime', { mime: 'text/html' }],
+     ['non-string data', { data: 5 }]]
+      .forEach(([n, patch]) => ok('a backup item with ' + n + ' is refused', !mediaItemValid(Object.assign({}, good, patch))));
+    ok('null is refused', !mediaItemValid(null));
+    ok('media is not a localStorage backup section', !BACKUP_KEYS.includes('_media') && !BACKUP_KEYS.includes('media'));
+
+    /* The new Log section lands beside Reflection for everyone with a saved layout — appending
+       it would bury it under the Sunday review. */
+    const ls = localStorage.getItem('dp.logsec');
+    localStorage.setItem('dp.logsec', JSON.stringify(['fresh', 'ring', 'onthisday', 'core', 'moodgrid', 'tasks', 'checklist', 'workout', 'health', 'reflection', 'deep', 'weekly'].map(id => ({ id, hidden: false }))));
+    let order = logSecCfg().map(x => x.id);
+    ok('Photos & voice slots in right after Reflection for a saved layout', order.indexOf('media') === order.indexOf('reflection') + 1, order.join(','));
+    ok('and is switched on', !logSecCfg().find(x => x.id === 'media').hidden);
+    localStorage.setItem('dp.logsec', JSON.stringify([{ id: 'weekly', hidden: false }, { id: 'reflection', hidden: true }]));
+    order = logSecCfg().map(x => x.id);
+    ok('it follows Reflection even where the user moved it', order.indexOf('media') === order.indexOf('reflection') + 1, order.join(','));
+    ok('every section is still there exactly once', order.length === LOG_SECTIONS_DEF.length && new Set(order).size === order.length, order.join(','));
+    if (ls != null) localStorage.setItem('dp.logsec', ls); else localStorage.removeItem('dp.logsec');
+
+    /* No IndexedDB (jsdom, or a locked-down browser): say so, and offer no button that would
+       pretend to save. */
+    const supSnap = window.mediaSupported;
+    if (!supSnap()) {
+      const h0 = mediaSlotHTML('log', todayStr());
+      ok('without storage the card says so instead of offering buttons', /cannot store photos/.test(h0) && !/data-madd/.test(h0), h0);
+    }
+
+    // With storage, from in-memory records.
+    const urlSnap = URL.createObjectURL, readySnap = _mediaReady;
+    URL.createObjectURL = () => 'blob:test';
+    window.mediaSupported = () => true;
+    _mediaReady = true;
+    const T0 = todayStr();
+    _media.set('mt1', { id: 'mt1', kind: 'photo', mime: 'image/jpeg', blob: new Blob(['x']), thumb: new Blob(['y']), day: T0, ctx: 'log', ts: Date.now(), size: 2 });
+    _media.set('mt2', { id: 'mt2', kind: 'voice', mime: 'audio/webm', blob: new Blob(['z']), day: T0, ctx: 'log', ts: Date.now() + 1, dur: 65000, size: 1 });
+    _media.set('mt3', { id: 'mt3', kind: 'photo', mime: 'image/jpeg', blob: new Blob(['x']), day: addDays(T0, -1), ctx: 'log', ts: 1, size: 1 });
+    _media.set('mt4', { id: 'mt4', kind: 'photo', mime: 'image/jpeg', blob: new Blob(['x']), day: T0, ctx: 'note:nX', ts: 1, size: 1 });
+    const h = mediaSlotHTML('log', T0);
+    ok('today shows its photo', /data-mview="mt1"/.test(h));
+    ok('and its voice note with its length', /data-vrow="mt2"/.test(h) && /1:05/.test(h));
+    ok('but not yesterday’s photo', !/mt3/.test(h));
+    ok('nor a note’s photo', !/mt4/.test(h));
+    ok('the day count reads right', mediaCountText(mediaDayCount(T0)) === '1 photo · 1 voice note', mediaCountText(mediaDayCount(T0)));
+    ok('Camera, Photos and Record are offered', h.includes('data-madd="camera"') && h.includes('data-madd="gallery"') && /data-mrec/.test(h));
+    const hn = mediaSlotHTML('note:nX', '', { compact: true });
+    ok('a note’s slot shows only that note’s media', /mt4/.test(hn) && !/mt1/.test(hn) && !/data-madd/.test(hn));
+    ok('mediaHas finds a note’s media', mediaHas('note:nX') && !mediaHas('note:nope'));
+    const ldSnap = logDate; logDate = T0; renderToday();
+    ok('the Log screen has the Photos & voice card', !!document.querySelector('#s-today .media-card .media-slot[data-mctx="log"]'));
+    ok('…with the count in its header', /1 photo/.test((document.getElementById('media-log-count') || {}).textContent || ''));
+    logDate = ldSnap;
+    const totals = mediaTotals();
+    ok('totals count photos and voice separately', totals.photos === 3 && totals.voice === 1, totals);
+    mediaViewOpen('mt1');
+    ok('a thumbnail opens the viewer', mediaViewIsOpen());
+    ok('the viewer pages only through that day’s photos', _mview && _mview.ids.length === 1, _mview && _mview.ids);
+    handleBack();
+    ok('Android back closes the viewer first', !mediaViewIsOpen());
+    ['mt1', 'mt2', 'mt3', 'mt4'].forEach(id => _media.delete(id)); _mediaUrls.clear();
+    _mediaReady = readySnap; window.mediaSupported = supSnap; URL.createObjectURL = urlSnap;
+  })();
+
   if (snapshot != null) localStorage.setItem('dp.tasks', snapshot); else localStorage.removeItem('dp.tasks');
 
   const summary = { pass, fail, results: R };

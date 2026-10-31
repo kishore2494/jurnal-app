@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v250';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v251';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -961,8 +961,9 @@ function renderDeepSections() {
    Testers get silent web updates; this makes improvements visible so they keep
    giving feedback. Bump WHATS_NEW.v to re-show with new items. */
 const WHATS_NEW = {
-  v: 'w20',
+  v: 'w21',
   items: [
+    '📷 <b>Photos &amp; voice notes</b> — the Log has a new <b>Photos &amp; voice</b> card, under Reflection. Take a photo, add some from your gallery, or record a voice note while the day is still fresh, and tap any photo to see it full-screen, caption it or share it. On the Notes screen, <b>Photo</b> and <b>Voice</b> each save a new note. Everything stays on your phone. Photos are shrunk to a few hundred KB, still sharp full-screen, and their location data is removed. They go into your backup file, so a new phone gets them back. They are not sent to the Google Sheet.',
     '\ud83e\udeb6 <b>A calmer start</b> \u2014 Daylog had grown to nineteen screens and a Log page that opened with <b>38 deep-log rating scales</b> switched on, before you had written a single thing. New installs now begin with the Log, Time, Focus, Stats and Habits; the other thirteen sit behind <b>More features</b> in the menu, each described by what it does, one tap to add. Setup went from five steps to three. <b>Nothing changed for you</b> \u2014 your menu, your Deep log and your layout are exactly as you left them; this only affects a fresh install.',
     '\ud83d\udcbe <b>Export a backup as a real file again</b> \u2014 please update in the Play Store. Inside the app, exporting could only ever offer \u201ccopy to clipboard\u201d, and the Share button next to it did nothing at all: Android\u2019s WebView has no share API and blocks ordinary downloads, and the failure was being swallowed silently. The new build writes the file straight to your <b>Downloads</b> folder, so Import can pick it like any other file. Until you update, the copy box now says why and the Share button tells you instead of failing quietly.',
     '\ud83d\udcca <b>Money now has a Charts tab</b> \u2014 net worth over 12 months, your spending so far this month drawn against the same point last month, income vs spending by month, a ranked category breakdown, a typical-spend-by-weekday profile, a calendar of every day\u2019s spending, and 12-month trends per category that only say \u201crising\u201d or \u201cfalling\u201d past a 15% change rather than dressing up noise as a trend.<br><br>Three things were wrong and are fixed: net worth used to show an account opened today as already holding its balance a year ago \u2014 accounts now have a start date and count for nothing before it. The weekday chart used the average, which one monthly rent payment could turn into \u201cFriday is your most expensive day\u201d; it now uses the middle day instead. And the spending calendar was washed out by a single big bill setting the scale, so it now scales to your ordinary days and marks where it clips.',
@@ -1196,6 +1197,7 @@ const LOG_SECTIONS_DEF = [
   { id: 'workout',   label: 'Workout',          sub: "link to today's gym log" },
   { id: 'health',    label: 'Health',           sub: 'auto-tracked steps, sleep, screen time' },
   { id: 'reflection',label: 'Reflection',       sub: 'wins, improvements, journal' },
+  { id: 'media',     label: 'Photos & voice',   sub: 'pictures and voice notes from your day' },
   /* `off` = hidden on a FRESH install only. A saved dp.logsec always wins, so nobody who
      already uses these loses anything. The Deep log is 10 sections and 38 rating scales, and
      every one of them rendered on the Log screen on day one — the onboarding step even said
@@ -1216,7 +1218,15 @@ function logSecCfg() {
   });
   /* A section added in a later release appears for everyone (hidden:false) EXCEPT ones
      marked `off`, which stay out of the way until switched on in Customize. */
-  LOG_SECTIONS_DEF.forEach(d => { if (!out.some(o => o.id === d.id)) out.push(Object.assign({}, d, { hidden: !!d.off })); });
+  /* It lands right after the section it follows in the defaults, not at the very bottom —
+     otherwise Photos & voice (v251) would sit under the Sunday review for everyone who has
+     ever saved a layout, which is almost everyone. */
+  LOG_SECTIONS_DEF.forEach((d, i) => {
+    if (out.some(o => o.id === d.id)) return;
+    const row = Object.assign({}, d, { hidden: !!d.off });
+    const prev = i > 0 ? out.findIndex(o => o.id === LOG_SECTIONS_DEF[i - 1].id) : -1;
+    if (prev >= 0) out.splice(prev + 1, 0, row); else out.push(row);
+  });
   return out;
 }
 function saveLogSec(list) {
@@ -1689,6 +1699,7 @@ function renderToday() {
       ${reflect}
       ${journalHtml}
     </div>` : ''),
+    media: () => mediaLogCardHTML(logDate),
     deep: () => `<h2 style="margin:22px 4px 10px;font-size:13px;color:var(--text-dim);font-weight:600;letter-spacing:.3px;text-transform:uppercase">Deep log <span class="hint" style="text-transform:none">optional · the polymath metrics</span></h2>
       ${renderDeepSections()}`,
     weekly: () => (isSunday(logDate) ? `<div class="card"><h2>📅 Sunday weekly review</h2>
@@ -2310,7 +2321,13 @@ document.addEventListener('click', (ev) => {
   if (sc) { setColor(sc.dataset.setcolor, sc.dataset.color); return; }
   if (ev.target.id === 'note-add-btn') return addNote();
   const dn = ev.target.closest('[data-delnote]');
-  if (dn) { DB.saveNotes(DB.notes().filter(n=>n.id!==dn.dataset.delnote)); renderNotes(); syncNotes(); return; }
+  if (dn) {
+    const nid = dn.dataset.delnote, att = mediaList('note:' + nid, null).map(r => r.id);
+    if (att.length && !confirm(`Delete this note and its ${att.length} photo(s)/voice note(s)? This cannot be undone.`)) return;
+    DB.saveNotes(DB.notes().filter(n=>n.id!==nid)); renderNotes(); syncNotes();
+    if (att.length) mediaDelete(att).then(() => renderNotes());
+    return;
+  }
 });
 document.addEventListener('keydown', (ev) => {
   if (ev.target.id === 'task-input' && ev.key === 'Enter') addTask();
@@ -2331,6 +2348,7 @@ function renderNotes() {
       <button class="pal" data-palette="${n.id}" title="highlight color"${n.color?` style="background:${colorHex(n.color)};border-color:${colorHex(n.color)}"`:''}></button>
       <button class="del" data-delnote="${n.id}">×</button>
     </div>
+    ${mediaHas('note:' + n.id) ? mediaSlot('note:' + n.id, '', { compact: true }) : ''}
     ${openColorId===n.id ? swatchStrip(n.id) : ''}
   </div>`;
   document.getElementById('s-notes').innerHTML = `
@@ -2340,7 +2358,13 @@ function renderNotes() {
         <button class="mic-ic" data-mic="#note-input" title="speak">🎤</button>
         <button class="btn btn-primary btn-sm" id="note-add-btn">Add</button>
       </div>
-      <div class="hint" style="margin-top:8px">Drag ⠿ to reorder · tap ◌ to color · 🎤 to speak</div>
+      ${mediaSupported() ? `<div class="media-acts note-acts">
+        <button class="m-act" data-madd="camera" data-mctx="note:new" data-mday="${todayStr()}">${icon('camera', 20)}<span>Photo</span></button>
+        <button class="m-act" data-madd="gallery" data-mctx="note:new" data-mday="${todayStr()}">${icon('image', 20)}<span>Gallery</span></button>
+        <button class="m-act" data-mrec data-mctx="note:new" data-mday="${todayStr()}">${icon('mic', 20)}<span>Voice</span></button>
+      </div>
+      ${mediaSlot('note:new', todayStr(), { compact: true })}` : ''}
+      <div class="hint" style="margin-top:8px">Drag ⠿ to reorder · tap ◌ to color · 🎤 to speak. Photo and Voice save a new note, with anything you typed as its text.</div>
     </div>
     <div class="card" id="note-list" style="padding:4px 16px">
       ${notes.length ? notes.map(item).join('') : '<div class="empty">No notes yet. Add one above 👆</div>'}
@@ -4453,7 +4477,7 @@ function renderHistory() {
     return `<div class="hist-item" data-open="${d}">
       <div><div class="hist-date">${prettyDate(d)}</div>
         <div class="hist-meta">${en.journal ? escapeHtml(en.journal.slice(0,46)) + (en.journal.length>46?'…':'') : '—'}</div></div>
-      <div class="hist-moods"><span class="pill">😊 ${en.mood||'–'}</span><span class="pill">⚡ ${en.energy||'–'}</span><span class="pill">✅ ${hc}/${HABITS.length}</span></div>
+      <div class="hist-moods"><span class="pill">😊 ${en.mood||'–'}</span><span class="pill">⚡ ${en.energy||'–'}</span><span class="pill">✅ ${hc}/${HABITS.length}</span>${(() => { const c = mediaDayCount(d); return c.p + c.v ? `<span class="pill">${c.p ? '📷 ' + c.p : ''}${c.p && c.v ? ' ' : ''}${c.v ? '🎙 ' + c.v : ''}</span>` : ''; })()}</div>
     </div>`;
   }).join('');
   document.getElementById('s-history').innerHTML = sampleBannerHTML('these days') + `<div class="card">${items}</div>`;
@@ -5724,6 +5748,7 @@ function renderSettings() {
     backup: `    <div class="card">
       <h2>💾 Backup &amp; restore <span class="hint">last: ${(() => { const t = +localStorage.getItem('dp.lastBackup') || 0; if (!t) return 'never'; const d = Math.floor((Date.now() - t) / 86400000); return d === 0 ? 'today ✅' : d + 'd ago' + (d > 7 ? ' ⚠️' : ''); })()}</span></h2>
       <div class="hint" style="margin-bottom:8px">A backup file is the only way to move your data to a new phone or recover it after a reinstall (the PDF report is just for reading, it can't be restored). Keep one in Drive/email.</div>
+      ${(() => { const m = mediaTotals(); return m.photos + m.voice ? `<div class="hint" style="margin-bottom:8px">Your <b>${m.photos ? m.photos + ' photo' + (m.photos === 1 ? '' : 's') : ''}${m.photos && m.voice ? ' and ' : ''}${m.voice ? m.voice + ' voice note' + (m.voice === 1 ? '' : 's') : ''}</b> (${fmtBytes(m.bytes)}) go in the backup file too, so it is bigger than it used to be. They are not sent to the Google Sheet.</div>` : ''; })()}
       <div class="btn-row">
         <button class="btn btn-primary btn-sm" id="export">⬇ Export backup</button>
         <button class="btn btn-ghost btn-sm" id="import">Import backup</button>
@@ -5974,8 +5999,10 @@ document.addEventListener('click', async (ev) => {
     if (_wipeStage !== 4) return;
     wipeReset();
     const n = wipeEverything();
-    toast(n + ' items erased. Daylog is empty.');
-    setTimeout(() => location.reload(), 900);
+    const p = mediaTotals();
+    toast(n + ' items' + (p.photos + p.voice ? ` and ${p.photos + p.voice} photos/voice notes` : '') + ' erased. Daylog is empty.');
+    // Reload only once the photo database is really gone, or it survives the "delete everything".
+    Promise.all([mediaWipe(), new Promise(r => setTimeout(r, 900))]).then(() => location.reload());
     return;
   }
   if (ev.target.id === 'export') exportData();
@@ -6167,6 +6194,604 @@ async function sendFeedback(text, contact) {
   toast('Opening your mail app — your text stays here until you send it');
 }
 
+/* ============================================================
+   PHOTOS & VOICE NOTES
+   ------------------------------------------------------------
+   They live in IndexedDB, never localStorage: one phone photo is bigger than localStorage's
+   whole ~5 MB budget, and the journal must never compete with pictures for that space.
+   They stay on this phone. They are NOT sent to the Google Sheet (a cell holds 50k characters
+   and a photo is ~300k as text), and they DO ride along in the backup file, as base64, so a
+   restore on a new phone brings them back.
+
+   A record:  { id, kind: 'photo'|'voice', mime, blob, thumb?, day: 'YYYY-MM-DD',
+                ctx: 'log' | 'note:<noteId>', ts, w?, h?, dur?, size, caption? }
+
+   Photos are re-encoded on the phone (longest edge 1600px, JPEG): a 12 MP camera shot is
+   4-6 MB and would fill a cheap phone in a few hundred days; this is ~300 KB and still sharp
+   full-screen. Re-encoding also drops the EXIF block, so a photo's GPS location never sits
+   in the app or a backup file.
+   ============================================================ */
+const MEDIA_DB = 'daylog-media';
+const MEDIA_MAX_EDGE = 1600, MEDIA_THUMB_EDGE = 360, MEDIA_JPEG_Q = 0.82;
+const VOICE_MAX_MS = 10 * 60 * 1000;          // a voice NOTE; ten minutes then it saves itself
+const VOICE_MIN_MS = 700;                      // shorter than this is a mis-tap, not a note
+let _mediaDbP = null;
+const _media = new Map();                      // id → record. IDB blobs are disk-backed handles,
+let _mediaReady = false;                       // so holding every record costs almost nothing.
+const _mediaUrls = new Map();                  // 'id:t' / 'id:f' → object URL
+function mediaSupported() { return typeof indexedDB !== 'undefined' && !!indexedDB && typeof Blob !== 'undefined'; }
+function mediaId() { return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function mediaOpen() {
+  if (_mediaDbP) return _mediaDbP;
+  _mediaDbP = new Promise((res, rej) => {
+    let rq;
+    try { rq = indexedDB.open(MEDIA_DB, 1); } catch (e) { _mediaDbP = null; rej(e); return; }
+    rq.onupgradeneeded = () => {
+      const s = rq.result.createObjectStore('media', { keyPath: 'id' });
+      s.createIndex('day', 'day'); s.createIndex('ctx', 'ctx');
+    };
+    rq.onsuccess = () => {
+      const db = rq.result;
+      // Another tab deleting or upgrading the database must not be blocked by this one.
+      db.onversionchange = () => { db.close(); _mediaDbP = null; };
+      res(db);
+    };
+    rq.onerror = () => { _mediaDbP = null; rej(rq.error); };
+  });
+  return _mediaDbP;
+}
+/* Resolves only when the transaction COMMITS. A put() request succeeding is not the write
+   landing on disk — a quota failure aborts the transaction after the request "succeeded" —
+   and this app has had to unlearn reporting success it had not earned more than once. */
+async function mediaWrite(fn) {
+  const db = await mediaOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('media', 'readwrite');
+    fn(tx.objectStore('media'));
+    tx.oncomplete = () => res(true);
+    tx.onerror = () => rej(tx.error);
+    tx.onabort = () => rej(tx.error || new Error('aborted'));
+  });
+}
+async function mediaReadAll() {
+  const db = await mediaOpen();
+  return new Promise((res, rej) => {
+    const rq = db.transaction('media', 'readonly').objectStore('media').getAll();
+    rq.onsuccess = () => res(rq.result || []);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function mediaLoad() {
+  if (!mediaSupported()) return;
+  try {
+    const all = await mediaReadAll();
+    _media.clear(); all.forEach(r => { if (r && r.id) _media.set(r.id, r); });
+  } catch (e) { /* stays empty; mediaSlotHTML says it cannot open storage */ }
+  _mediaReady = true;
+  refreshMediaSlots();
+}
+function mediaQuotaMsg(e) {
+  return e && /quota/i.test(String(e.name || '') + String(e.message || ''))
+    ? 'Your phone is out of space — free some up, then try again'
+    : 'Could not save it on this phone';
+}
+async function mediaAdd(rec) {
+  try { await mediaWrite(s => s.put(rec)); }
+  catch (e) { toast(mediaQuotaMsg(e) + ' — it was NOT saved', true); return false; }
+  _media.set(rec.id, rec);
+  // Ask once for durable storage, so the browser never evicts photos to make room.
+  // (In the Play Store app the WebView's storage is app data and is never evicted anyway.)
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  return true;
+}
+function mediaRevoke(id) {
+  ['t', 'f'].forEach(k => { const u = _mediaUrls.get(id + ':' + k); if (u) { URL.revokeObjectURL(u); _mediaUrls.delete(id + ':' + k); } });
+}
+async function mediaDelete(ids) {
+  ids = [].concat(ids).filter(id => _media.has(id));
+  if (!ids.length) return true;
+  try { await mediaWrite(s => ids.forEach(id => s.delete(id))); }
+  catch (e) { toast('Could not delete it — try again', true); return false; }
+  ids.forEach(id => { if (_play && _play.id === id) voiceHalt(); mediaRevoke(id); _media.delete(id); });
+  return true;
+}
+function mediaUrl(rec, which) {
+  const key = rec.id + ':' + which;
+  if (!_mediaUrls.has(key)) {
+    const b = which === 't' && rec.thumb ? rec.thumb : rec.blob;
+    _mediaUrls.set(key, URL.createObjectURL(b));
+  }
+  return _mediaUrls.get(key);
+}
+function mediaList(ctx, day) {
+  const out = [];
+  _media.forEach(r => { if (r.ctx === ctx && (day == null || r.day === day)) out.push(r); });
+  return out.sort((a, b) => a.ts - b.ts);
+}
+function mediaHas(ctx) { for (const r of _media.values()) if (r.ctx === ctx) return true; return false; }
+/* "Photo note" / "Voice note" on the Notes screen. The note is created only AFTER the media is
+   safely written — a cancelled camera or a full disk must not leave an empty note behind. */
+function mediaNewNoteId() { return 'n' + Date.now(); }
+function mediaCommitNote(id) {
+  const ns = DB.notes(); if (ns.some(n => n.id === id)) return;
+  const inp = document.getElementById('note-input');
+  const text = inp ? inp.value.trim() : '';
+  if (inp) inp.value = '';
+  ns.unshift({ id, text, color: '', created: todayStr() });
+  DB.saveNotes(ns); syncNotes();
+}
+function mediaAfterNote() {
+  const sc = document.getElementById('s-notes');
+  if (sc && sc.classList.contains('on')) renderNotes();
+}
+function mediaDayCount(day) {
+  let p = 0, v = 0;
+  _media.forEach(r => { if (r.day === day && r.ctx === 'log') { if (r.kind === 'photo') p++; else v++; } });
+  return { p, v };
+}
+function mediaTotals() {
+  let photos = 0, voice = 0, bytes = 0;
+  _media.forEach(r => { if (r.kind === 'photo') photos++; else voice++; bytes += r.size || 0; });
+  return { photos, voice, bytes };
+}
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return Math.round(n / 1024) + ' KB';
+  return (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
+}
+function fmtClipLen(ms) { const s = Math.max(0, Math.round((ms || 0) / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function mediaWhen(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
+/* Scale (w,h) so the longest edge is at most `max`, never upscaling. Pure, so it is tested. */
+function mediaFit(w, h, max) {
+  const k = Math.min(1, max / Math.max(w, h, 1));
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+
+/* ---------- photos: decode → shrink → JPEG ---------- */
+async function mediaDecode(file) {
+  // createImageBitmap honours the camera's EXIF rotation; without it a portrait shot from
+  // many Android cameras lands sideways.
+  if (window.createImageBitmap) {
+    try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) {}
+  }
+  return new Promise((res, rej) => {
+    const u = URL.createObjectURL(file), im = new Image();
+    im.onload = () => { URL.revokeObjectURL(u); res(im); };
+    im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('decode')); };
+    im.src = u;
+  });
+}
+function mediaEncode(src, w, h, q) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);     // JPEG has no alpha; a PNG's clear parts would go black
+  x.drawImage(src, 0, 0, w, h);
+  return new Promise(res => c.toBlob(b => res(b), 'image/jpeg', q));
+}
+async function mediaPhotoRecord(file, ctx, day) {
+  const src = await mediaDecode(file);
+  const W = src.width || src.naturalWidth, H = src.height || src.naturalHeight;
+  if (!W || !H) throw new Error('decode');
+  const big = mediaFit(W, H, MEDIA_MAX_EDGE), sm = mediaFit(W, H, MEDIA_THUMB_EDGE);
+  const blob = await mediaEncode(src, big.w, big.h, MEDIA_JPEG_Q);
+  const thumb = await mediaEncode(src, sm.w, sm.h, 0.72);
+  if (src.close) src.close();
+  if (!blob) throw new Error('encode');
+  return { id: mediaId(), kind: 'photo', mime: 'image/jpeg', blob, thumb, day, ctx, ts: Date.now(),
+    w: big.w, h: big.h, size: blob.size + (thumb ? thumb.size : 0) };
+}
+let _mediaTarget = null;     // { ctx, day } the next picked photo belongs to
+function mediaInputs() {
+  if (document.getElementById('media-cam')) return;
+  const mk = (id, extra) => {
+    const i = document.createElement('input');
+    i.type = 'file'; i.accept = 'image/*'; i.id = id; i.hidden = true;
+    Object.assign(i, extra);
+    i.addEventListener('change', () => { const fs = [...(i.files || [])]; i.value = ''; mediaTakeFiles(fs); });
+    document.body.appendChild(i);
+  };
+  mk('media-cam', {}); document.getElementById('media-cam').setAttribute('capture', 'environment');
+  mk('media-pick', { multiple: true });
+}
+function mediaPick(how, ctx, day) {
+  if (!mediaSupported()) { toast('This browser cannot store photos', true); return; }
+  mediaInputs();
+  _mediaTarget = { ctx, day };
+  document.getElementById(how === 'camera' ? 'media-cam' : 'media-pick').click();
+}
+async function mediaTakeFiles(files) {
+  const t = _mediaTarget; if (!t || !files.length) return;
+  const imgs = files.filter(f => /^image\//.test(f.type) || !f.type);
+  if (!imgs.length) { toast('That is not a photo', true); return; }
+  if (imgs.length > 1) toast(`Adding ${imgs.length} photos…`);
+  const newNote = t.ctx === 'note:new' ? mediaNewNoteId() : null;
+  const ctx = newNote ? 'note:' + newNote : t.ctx;
+  let saved = 0, bad = 0;
+  for (const f of imgs) {
+    let rec;
+    try { rec = await mediaPhotoRecord(f, ctx, t.day); } catch (e) { bad++; continue; }
+    if (await mediaAdd(rec)) saved++; else break;      // out of space: stop, mediaAdd said so
+  }
+  if (newNote && saved) { mediaCommitNote(newNote); mediaAfterNote(); }
+  refreshMediaSlots();
+  if (saved) { buzz(8); toast(saved === 1 ? 'Photo saved' : saved + ' photos saved'); }
+  if (bad) toast(bad === 1 ? 'That photo could not be read — try a different one' : bad + ' photos could not be read', true);
+}
+
+/* ---------- voice notes ---------- */
+let _rec = null;    // { mr, chunks, t0, ctx, day, stream, mime, tick, cap }
+function voiceMime() {
+  if (!window.MediaRecorder) return null;
+  for (const m of ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm']) {
+    try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {}
+  }
+  return '';
+}
+async function voiceStart(ctx, day) {
+  if (_rec) return;
+  if (!mediaSupported() || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || voiceMime() === null) {
+    toast('Voice notes need a newer browser or Android System WebView', true); return;
+  }
+  voiceHalt();
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+  catch (e) {
+    toast(e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')
+      ? 'Microphone is off for Daylog — allow it in your phone’s Settings ▸ Apps ▸ Daylog ▸ Permissions'
+      : 'Could not start the microphone' + (e && e.name === 'NotReadableError' ? ' — another app is using it' : ''), true);
+    return;
+  }
+  const mime = voiceMime();
+  let mr;
+  try { mr = new MediaRecorder(stream, Object.assign({ audioBitsPerSecond: 32000 }, mime ? { mimeType: mime } : {})); }
+  catch (e) { stream.getTracks().forEach(t => t.stop()); toast('This phone cannot record audio here', true); return; }
+  const r = _rec = { mr, chunks: [], t0: Date.now(), ctx, day, stream, mime: mr.mimeType || mime || 'audio/webm', peak: 0 };
+  /* A live level meter. A recording of silence — mic muted, another app holding it, a case
+     over the hole — is the classic voice-note failure, and it is invisible until playback. */
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    r.ac = new AC(); r.an = r.ac.createAnalyser(); r.an.fftSize = 512;
+    r.ac.createMediaStreamSource(stream).connect(r.an);
+    r.buf = new Uint8Array(r.an.fftSize);
+  } catch (e) { r.an = null; }
+  mr.ondataavailable = e => { if (e.data && e.data.size) r.chunks.push(e.data); };
+  mr.onstop = () => voiceFinish(r);
+  mr.onerror = () => voiceStop(false);
+  try { mr.start(1000); }
+  catch (e) { _rec = null; stream.getTracks().forEach(t => t.stop()); toast('Could not start recording', true); return; }
+  r.tick = setInterval(voiceTick, 250);
+  r.cap = setTimeout(() => { voiceStop(false); toast('Ten minutes is the limit for one note — saved'); }, VOICE_MAX_MS);
+  buzz(12);
+  refreshMediaSlots();
+}
+function voiceTick() {
+  const r = _rec; if (!r) return;
+  const el = document.getElementById('vrec-t');
+  if (el) el.textContent = fmtClipLen(Date.now() - r.t0);
+  if (r.an) {
+    r.an.getByteTimeDomainData(r.buf);
+    let sum = 0; for (let i = 0; i < r.buf.length; i++) { const v = (r.buf[i] - 128) / 128; sum += v * v; }
+    const lvl = Math.min(1, Math.sqrt(sum / r.buf.length) * 4);
+    r.peak = Math.max(r.peak, lvl);
+    const m = document.getElementById('vrec-lvl'); if (m) m.style.width = Math.round(lvl * 100) + '%';
+  }
+}
+function voiceStop(cancel) {
+  const r = _rec; if (!r || r.stopping) return;
+  r.stopping = true; r.cancelled = !!cancel; r.dur = Date.now() - r.t0;
+  clearInterval(r.tick); clearTimeout(r.cap);
+  try { if (r.mr.state !== 'inactive') r.mr.stop(); else voiceFinish(r); } catch (e) { voiceFinish(r); }
+}
+async function voiceFinish(r) {
+  if (r.done) return; r.done = true;
+  try { r.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  try { if (r.ac) r.ac.close(); } catch (e) {}
+  if (_rec === r) _rec = null;
+  if (r.cancelled) { refreshMediaSlots(); toast('Recording discarded'); return; }
+  const blob = new Blob(r.chunks, { type: r.mime });
+  if (!blob.size || r.dur < VOICE_MIN_MS) { refreshMediaSlots(); toast('Too short to keep — hold on a little longer', true); return; }
+  const newNote = r.ctx === 'note:new' ? mediaNewNoteId() : null;
+  const ok = await mediaAdd({ id: mediaId(), kind: 'voice', mime: r.mime, blob, day: r.day, ctx: newNote ? 'note:' + newNote : r.ctx,
+    ts: r.t0, dur: r.dur, size: blob.size });
+  if (ok && newNote) { mediaCommitNote(newNote); mediaAfterNote(); }
+  refreshMediaSlots();
+  if (!ok) return;
+  buzz(8);
+  // Saved either way — but say so if the meter never moved, rather than let them find out later.
+  if (r.an && r.peak < 0.02) toast('Saved, but it sounds silent — check the microphone is not blocked or covered', true);
+  else toast('Voice note saved · ' + fmtClipLen(r.dur));
+}
+/* Leaving the screen or the app ends a recording by SAVING it — nobody expects a voice note
+   to vanish because a notification pulled them away. */
+function voiceSaveIfRecording() { if (_rec) voiceStop(false); }
+
+let _play = null;   // { id, a }
+function voiceToggle(id) {
+  if (_play && _play.id === id) { if (_play.a.paused) _play.a.play().catch(() => {}); else _play.a.pause(); return; }
+  voiceHalt();
+  const rec = _media.get(id); if (!rec) return;
+  const a = new Audio(mediaUrl(rec, 'f'));
+  _play = { id, a };
+  a.ontimeupdate = voicePaint; a.onplay = voicePaint; a.onpause = voicePaint;
+  a.onended = () => voiceHalt();
+  a.onerror = () => { toast('This voice note cannot be played on this phone', true); voiceHalt(); };
+  a.play().catch(() => {});
+  voicePaint();
+}
+function voiceHalt() {
+  if (_play) { try { _play.a.pause(); } catch (e) {} _play = null; }
+  voicePaint();
+}
+function voicePaint() {
+  document.querySelectorAll('[data-vrow]').forEach(row => {
+    const id = row.dataset.vrow, rec = _media.get(id);
+    const on = !!(_play && _play.id === id), playing = on && !_play.a.paused;
+    const b = row.querySelector('[data-vplay]');
+    if (b) { b.innerHTML = playing ? icon('pause', 18) : icon('playFill', 18); b.setAttribute('aria-label', playing ? 'Pause' : 'Play voice note'); }
+    const dur = (rec && rec.dur) || 0;
+    const t = on ? _play.a.currentTime * 1000 : 0;
+    const bar = row.querySelector('.vbar > span'); if (bar) bar.style.width = (on && dur ? Math.min(100, t / dur * 100) : 0) + '%';
+    const tm = row.querySelector('.vtime'); if (tm) tm.textContent = on && t ? fmtClipLen(t) + ' / ' + fmtClipLen(dur) : fmtClipLen(dur);
+    row.classList.toggle('on', on);
+  });
+}
+
+/* ---------- rendering ----------
+   A "slot" is re-rendered on its own (refreshMediaSlots) so adding a photo never rebuilds the
+   Log screen around a half-typed journal. */
+function mediaSlot(ctx, day, opts) {
+  opts = opts || {};
+  return `<div class="media-slot${opts.compact ? ' compact' : ''}" data-mctx="${escapeHtml(ctx)}" data-mday="${escapeHtml(day)}"${opts.compact ? ' data-mcompact="1"' : ''}>${mediaSlotHTML(ctx, day, opts)}</div>`;
+}
+function mediaSlotHTML(ctx, day, opts) {
+  opts = opts || {};
+  if (!mediaSupported()) return opts.compact ? '' : '<div class="hint">This browser cannot store photos or voice notes.</div>';
+  if (!_mediaReady) return opts.compact ? '' : '<div class="hint">Loading…</div>';
+  const items = mediaList(ctx, ctx === 'log' ? day : null);
+  const photos = items.filter(r => r.kind === 'photo'), voices = items.filter(r => r.kind === 'voice');
+  const grid = photos.length ? `<div class="mgrid">${photos.map(r => `<button class="mthumb" data-mview="${r.id}" aria-label="Photo from ${escapeHtml(mediaWhen(r.ts))}${r.caption ? ': ' + escapeHtml(r.caption) : ''}">
+      <img src="${mediaUrl(r, 't')}" alt="" loading="lazy" decoding="async"></button>`).join('')}</div>` : '';
+  const vlist = voices.map(r => `<div class="vrow" data-vrow="${r.id}">
+      <button class="vplay" data-vplay="${r.id}" aria-label="Play voice note">${icon('playFill', 18)}</button>
+      <div class="vmid"><div class="vbar"><span></span></div>
+        <div class="vmeta"><span class="vtime">${fmtClipLen(r.dur)}</span><span>${escapeHtml(mediaWhen(r.ts))}</span></div></div>
+      <button class="vdel" data-mdel="${r.id}" aria-label="Delete voice note">${icon('trash', 17)}</button>
+    </div>`).join('');
+  const recHere = _rec && _rec.ctx === ctx && _rec.day === day;
+  const recBar = recHere ? `<div class="vrec" role="status">
+      <span class="vrec-dot" aria-hidden="true"></span><span class="vrec-t" id="vrec-t">${fmtClipLen(Date.now() - _rec.t0)}</span>
+      <span class="vrec-lvl" aria-hidden="true"><span id="vrec-lvl"></span></span>
+      <div class="vrec-btns">
+        <button class="btn btn-ghost" data-vrec-cancel>Discard</button>
+        <button class="btn btn-primary" data-vrec-stop>${icon('check', 18)} Save</button>
+      </div></div>` : '';
+  if (opts.compact) return grid + (vlist ? `<div class="vlist">${vlist}</div>` : '') + recBar;
+  const empty = !items.length && !recHere
+    ? `<div class="media-empty">A photo of something from today, or a voice note while it is fresh. They stay on this phone and are saved in your backup file.</div>` : '';
+  const acts = recHere ? '' : `<div class="media-acts">
+      <button class="m-act" data-madd="camera" data-mctx="${escapeHtml(ctx)}" data-mday="${escapeHtml(day)}">${icon('camera', 20)}<span>Camera</span></button>
+      <button class="m-act" data-madd="gallery" data-mctx="${escapeHtml(ctx)}" data-mday="${escapeHtml(day)}">${icon('image', 20)}<span>Photos</span></button>
+      <button class="m-act" data-mrec data-mctx="${escapeHtml(ctx)}" data-mday="${escapeHtml(day)}"${_rec ? ' disabled' : ''}>${icon('mic', 20)}<span>Record</span></button>
+    </div>`;
+  return empty + grid + (vlist ? `<div class="vlist">${vlist}</div>` : '') + recBar + acts;
+}
+function refreshMediaSlots() {
+  document.querySelectorAll('.media-slot').forEach(s => {
+    s.innerHTML = mediaSlotHTML(s.dataset.mctx, s.dataset.mday, { compact: !!s.dataset.mcompact });
+  });
+  voicePaint();
+  const lc = document.getElementById('media-log-count');
+  if (lc) { const c = mediaDayCount(lc.dataset.day); lc.textContent = mediaCountText(c); }
+}
+function mediaCountText(c) {
+  const bits = [];
+  if (c.p) bits.push(c.p + ' photo' + (c.p === 1 ? '' : 's'));
+  if (c.v) bits.push(c.v + ' voice note' + (c.v === 1 ? '' : 's'));
+  return bits.join(' · ') || 'stays on this phone';
+}
+function mediaLogCardHTML(day) {
+  return `<div class="card media-card">
+    <h2 class="h2-icon">${hicon('camera')}<span>Photos &amp; voice</span> <span class="hint" id="media-log-count" data-day="${day}">${_mediaReady ? mediaCountText(mediaDayCount(day)) : ''}</span></h2>
+    ${mediaSlot('log', day)}
+  </div>`;
+}
+
+/* ---------- full-screen photo viewer ---------- */
+let _mview = null;   // { ids, i }
+function mediaViewOpen(id) {
+  const rec = _media.get(id); if (!rec) return;
+  const ids = mediaList(rec.ctx, rec.ctx === 'log' ? rec.day : null).filter(r => r.kind === 'photo').map(r => r.id);
+  _mview = { ids, i: Math.max(0, ids.indexOf(id)) };
+  let el = document.getElementById('media-view');
+  if (!el) { el = document.createElement('div'); el.id = 'media-view'; el.className = 'mview'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); document.body.appendChild(el); mediaSwipe(el); }
+  mediaViewPaint();
+  el.classList.add('on');
+}
+function mediaViewPaint() {
+  const el = document.getElementById('media-view'); if (!el || !_mview) return;
+  const id = _mview.ids[_mview.i], rec = _media.get(id);
+  if (!rec) { mediaViewClose(); return; }
+  const n = _mview.ids.length;
+  const canShare = !!nativeSharePlugin() || !!navigator.canShare || !window.Capacitor;
+  el.setAttribute('aria-label', 'Photo ' + (_mview.i + 1) + ' of ' + n);
+  el.innerHTML = `
+    <div class="mview-top">
+      <div class="mview-when"><b>${escapeHtml(prettyDate(rec.day))}</b><span>${escapeHtml(mediaWhen(rec.ts))}${n > 1 ? ' · ' + (_mview.i + 1) + ' of ' + n : ''}</span></div>
+      <button class="mview-x" data-mview-close aria-label="Close">${icon('x', 22)}</button>
+    </div>
+    <div class="mview-stage"><img class="mview-img" src="${mediaUrl(rec, 'f')}" alt="${escapeHtml(rec.caption || 'Photo')}"></div>
+    ${n > 1 ? `<button class="mview-nav prev" data-mview-step="-1" aria-label="Previous photo"${_mview.i === 0 ? ' disabled' : ''}>${icon('chevL', 26)}</button>
+      <button class="mview-nav next" data-mview-step="1" aria-label="Next photo"${_mview.i === n - 1 ? ' disabled' : ''}>${icon('chevR', 26)}</button>` : ''}
+    <div class="mview-bar">
+      <input class="mview-cap" type="text" maxlength="200" data-mcap="${rec.id}" placeholder="Add a caption…" value="${escapeHtml(rec.caption || '')}" aria-label="Caption">
+      <div class="mview-acts">
+        ${canShare ? `<button class="mview-btn" data-mshare="${rec.id}">${icon('share', 18)}<span>Share</span></button>` : ''}
+        <button class="mview-btn danger" data-mdel="${rec.id}">${icon('trash', 18)}<span>Delete</span></button>
+      </div>
+    </div>`;
+}
+function mediaViewStep(d) {
+  if (!_mview) return;
+  const j = _mview.i + d; if (j < 0 || j >= _mview.ids.length) return;
+  _mview.i = j; mediaViewPaint();
+}
+function mediaViewClose() {
+  const el = document.getElementById('media-view'); if (el) { el.classList.remove('on'); el.innerHTML = ''; }
+  _mview = null;
+}
+function mediaViewIsOpen() { const el = document.getElementById('media-view'); return !!(el && el.classList.contains('on')); }
+function mediaSwipe(el) {
+  let x0 = null, y0 = 0;
+  el.addEventListener('touchstart', e => { if (e.touches.length !== 1 || e.target.closest('.mview-bar')) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (x0 == null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) mediaViewStep(dx < 0 ? 1 : -1);
+    else if (dy > 90 && Math.abs(dy) > Math.abs(dx) * 1.5) mediaViewClose();   // swipe down to close
+  }, { passive: true });
+}
+let _capTimer = null;
+function mediaSaveCaption(id, text) {
+  const rec = _media.get(id); if (!rec) return;
+  rec.caption = String(text || '').slice(0, 200);
+  clearTimeout(_capTimer);
+  _capTimer = setTimeout(() => { mediaWrite(s => s.put(rec)).catch(e => toast(mediaQuotaMsg(e) + ' — caption not saved', true)); }, 400);
+}
+function b64ToBlob(b64, mime) {
+  const bin = atob(b64), u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return new Blob([u], { type: mime || 'application/octet-stream' });
+}
+async function mediaShare(id) {
+  const rec = _media.get(id); if (!rec) return;
+  const name = 'daylog-' + rec.day + '-' + rec.id + '.jpg';
+  const nat = nativeSharePlugin();
+  if (nat) {
+    try { await nat.shareImage({ base64: await blobToB64(rec.blob), filename: name }); }
+    catch (e) { toast('Could not open the share sheet', true); }
+    return;
+  }
+  try {
+    const f = new File([rec.blob], name, { type: rec.mime });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  if (!window.Capacitor) {
+    const a = document.createElement('a'); a.href = mediaUrl(rec, 'f'); a.download = name; a.click();
+    toast('Saved to your downloads'); return;
+  }
+  toast('Sharing photos needs the latest Daylog from the Play Store', true);
+}
+async function mediaConfirmDelete(id) {
+  const rec = _media.get(id); if (!rec) return;
+  if (!confirm(rec.kind === 'photo' ? 'Delete this photo? This cannot be undone.' : 'Delete this voice note? This cannot be undone.')) return;
+  if (!(await mediaDelete(id))) return;
+  if (_mview) {
+    _mview.ids = _mview.ids.filter(x => x !== id);
+    if (!_mview.ids.length) mediaViewClose();
+    else { _mview.i = Math.min(_mview.i, _mview.ids.length - 1); mediaViewPaint(); }
+  }
+  refreshMediaSlots();
+  toast(rec.kind === 'photo' ? 'Photo deleted' : 'Voice note deleted');
+}
+document.addEventListener('click', (ev) => {
+  const t = ev.target.closest && ev.target.closest('[data-madd],[data-mrec],[data-vrec-stop],[data-vrec-cancel],[data-vplay],[data-mview],[data-mdel],[data-mshare],[data-mview-close],[data-mview-step]');
+  if (!t) {
+    // a tap on the dark backdrop around the photo closes the viewer
+    if (ev.target.id === 'media-view' || (ev.target.classList && ev.target.classList.contains('mview-stage'))) mediaViewClose();
+    return;
+  }
+  const d = t.dataset;
+  if (d.madd !== undefined) { mediaPick(d.madd, d.mctx, d.mday); return; }
+  if (d.mrec !== undefined) { voiceStart(d.mctx, d.mday); return; }
+  if (d.vrecStop !== undefined) { voiceStop(false); return; }
+  if (d.vrecCancel !== undefined) { voiceStop(true); return; }
+  if (d.vplay) { voiceToggle(d.vplay); return; }
+  if (d.mview) { mediaViewOpen(d.mview); return; }
+  if (d.mdel) { mediaConfirmDelete(d.mdel); return; }
+  if (d.mshare) { mediaShare(d.mshare); return; }
+  if (d.mviewClose !== undefined) { mediaViewClose(); return; }
+  if (d.mviewStep) { mediaViewStep(+d.mviewStep); return; }
+});
+document.addEventListener('input', (ev) => {
+  const c = ev.target.closest && ev.target.closest('[data-mcap]');
+  if (c) mediaSaveCaption(c.dataset.mcap, c.value);
+});
+document.addEventListener('keydown', (ev) => {
+  if (!mediaViewIsOpen() || (ev.target.closest && ev.target.closest('.mview-cap'))) return;
+  if (ev.key === 'Escape') mediaViewClose();
+  else if (ev.key === 'ArrowLeft') mediaViewStep(-1);
+  else if (ev.key === 'ArrowRight') mediaViewStep(1);
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && _rec) { voiceSaveIfRecording(); }
+  if (document.visibilityState === 'hidden') voiceHalt();
+});
+
+/* ---------- backup ----------
+   Media rides in the backup file as `_media`, base64. It is not in BACKUP_KEYS: those are
+   localStorage sections and this is not one. validateBackup ignores it, so an old app reading
+   a new backup restores everything else and simply skips the pictures. */
+async function mediaForBackup() {
+  if (!mediaSupported()) return { items: [], skipped: 0, bytes: 0 };
+  let all;
+  try { all = await mediaReadAll(); } catch (e) { return { items: [], skipped: -1, bytes: 0 }; }
+  const items = []; let skipped = 0, bytes = 0;
+  for (const r of all) {
+    try {
+      const it = { id: r.id, kind: r.kind, mime: r.mime, day: r.day, ctx: r.ctx, ts: r.ts, data: await blobToB64(r.blob) };
+      if (r.thumb) it.thumb = await blobToB64(r.thumb);
+      ['w', 'h', 'dur', 'caption'].forEach(k => { if (r[k] != null && r[k] !== '') it[k] = r[k]; });
+      items.push(it); bytes += r.size || 0;
+    } catch (e) { skipped++; }
+  }
+  return { items, skipped, bytes };
+}
+/* Shape-check one backed-up item. Pure, so tests can feed it junk. */
+function mediaItemValid(it) {
+  return !!it && typeof it === 'object'
+    && typeof it.id === 'string' && /^[\w-]{1,40}$/.test(it.id)
+    && (it.kind === 'photo' || it.kind === 'voice')
+    && typeof it.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.day)
+    && typeof it.ctx === 'string' && /^(log|note:[\w-]{1,40})$/.test(it.ctx)
+    && typeof it.data === 'string' && it.data.length > 0
+    && (it.mime == null || (typeof it.mime === 'string' && /^(image|audio)\/[\w.+-]+(;[\w=.,+ -]*)?$/.test(it.mime)));
+}
+/* Adds what is missing and never overwrites: a photo already on this phone is the same photo. */
+async function mediaRestore(list) {
+  const res = { added: 0, had: 0, bad: 0, failed: 0 };
+  if (!mediaSupported() || !Array.isArray(list)) return res;
+  if (!_mediaReady) await mediaLoad();
+  for (const it of list) {
+    if (!mediaItemValid(it)) { res.bad++; continue; }
+    if (_media.has(it.id)) { res.had++; continue; }
+    let rec;
+    try {
+      const mime = it.mime || (it.kind === 'photo' ? 'image/jpeg' : 'audio/webm');
+      const blob = b64ToBlob(it.data, mime);
+      rec = { id: it.id, kind: it.kind, mime, blob, day: it.day, ctx: it.ctx, ts: +it.ts || Date.now(), size: blob.size };
+      if (typeof it.thumb === 'string' && it.thumb) { rec.thumb = b64ToBlob(it.thumb, 'image/jpeg'); rec.size += rec.thumb.size; }
+      if (+it.w) rec.w = +it.w; if (+it.h) rec.h = +it.h; if (+it.dur) rec.dur = +it.dur;
+      if (typeof it.caption === 'string') rec.caption = it.caption.slice(0, 200);
+    } catch (e) { res.bad++; continue; }
+    try { await mediaWrite(s => s.put(rec)); _media.set(rec.id, rec); res.added++; }
+    catch (e) { res.failed++; break; }        // out of space: further writes fail the same way
+  }
+  refreshMediaSlots();
+  return res;
+}
+/* Delete everything: close our handle first, or deleteDatabase waits on it forever. */
+function mediaWipe() {
+  voiceHalt(); if (_rec) voiceStop(true);
+  _mediaUrls.forEach(u => URL.revokeObjectURL(u)); _mediaUrls.clear(); _media.clear();
+  if (!mediaSupported()) return Promise.resolve();
+  const closing = _mediaDbP ? _mediaDbP.then(db => db.close()).catch(() => {}) : Promise.resolve();
+  _mediaDbP = null;
+  return closing.then(() => new Promise(res => {
+    try { const rq = indexedDB.deleteDatabase(MEDIA_DB); rq.onsuccess = rq.onerror = rq.onblocked = () => res(); }
+    catch (e) { res(); }
+  }));
+}
+
 /* Everything the app stores, for a COMPLETE backup/restore. */
 const BACKUP_KEYS = ['entries', 'tasks', 'notes', 'plans', 'projects', 'pjnames', 'gapskip', 'cardratio',
   'finaccts', 'fintx', 'finmarks', 'finbudget', 'fincats', 'finset', 'gym', 'exercises', 'reminders', 'timelog', 'timeacts', 'events', 'docs', 'habitcfg', 'actcfg', 'deepcfg', 'gymcfg', 'corecfg', 'daycfg', 'gymgroups', 'navcfg', 'pomo', 'timebox', 'pomohist', 'health', 'goals', 'logsec', 'awards', 'freshSeen',
@@ -6208,6 +6833,11 @@ const BACKUP_EXCLUDED = [
   'ntfy.sent',                         // notification de-dup; replaying it would suppress alerts
   'logsecMigrated', 'moodInputMigrated',   // one-shot migration markers
 ];
+/* Sections of the backup FILE that are not localStorage keys, so the BACKUP_KEYS loop cannot
+   carry them; each has its own export and restore code. `_media` is the photos and voice notes
+   held in IndexedDB (mediaForBackup / mediaRestore). tools/check-backup-keys.mjs checks every
+   one is written by exportData AND read by importData, so one side cannot quietly go missing. */
+const BACKUP_EXTRA = ['_media'];
 /* Deleting everything is irreversible, so it is deliberately hard to do by accident.
    Four stages, in memory only — a reload, a crash or leaving Settings resets it to 0:
      0  the plain button
@@ -6298,6 +6928,8 @@ function wipeEverything() {
 
 async function exportData() {
   const { data: out, skipped } = backupBlob();
+  const media = await mediaForBackup();
+  if (media.items.length) out._media = media.items;
   // Await it, and only stamp the date if the file actually reached the user. Stamping
   // unconditionally meant Settings said "last backup: today ✅" after a cancelled share
   // sheet — the single most dangerous lie this app could tell.
@@ -6307,6 +6939,9 @@ async function exportData() {
   // this app keeps having to unlearn — and here it would not be noticed until a restore.
   if (saveOk(r) && skipped.length) {
     toast(`Backed up, but ${skipped.length} section(s) were unreadable and left out: ${skipped.join(', ')}`, true);
+  } else if (saveOk(r) && media.skipped) {
+    toast(media.skipped < 0 ? 'Backed up, but your photos and voice notes could not be read and are NOT in this file'
+      : `Backed up, but ${media.skipped} photo(s)/voice note(s) could not be read and were left out`, true);
   }
   return r;
 }
@@ -6382,7 +7017,8 @@ function importData(file, after) {
       if (!check.ok) { toast(check.reason, true); done(false); return; }
       // Restoring REPLACES what is on this device. Ask first — this is destructive, it is not
       // undoable, and the file picker cannot tell a backup from any other .json.
-      if (!confirm(`Restore ${check.keys.length} section(s) from this backup?\n\nThis replaces the matching data on this device and cannot be undone.`)) { done(false); return; }
+      const nMedia = Array.isArray(d._media) ? d._media.length : 0;
+      if (!confirm(`Restore ${check.keys.length} section(s)${nMedia ? ` and ${nMedia} photo(s)/voice note(s)` : ''} from this backup?\n\nThis replaces the matching data on this device and cannot be undone.${nMedia ? ' Photos and voice notes already on this phone are kept.' : ''}`)) { done(false); return; }
       // safeSet, not setItem: on a full phone a raw write throws per key and the restore
       // would still have said "Backup restored" over a half-loaded backup — the same
       // report-success-on-failure bug fixed for the SAVE paths in v223/v224, but on the
@@ -6393,8 +7029,18 @@ function importData(file, after) {
       refreshStreak(); setupReminders(); pushState(true); show('dash');
       if (!wrote) toast(`Nothing was restored — all ${failed} section(s) failed to write. Free up storage and try again.`, true);
       else if (failed) toast(`Restored ${wrote} section(s); ${failed} could not be written — free up storage and import again`, true);
-      else toast('Backup restored');
+      else if (!nMedia) toast('Backup restored');
       done(wrote > 0);
+      // Pictures go after the sections, and report separately: they are big, slow on a cheap
+      // phone, and the one part most likely to hit a full disk.
+      if (nMedia && wrote) {
+        toast(`Restoring ${nMedia} photo(s) and voice note(s)…`);
+        mediaRestore(d._media).then(m => {
+          if (m.failed) toast(`Restored your data and ${m.added} photo(s)/voice note(s); the rest did not fit — free up space and import again`, true);
+          else if (m.bad) toast(`Backup restored · ${m.added} photo(s)/voice note(s) added, ${m.bad} damaged one(s) skipped`, true);
+          else toast(`Backup restored · ${m.added} photo(s)/voice note(s) added` + (m.had ? `, ${m.had} were already here` : ''));
+        });
+      }
     } catch (e) { toast('Bad backup file', true); done(false); }
   };
   r.onerror = () => done(false);
@@ -11729,6 +12375,8 @@ function handleBack() {
   if (svh && svh.classList.contains('on')) { saveSheetClose(); return; }
   const mrd = document.getElementById('mrdeck');
   if (mrd && mrd.classList.contains('on')) { mrClose(); return; }
+  if (mediaViewIsOpen()) { mediaViewClose(); return; }
+  if (_rec) { voiceStop(false); return; }   // back while recording saves the note, like leaving does
   for (const id of ['tip-ask', 'rate-ask']) {   // the tip and review sheets
     const x = document.getElementById(id); if (x && x.classList.contains('on')) { x.classList.remove('on'); return; }
   }
@@ -11821,6 +12469,7 @@ function show(name) {
   // Leaving Settings abandons a half-finished delete. An in-progress irreversible action
   // must never survive navigating away and come back still armed.
   if (name !== 'settings') { try { wipeReset(); } catch (e) {} settingsPage = null; }
+  voiceSaveIfRecording(); voiceHalt(); mediaViewClose();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
   const sec = document.getElementById('s-' + name);
   if (sec) sec.classList.add('on');
@@ -11919,6 +12568,15 @@ const ICONS = {
   download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
   trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   message:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>',
+  camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/>',
+  image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+  mic:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
+  share:'<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/>',
+  pause:'<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
+  playFill:'<path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5Z" fill="currentColor"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  chevL:'<path d="m15 18-6-6 6-6"/>',
+  chevR:'<path d="m9 18 6-6-6-6"/>',
 };
 // section id → icon, and default-habit key → icon (custom items keep their emoji)
 const SECTION_ICON = { mind:'lightbulb', wellbeing:'smile', health:'heart', work:'briefcase', learning:'book', finance:'wallet', digital:'phone', growth:'trending', haircare:'scissors', skincare:'droplet' };
@@ -12247,6 +12905,7 @@ document.getElementById('nav').classList.add('ready');   // reveal the bar now t
 const _topbar = document.querySelector('.topbar');
 addEventListener('scroll', () => { if (_topbar) _topbar.classList.toggle('scrolled', scrollY > 4); }, { passive: true });
 refreshStreak();
+mediaLoad();
 // Returning from the standalone How-to guide (index.html?go=settings) lands on Settings, not home.
 const _go = new URLSearchParams(location.search).get('go');
 navigateTo((_go && RENDER[_go]) ? _go : defaultTab());

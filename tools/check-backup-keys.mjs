@@ -36,6 +36,8 @@ function arrayLiteral(name) {
 
 const backed = arrayLiteral("BACKUP_KEYS");
 const excluded = arrayLiteral("BACKUP_EXCLUDED");
+// Backup-file sections that do not live in localStorage (photos and voice notes in IndexedDB).
+const extra = arrayLiteral("BACKUP_EXTRA");
 
 // Every literal key written through safeSet() or localStorage.setItem().
 const written = new Set();
@@ -121,8 +123,15 @@ for (const m of bodyOf("backupBlob").matchAll(/\bout\.([A-Za-z_]\w*)\s*=|const o
 for (const m of bodyOf("importData").matchAll(/\bd\.([A-Za-z_]\w*)/g)) specialCased.add(m[1]);
 
 const undeclared = [...specialCased]
-  .filter((k) => !backed.includes(k) && !excluded.includes(k))
+  .filter((k) => !backed.includes(k) && !excluded.includes(k) && !extra.includes(k))
   .sort();
+// A non-localStorage section is only a backup if BOTH sides exist. Exporting photos that the
+// import never reads would be the same "Backup restored" lie this whole script is about.
+for (const k of extra) {
+  if (backed.includes(k) || excluded.includes(k)) problems.push(`${k} is in BACKUP_EXTRA and also in a localStorage list`);
+  if (!new RegExp(`\\bout\\.${k}\\s*=`).test(bodyOf("exportData"))) problems.push(`${k} is in BACKUP_EXTRA but exportData() never writes out.${k}`);
+  if (!new RegExp(`\\bd\\.${k}\\b`).test(bodyOf("importData"))) problems.push(`${k} is in BACKUP_EXTRA but importData() never reads d.${k}`);
+}
 if (undeclared.length) {
   problems.push(
     `handled by hand in backupBlob()/importData() but in neither list: ${undeclared.join(", ")}\n` +
@@ -143,6 +152,6 @@ if (problems.length) {
 }
 
 console.log(
-  `backup keys: ${written.size} written, ${backed.length} backed up, ${excluded.length} excluded by design, ${specialCased.size} hand-handled` +
+  `backup keys: ${written.size} written, ${backed.length} backed up, ${excluded.length} excluded by design, ${extra.length} outside localStorage (${extra.join(", ")}), ${specialCased.size} hand-handled` +
   (unmatched.length ? ` (${unmatched.length} written via helpers, not literals: ${unmatched.join(", ")})` : "")
 );
