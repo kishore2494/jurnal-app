@@ -1005,7 +1005,7 @@ const WHATS_NEW = {
     '🎓 <b>Guided tour</b> — a 60-second walkthrough of everything (Settings ▸ Take the app tour)',
     '🧠 <b>Your patterns</b> — Stats now discovers YOUR sleep sweet spot, which habit actually lifts your mood, your peak focus hours & more',
     '🕸️ <b>Explore your Connections graph</b> — drag to pan, pinch to zoom',
-    '🧭 <b>Pin any tabs you want</b> to the bottom bar — ☰ Menu ▸ Edit tabs',
+    '🧭 <b>Pin any tabs you want</b> to the bottom bar — ☰ Menu ▸ Edit this menu',
     '🎙️ <b>Voice typing works in the app</b> — update Daylog in the Play Store, then tap Speak',
     '🎉 <b>Streak rewards</b> — full-screen celebration at 3, 5, 7, 10, 14… day streaks',
     '🔗 <b>Connected insights</b> in Stats — how sleep drives your mood, week vs last week',
@@ -2202,7 +2202,7 @@ document.addEventListener('click', (ev) => {
       })
       .then(r => { if (!r) return;
         toast(r.granted ? 'Connected — ' + r.granted + ' of ' + r.of + ' metrics allowed' : 'Nothing allowed yet');
-        renderSettings(); })
+        renderSettingsIfShown(); })
       .catch(() => toast('Health Connect unavailable', true));
     return;
   }
@@ -5580,7 +5580,13 @@ document.addEventListener('click', (ev) => {
 /* ============================================================
    SCREEN: SETTINGS / MORE
    ============================================================ */
-let settingsPage = null;   // which Settings page is open; null = the grouped home
+let settingsPage = null;
+/* For async callbacks (a network reply, a permission sheet): the person may have left
+   Settings meanwhile, and renderSettings() also rewrites the screen title. */
+function renderSettingsIfShown() {
+  const s = document.getElementById('s-settings');
+  if (s && s.classList.contains('on')) renderSettings();
+}   // which Settings page is open; null = the grouped home
 function renderSettings() {
   const s = DB.settings();
   /* SYNC IS HIDDEN AGAIN (v222) — offered only to users who already connected it.
@@ -5826,8 +5832,8 @@ function renderSettings() {
       row('id="open-custom"', 'sparkle', 'Customize', 'Tabs, habits, log fields, gym, theme') +
       row('data-set-page="widgets"', 'layers', 'Log screen', 'Show or hide the ring, mood grid and more'))}
     ${group('Reminders &amp; tracking',
-      row('data-set-page="reminders"', 'bell', 'Reminders', nRem ? `${nRem} set` + (nativeShell() ? '' : ' · background alarms') : 'None yet · add a daily nudge') +
-      row('data-set-page="tracking"', 'heart', 'Auto-tracking', at.on ? 'On · sleep, steps, screen time from your phone' : 'Off · nothing is collected'))}
+      row('data-set-page="reminders"', 'bell', 'Reminders', nRem ? `${nRem} set` + (!nativeShell() && s.ntfyOn ? ' · background alarms on' : '') : 'None yet · add a daily nudge') +
+      row('data-set-page="tracking"', 'heart', 'Auto-tracking', !hcPlugin() ? 'Needs the Play Store app' : at.on ? 'On · sleep, steps, screen time from your phone' : 'Off · nothing is collected'))}
     ${group('Your data',
       row('data-set-page="data"', 'download', 'Backup &amp; restore', lastD < 0 ? 'No backup yet · do this once' : lastD === 0 ? 'Last backup today' : `Last backup ${lastD} day${lastD === 1 ? '' : 's'} ago`, lastD < 0 || lastD > 7 ? 'set-warn' : '') +
       row('id="open-report"', 'note', 'Download report (PDF)', 'Your stats as a printable report') +
@@ -6012,8 +6018,8 @@ document.addEventListener('click', async (ev) => {
     const raw = (document.getElementById('set-restore-url').value || '').trim();
     toast('Connecting…');
     syncLinkRestore(raw, (status, days) => {
-      if (status === 'restored') { renderSettings(); refreshStreak(); toast(`Restored ${days} day${days === 1 ? '' : 's'} ✅`); }
-      else if (status === 'empty') { renderSettings(); toast('Connected, but the sheet has no data to restore yet', true); }
+      if (status === 'restored') { renderSettingsIfShown(); refreshStreak(); toast(`Restored ${days} day${days === 1 ? '' : 's'} ✅`); }
+      else if (status === 'empty') { renderSettingsIfShown(); toast('Connected, but the sheet has no data to restore yet', true); }
       else if (status === 'bad-url') toast('That does not look like a sync link — it ends in /exec', true);
       else toast('Could not reach that link — check it and try again', true);
     });
@@ -12507,7 +12513,13 @@ function navigateTo(name) {
   if (name === 'plans') curPlan = null;                     // Plans opens the list
   if (name === 'cal') { calSel = todayStr(); calMonth = calSel.slice(0, 7); }
   if (name === 'write') curDoc = null;                      // Write opens the article list
+  /* Picking Settings — from the menu, a pinned tab or More — opens its HOME, not whichever
+     sub-page was last open, and disarms a half-started delete. Done here and not in show():
+     the sync merge and the theme change re-render through show(), and must not throw someone
+     off a page mid-edit. */
+  if (name === 'settings') settingsPage = null;
   show(name);
+  if (name === 'settings') wipeAbandonIfAway();
 }
 document.getElementById('nav').addEventListener('click', (ev) => {
   const b = ev.target.closest('button'); if (!b) return;
@@ -12817,7 +12829,7 @@ const TOUR = [
   { s: 'time', t: '.act-chip', h: 'The one-tap time tracker ⭐', b: 'Tap an activity to start its timer, tap another to switch — your whole day becomes a 24-hour timeline. Tracked Sleep & Work auto-fill your Log.' },
   { s: 'dash', t: '.pat-row', alt: '.pm-card', h: 'Your patterns', b: 'Daylog mines your raw data for real insights — your sleep sweet spot, which habit lifts your mood, your peak focus hours. All computed on your phone.' },
   { s: 'dash', t: '[data-dashtab="health"]', h: 'Health analytics', b: 'Steps, screen time, calories — charted and connected to your mood, so you can see what actually helps.' },
-  { s: '__menu', t: '#drawer-more-toggle', alt: '.drawer-row', h: 'Everything else lives in Menu', b: 'Search your entire life, History, Gym, Calendar, Focus timers… and pin ANY of these to the bottom bar with “Edit tabs”.' },
+  { s: '__menu', t: '#drawer-more-toggle', alt: '.drawer-row', h: 'Everything else lives in Menu', b: 'Search your entire life, History, Gym, Calendar, Focus timers… and pin ANY of these to the bottom bar with “Edit this menu”.' },
   { s: 'today', t: null, h: 'You\'re all set 🔥', b: 'Make every part yours in Settings ▸ Customize. Your data stays on your phone — private, always.' },
 ];
 let tourIdx = -1;
@@ -12916,13 +12928,10 @@ setupReminders();
 setTimeout(() => { if (localStorage.getItem('dp.onboarded') && !document.getElementById('onboard').classList.contains('on')) showWhatsNewPopup(); }, 1200);
 setTimeout(() => checkReminders(true), 1000);   // catch a reminder you missed while the app was closed
 // Ask Android what it will actually honour, so Settings can warn instead of failing silently.
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible' || !nativeShell()) return;
-  refreshAlarmHealth().then(() => {          // they may have just granted it in Settings
-    const s = document.getElementById('s-settings');
-    if (s && s.classList.contains('on')) renderSettings();
-  });
-});
+// Coming BACK to the app is handled by recheckAlarmHealth()'s own visibilitychange listener,
+// which redraws only if the answer changed. A second listener here redrew Settings on every
+// return — which emptied the feedback box right after the mail-app handoff that promised
+// "your text stays here until you send it".
 setTimeout(() => { refreshAlarmHealth().then(() => {
   const s = document.getElementById('s-settings');
   if (s && s.classList.contains('on')) renderSettings();

@@ -669,9 +669,24 @@
     ok('the home holds no setting cards of its own', !document.querySelector('#s-settings .card:not(.alarm-warn)'));
     const pages = [...document.querySelectorAll('#s-settings [data-set-page]')].map(b => b.dataset.setPage);
     ok('every page row opens a page that renders', pages.length >= 6 && pages.every(k => {
-      settingsPage = k; renderSettings(); const ok1 = !!document.getElementById('set-back') && settingsPage === k;
+      settingsPage = k; renderSettings();
+      // a back button alone would pass on an empty page — require the page's own content
+      const ok1 = !!document.getElementById('set-back') && settingsPage === k
+        && document.querySelectorAll('#s-settings .card').length > 0
+        && (document.getElementById('s-settings').textContent || '').trim().length > 120;
       settingsPage = null; return ok1; }), pages.join(','));
     renderSettings();
+    /* Picking Settings again — menu, pinned tab, More — lands on the home and disarms a
+       half-started delete. It used to redraw whichever page was open, still armed. */
+    settingsPage = 'wipe'; renderSettings(); _wipeStage = 1; renderSettings();
+    navigateTo('settings');
+    ok('choosing Settings again opens its home', settingsPage === null && !document.getElementById('set-back'));
+    ok('…and a half-started delete is disarmed', _wipeStage === 0);
+    /* A re-render after an async reply must not paint Settings over another screen. */
+    show('notes');
+    renderSettingsIfShown();
+    ok('a late reply does not repaint Settings over Notes', document.getElementById('screen-title').textContent === 'Notes');
+    show('settings');
   })();
 
   /* ---- PROJECTS ---- */
@@ -1698,6 +1713,8 @@
     renderDrawer();
     const keys = [...document.querySelectorAll('#drawer-list [data-screen], #drawer-foot [data-screen]')].map(b => b.dataset.screen);
     ok('settings renders last in the menu', keys[keys.length - 1] === 'settings', keys.join(','));
+    ok('and lives in the footer, not among the tabs',
+      !document.querySelector('#drawer-list [data-screen="settings"]') && !!document.querySelector('#drawer-foot [data-screen="settings"]'));
     ok('and the edit-tabs row is still below it', !!document.getElementById('drawer-edit-tabs'));
     ok('it reads Settings in the menu',
       /Settings/.test([...document.querySelectorAll('#drawer-foot [data-screen="settings"]')][0].textContent));

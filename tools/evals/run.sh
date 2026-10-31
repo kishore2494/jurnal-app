@@ -75,6 +75,16 @@ for VP in "320 640" "360 740" "412 820"; do
     case "$R" in \{*) echo "," >> "$OUT"; printf '{"screen":"dash-%s","w":%s,"h":%s,"r":%s}' "$T" "$W" "$H" "$R" >> "$OUT";; esac
   done
 
+  # Settings opens on a short list of rows; the dense cards (reminder rows, ntfy, the delete
+  # stages, backup, sync) live on its pages. Measuring only show('settings') stopped
+  # measuring all of them in v250.
+  for P in widgets reminders tracking data wipe feedback; do
+    $B js "try{ settingsPage='$P'; show('settings'); window.scrollTo(0,0); }catch(e){} 'ok'" >/dev/null 2>&1
+    R=$($B eval "$PWD/tools/evals/checks.js" 2>/dev/null | tail -1)
+    case "$R" in \{*) echo "," >> "$OUT"; printf '{"screen":"settings-%s","w":%s,"h":%s,"r":%s}' "$P" "$W" "$H" "$R" >> "$OUT";; esac
+  done
+  $B js "try{ settingsPage=null; }catch(e){} 'ok'" >/dev/null 2>&1
+
   claim || continue
   # Money: four tabs, and the empty state is a different page again. Seeded with a credit card
   # in debt and a loan so the negative-balance styling is actually measured, plus the quick-add
