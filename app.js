@@ -1015,6 +1015,38 @@ const WHATS_NEW = {
   ],
 };
 function whatsNewHTML() { return ''; }   // replaced by the popup (showWhatsNewPopup)
+/* Someone using Daylog in an ANDROID BROWSER is one tap from the Play app, which can do what a
+   web page cannot: ring an alarm with the screen off, read Health Connect, measure screen
+   time. Say so once, plainly, and get out of the way — "Not now" is 30 days of silence and
+   "Get it" is forever. Data does not follow them across (the app's WebView has its own
+   storage), so anyone with entries is told how to carry them over before they go. */
+const PLAY_NUDGE_SNOOZE = 30 * 86400000;
+function playNudgeDue() {
+  if (window.Capacitor || !/Android/i.test(navigator.userAgent || '')) return false;
+  const st = safeParse(localStorage.getItem('dp.playNudge'), null) || {};
+  if (st.done) return false;
+  return !st.snoozed || Date.now() - st.snoozed > PLAY_NUDGE_SNOOZE;
+}
+function playNudgeHTML() {
+  if (!playNudgeDue()) return '';
+  const n = contentDates().length;
+  return `<div class="card play-nudge" id="play-nudge">
+    <div class="pn-h">${hicon('phone')}<b>Daylog is on Google Play</b></div>
+    <p>The same app, plus what a browser cannot do: alarms that ring while your phone is asleep, steps and sleep from Health Connect, and automatic screen time. Free, no account.</p>
+    ${n ? `<p class="pn-dim">Your ${n} logged day${n === 1 ? '' : 's'} here will not move across by themselves: <b>Settings ▸ Backup ▸ Export</b> here, then <b>Import</b> in the app.</p>` : ''}
+    <div class="pn-btns">
+      <a class="btn btn-primary" id="pn-go" href="${escapeHtml(playLink('pwa', 'web', 'nudge'))}" target="_blank" rel="noopener">Install the app</a>
+      <button class="btn btn-ghost" id="pn-later">Not now</button>
+    </div></div>`;
+}
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest) return;
+  if (ev.target.closest('#pn-go')) { safeSet('dp.playNudge', JSON.stringify({ done: true })); setTimeout(() => { const el = document.getElementById('play-nudge'); if (el) el.remove(); }, 300); return; }
+  if (ev.target.closest('#pn-later')) {
+    safeSet('dp.playNudge', JSON.stringify({ snoozed: Date.now() }));
+    const el = document.getElementById('play-nudge'); if (el) el.remove();
+  }
+});
 function showWhatsNewPopup() {
   if (localStorage.getItem('dp.whatsnew') === WHATS_NEW.v) return;
   let m = document.getElementById('wn-pop');
@@ -1713,6 +1745,7 @@ function renderToday() {
 
   document.getElementById('s-today').innerHTML = `
     ${whatsNewHTML()}
+    ${playNudgeHTML()}
     ${secHTML}
 
     <div class="log-footer">
@@ -5843,7 +5876,9 @@ function renderSettings() {
       `<a class="set-row" href="guide.html"><span class="set-ico">${icon('book', 21)}</span>
         <span class="set-txt"><span class="set-lbl">How to use Daylog</span><span class="set-sub">A quick illustrated guide</span></span><span class="set-go" aria-hidden="true">›</span></a>` +
       row('data-set-page="feedback"', 'message', 'Send feedback', 'Something broken or missing? Tell me'))}
-    ${tipPlugin() ? group('Support', row('id="open-tip"', 'heart', 'Support Daylog', 'An optional tip · unlocks nothing', 'set-tip')) : ''}
+    ${group('Support',
+      row('id="open-invite"', 'share', 'Tell a friend', 'A card or a link · how people find Daylog') +
+      (tipPlugin() ? row('id="open-tip"', 'heart', 'Support Daylog', 'An optional tip · unlocks nothing', 'set-tip') : ''))}
     <p class="set-about">Daylog ${APP_VERSION} · Your data stays on this phone${s.syncUrl ? ' and your Google Sheet' : ''} · <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>`;
 }
 document.addEventListener('click', async (ev) => {
@@ -6828,6 +6863,7 @@ const BACKUP_EXCLUDED = [
   // how many times the support ask has been shown here — not data, and a donation buys
   // nothing, so there is deliberately nothing about a donor worth restoring
   'tip',
+  'playNudge',                         // "get the Play app" card state — about this browser, not the user
   'celeb',   // which day's one-per-day celebration budget is spent — meaningless on another install
   'errlog',                            // crash log for the feedback mail, not user data
   'onboarded', 'toured', 'whatsnew',   // one-shot "seen it" flags for THIS install
@@ -8969,7 +9005,53 @@ function cardChrome(g, H, subtitle) {
   g.textAlign = 'left';
 }
 
+/* ---------- Where to get Daylog, on the card itself ----------
+   A shared card is the only word of mouth that travels without us. It lands in a WhatsApp
+   status or an Instagram story, and whoever sees it had no way to find out where it came
+   from. Story cards — the default shape — have ~570px spare under the body, so they get a
+   QR code to the Play listing there; Google Lens reads it from a screenshot or a long-press.
+   The link carries a Play referrer so the Console's acquisition report can say whether cards
+   bring anyone in at all. It is the SAME link for everyone: nothing about the user is in it. */
+const PLAY_ID = 'io.github.kishore2494.dailypulse';
+function playLink(source, medium, campaign) {
+  const ref = 'utm_source=' + source + '&utm_medium=' + medium + (campaign ? '&utm_campaign=' + campaign : '');
+  return 'https://play.google.com/store/apps/details?id=' + PLAY_ID + '&referrer=' + encodeURIComponent(ref);
+}
+let _qrLoad = null;
+function qrLib() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  if (!_qrLoad) _qrLoad = new Promise(res => {
+    const s = document.createElement('script'); s.src = 'libs/qrcode.js';
+    s.onload = () => res(window.qrcode || null);
+    s.onerror = () => { _qrLoad = null; res(null); };      // offline first run: card just has no QR
+    document.head.appendChild(s);
+  });
+  return _qrLoad;
+}
+async function cardQR(source) {
+  const lib = await qrLib(); if (!lib) return null;
+  try { const q = lib(0, 'L'); q.addData(playLink(source || 'card', 'qr')); q.make(); return q; } catch (e) { return null; }
+}
+function cardDrawQR(g, q, x, y, S) {
+  const n = q.getModuleCount(), pad = Math.round(S * 0.09), m = (S - pad * 2) / n;
+  g.fillStyle = '#ffffff'; roundRect(g, x, y, S, S, Math.round(S * 0.09)); g.fill();
+  g.fillStyle = CARD_BG;
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    if (q.isDark(r, c)) g.fillRect(Math.floor(x + pad + c * m), Math.floor(y + pad + r * m), Math.ceil(m), Math.ceil(m));
+  }
+}
+let _cardQR = null;   // set by buildCardBlob for the card being drawn; null = no room or offline
 function cardFooter(g, H, line) {
+  if (_cardQR && H - CARD_BODY >= 500) {
+    const S = 176, x = 84, y = H - 80 - S, tx = x + S + 30, tw = CARD_W - 84 - tx;
+    cardDrawQR(g, _cardQR, x, y, S);
+    g.textAlign = 'left';
+    g.fillStyle = CARD_INK; g.font = cardFont(40, 700); g.fillText(cardClip(g, 'Daylog · on Google Play', tw), tx, y + 58);
+    g.fillStyle = CARD_DIM; g.font = cardFont(29, 500);
+    g.fillText(cardClip(g, line || 'Private life tracker · no account, no cloud', tw), tx, y + 104);
+    g.fillText(cardClip(g, 'Scan, or search “Daylog”', tw), tx, y + 146);
+    return;
+  }
   g.fillStyle = CARD_DIM; g.font = cardFont(30, 500); g.textAlign = 'center';
   g.fillText(line || 'Private life tracker · no account, no cloud', CARD_W / 2, H - 86);
   g.textAlign = 'left';
@@ -9008,7 +9090,44 @@ const CARD_KINDS = [
   { k: 'habit',   label: '✅ Habits' },
   { k: 'insight', label: '💡 Insight' },
   { k: 'award',   label: '🏆 Award' },
+  { k: 'invite',  label: '💌 Invite' },
 ];
+
+function inviteText(source) {
+  return 'I use Daylog to keep track of my habits, mood and days. It is private: no account, no ads, '
+    + 'and nothing gets uploaded. Free on Google Play: ' + playLink(source, 'invite');
+}
+/* "Tell a friend": what Daylog is, in four lines, and a big QR code. It says only what the
+   app does, and the one personal line is a count the user can see right above Share. */
+function drawInvite(g, H, q) {
+  cardChrome(g, H, '');
+  const sh = bodyTop(H), days = contentDates().length;
+  g.textAlign = 'center';
+  g.fillStyle = CARD_INK; g.font = cardFont(74, 800);
+  g.fillText(days >= 7 ? `I've logged ${days} days` : 'My daily log', CARD_W / 2, sh + 250);
+  g.fillStyle = CARD_DIM; g.font = cardFont(40, 500);
+  g.fillText('in a private, offline life tracker', CARD_W / 2, sh + 312);
+  const rows = [['✅', 'Habits, streaks and skip days'], ['😊', 'Mood, journal and voice notes'],
+                ['📷', 'A photo a day, kept on the phone'], ['⏱️', 'Screen time, focus and time tracking']];
+  g.textAlign = 'left'; g.font = cardFont(42, 600);
+  const rx = 150;
+  rows.forEach(([e, t], i) => {
+    const y = sh + 430 + i * 82;
+    g.fillStyle = CARD_INK; g.fillText(e, rx, y); g.fillText(cardClip(g, t, CARD_W - rx - 150 - 76), rx + 76, y);
+  });
+  const S = 330, qy = sh + 790;
+  if (q) {
+    cardDrawQR(g, q, (CARD_W - S) / 2, qy, S);
+    g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(40, 700);
+    g.fillText('Scan to get Daylog on Google Play', CARD_W / 2, qy + S + 70);
+  } else {
+    g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(52, 800);
+    g.fillText('Search “Daylog” on Google Play', CARD_W / 2, qy + 160);
+  }
+  g.fillStyle = CARD_DIM; g.font = cardFont(30, 500); g.textAlign = 'center';
+  g.fillText('No account · no ads · nothing uploaded', CARD_W / 2, H - 86);
+  g.textAlign = 'left';
+}
 
 function drawStreak(g, H) {
   cardChrome(g, H, shortDate(todayStr()));
@@ -9225,8 +9344,12 @@ async function buildCardBlob(kind, ratio, arg) {
   cv.width = CARD_W; cv.height = H;
   const g = cv.getContext('2d');
   g.textBaseline = 'alphabetic';
-  ({ streak: drawStreak, pixels: drawPixels, habit: drawHabit, insight: drawInsight,
-     award: (gg, hh) => drawAward(gg, hh, arg) }[kind] || drawStreak)(g, H);
+  const q = (kind === 'invite' || H - CARD_BODY >= 500) ? await cardQR(kind === 'invite' ? 'invite' : 'card') : null;
+  _cardQR = kind === 'invite' ? null : q;      // the invite draws its own, bigger one
+  try {
+    ({ streak: drawStreak, pixels: drawPixels, habit: drawHabit, insight: drawInsight,
+       award: (gg, hh) => drawAward(gg, hh, arg), invite: (gg, hh) => drawInvite(gg, hh, q) }[kind] || drawStreak)(g, H);
+  } finally { _cardQR = null; }
   return await new Promise(res => {
     if (cv.toBlob) cv.toBlob(b => res(b), 'image/png');
     else res(null);
@@ -9354,8 +9477,11 @@ function shareSheetRender() {
       <button type="button" class="btn btn-primary" id="ss-send" ${cardState.busy ? 'disabled' : ''}>
         ${cardState.busy ? 'Drawing…' : (nativeSharePlugin() || navigator.canShare ? 'Share' : 'Save image')}</button>
     </div>
+    ${cardState.kind === 'invite' ? `<div class="ss-links">
+      <button type="button" class="btn btn-ghost" id="ss-wa">Send the link on WhatsApp</button>
+      <button type="button" class="btn btn-ghost" id="ss-copy">Copy link</button></div>` : ''}
     ${cardState.hint ? `<div class="ss-hint">${escapeHtml(cardState.hint)}</div>` : ''}
-    <div class="hint ss-note">Only the picture is shared. Your entries never leave the phone.</div>
+    <div class="hint ss-note">${cardState.kind === 'invite' ? 'The card and the link say nothing about your entries.' : 'Only the picture is shared. Your entries never leave the phone.'}</div>
   </div>`;
 }
 
@@ -9414,6 +9540,18 @@ document.addEventListener('click', async (ev) => {
   if (sh) { shareSheetOpen(sh.dataset.shareCard || 'streak'); buzz(10); return; }
 
   if (t.id === 'ss-close' || t.id === 'sharesheet') { shareSheetClose(); return; }
+  if (t.id === 'ss-wa') {
+    // wa.me is an Android App Link: the shell hands it to WhatsApp, or the browser if absent.
+    const url = 'https://wa.me/?text=' + encodeURIComponent(inviteText('whatsapp'));
+    try { if (window.Capacitor) window.location.href = url; else window.open(url, '_blank', 'noopener'); } catch (e) {}
+    return;
+  }
+  if (t.id === 'ss-copy') {
+    const txt = inviteText('copy');
+    try { await navigator.clipboard.writeText(txt); toast('Copied — paste it to a friend'); }
+    catch (e) { showCopyModal('Daylog invite', txt); }
+    return;
+  }
 
   const kb = t.closest('[data-card-kind]');
   if (kb) { cardState.kind = kb.dataset.cardKind; shareSheetRender(); cardPreview(); return; }
@@ -12896,6 +13034,7 @@ document.addEventListener('click', (ev) => {
   if (ev.target.id === 'tour-skip') { endTour(); return; }
   if (ev.target.closest && ev.target.closest('#open-tour')) { show('today'); startTour(); return; }
   if (ev.target.closest && ev.target.closest('#open-tip')) { tipOpen(); return; }
+  if (ev.target.closest && ev.target.closest('#open-invite')) { shareSheetOpen('invite'); buzz(10); return; }
 });
 
 /* ---------- Init ---------- */

@@ -1955,6 +1955,42 @@
     _mediaReady = readySnap; window.mediaSupported = supSnap; URL.createObjectURL = urlSnap;
   })();
 
+  // ---- Distribution: share links, invite, Play nudge (v251) ----
+  (function () {
+    const L = playLink('card', 'qr');
+    ok('a Play link carries an encoded install referrer',
+      L.indexOf('https://play.google.com/store/apps/details?id=io.github.kishore2494.dailypulse&referrer=') === 0
+      && decodeURIComponent(L.split('referrer=')[1]) === 'utm_source=card&utm_medium=qr', L);
+    ok('…and a campaign when given', decodeURIComponent(playLink('pwa', 'web', 'nudge').split('referrer=')[1]) === 'utm_source=pwa&utm_medium=web&utm_campaign=nudge');
+    const it = inviteText('whatsapp');
+    ok('the invite message ends with the tracked link', /utm_source%3Dwhatsapp/.test(it) && it.trim().endsWith(playLink('whatsapp', 'invite')));
+    ok('…and says nothing about the person’s data', !/\d/.test(it.split('Free on Google Play')[0]));
+    ok('Invite is offered as a card', CARD_KINDS.some(c => c.k === 'invite'));
+    ok('the nudge state is install-local, not backed up', BACKUP_EXCLUDED.includes('playNudge') && !BACKUP_KEYS.includes('playNudge'));
+    const setUA = ua => Object.defineProperty(navigator, 'userAgent', { get: () => ua, configurable: true });
+    const pnSnap = localStorage.getItem('dp.playNudge'), capSnap = window.Capacitor;
+    delete window.Capacitor; localStorage.removeItem('dp.playNudge');
+    setUA('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36');
+    ok('an Android browser is offered the Play app', playNudgeDue() && /id="pn-go"/.test(playNudgeHTML()));
+    ok('…through a tracked link', /utm_source%3Dpwa/.test(playNudgeHTML()));
+    setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/605.1');
+    ok('an iPhone is not — there is no iOS app', !playNudgeDue());
+    setUA('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36');
+    window.Capacitor = { Plugins: {} };
+    ok('the Play app itself never shows it', !playNudgeDue());
+    delete window.Capacitor;
+    localStorage.setItem('dp.playNudge', JSON.stringify({ snoozed: Date.now() }));
+    ok('"Not now" means silence', !playNudgeDue());
+    localStorage.setItem('dp.playNudge', JSON.stringify({ snoozed: Date.now() - 31 * 86400000 }));
+    ok('…for a month', playNudgeDue());
+    localStorage.setItem('dp.playNudge', JSON.stringify({ done: true }));
+    ok('after "Get it", never again', !playNudgeDue());
+    delete navigator.userAgent;
+    if (capSnap !== undefined) window.Capacitor = capSnap;
+    if (pnSnap != null) localStorage.setItem('dp.playNudge', pnSnap); else localStorage.removeItem('dp.playNudge');
+    ok('the userAgent override is gone again', !/Pixel 7/.test(navigator.userAgent));
+  })();
+
   if (snapshot != null) localStorage.setItem('dp.tasks', snapshot); else localStorage.removeItem('dp.tasks');
 
   const summary = { pass, fail, results: R };

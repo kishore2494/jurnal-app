@@ -8,7 +8,7 @@ const ASSETS = [
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png',
   './fonts/twemoji.woff2',
   './fonts/self/dm-sans.woff2', './fonts/self/sora.woff2',
-  './libs/jspdf.min.js',
+  './libs/jspdf.min.js', './libs/qrcode.js',
 ];
 
 self.addEventListener('install', (e) => {

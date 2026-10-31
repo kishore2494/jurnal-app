@@ -2314,3 +2314,11 @@ input[type="range"] { height: 30px; }
   border-radius: 12px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.1); color: #fff;
   font: 600 15px/1 var(--font-ui); cursor: pointer; }
 .mview-btn.danger { color: #ff9b9b; border-color: rgba(255,120,120,.4); }
+.ss-links { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
+.ss-links .btn { width: 100%; min-height: 46px; }
+.play-nudge { border-color: var(--accent); }
+.play-nudge .pn-h { display: flex; align-items: center; gap: 10px; font-size: 17px; margin-bottom: 8px; }
+.play-nudge p { font-size: 15px; line-height: 1.5; color: var(--text); margin: 0 0 10px; }
+.play-nudge .pn-dim { color: var(--text-dim); font-size: 14px; }
+.play-nudge .pn-btns { display: grid; grid-template-columns: 1.6fr 1fr; gap: 8px; }
+.play-nudge .pn-btns .btn { min-height: 48px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
