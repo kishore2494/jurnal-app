@@ -2334,3 +2334,6 @@ input[type="range"] { height: 30px; }
 .mview-acts .mview-btn { min-width: 0; padding: 0 8px; }
 .sr-photo { display: flex; align-items: center; gap: 10px; }
 .sr-thumb { flex: none; width: 48px; height: 48px; }
+.orphan-row { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.orphan-row:last-child { border-bottom: none; }
+.orphan-row .btn { margin-top: 6px; }

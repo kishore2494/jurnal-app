@@ -1652,6 +1652,9 @@ function refreshHabitChip(key) {
 }
 
 function renderToday() {
+  // The recording bar belongs to the day it started on; switching day would hide its Save
+  // button while the mic kept running.
+  if (_rec && _rec.ctx === 'log' && _rec.day !== logDate) voiceStop(false);
   const isToday = logDate === todayStr();
   document.getElementById('screen-title').textContent = isToday ? 'Today' : prettyDate(logDate);
   document.getElementById('screen-sub').textContent = isToday ? prettyDate(logDate) + ' · Daylog' : 'Editing past entry';
@@ -2357,12 +2360,19 @@ document.addEventListener('click', (ev) => {
   const sc = ev.target.closest('[data-setcolor]');
   if (sc) { setColor(sc.dataset.setcolor, sc.dataset.color); return; }
   if (ev.target.id === 'note-add-btn') return addNote();
+  const orn = ev.target.closest('[data-orphan-note]');
+  if (orn) { if (mediaCommitNote(orn.dataset.orphanNote, '')) { renderNotes(); toast('Back in your notes'); } return; }
   const dn = ev.target.closest('[data-delnote]');
   if (dn) {
     const nid = dn.dataset.delnote, att = mediaList('note:' + nid, null).map(r => r.id);
-    if (att.length && !confirm(`Delete this note and its ${att.length} photo(s)/voice note(s)? This cannot be undone.`)) return;
-    DB.saveNotes(DB.notes().filter(n=>n.id!==nid)); renderNotes(); syncNotes();
-    if (att.length) mediaDelete(att).then(() => renderNotes());
+    if (!att.length) { DB.saveNotes(DB.notes().filter(n=>n.id!==nid)); renderNotes(); syncNotes(); return; }
+    if (!confirm(`Delete this note and its ${att.length} photo(s)/voice note(s)? This cannot be undone.`)) return;
+    // Media FIRST: if that fails the note is still there to try again from, instead of the
+    // pictures living on invisibly with nothing pointing at them.
+    mediaDelete(att).then(ok => {
+      if (!ok) return;
+      DB.saveNotes(DB.notes().filter(n=>n.id!==nid)); renderNotes(); syncNotes();
+    });
     return;
   }
 });
@@ -2388,6 +2398,12 @@ function renderNotes() {
     ${mediaHas('note:' + n.id) ? mediaSlot('note:' + n.id, '', { compact: true }) : ''}
     ${openColorId===n.id ? swatchStrip(n.id) : ''}
   </div>`;
+  const orphans = _mediaReady ? mediaOrphanCtxs() : [];
+  const orphanHTML = orphans.length ? `<div class="card">
+      <h2>Unattached photos &amp; voice notes <span class="hint">their note was deleted on another device or replaced by a restore</span></h2>
+      ${orphans.map(c => `<div class="orphan-row">${mediaSlot(c, '', { compact: true })}
+        <button class="btn btn-ghost btn-sm" data-orphan-note="${escapeHtml(c.slice(5))}">Make it a note again</button></div>`).join('')}
+    </div>` : '';
   document.getElementById('s-notes').innerHTML = `
     <div class="card">
       <div class="task-add">
@@ -2405,7 +2421,8 @@ function renderNotes() {
     </div>
     <div class="card" id="note-list" style="padding:4px 16px">
       ${notes.length ? notes.map(item).join('') : '<div class="empty">No notes yet. Add one above 👆</div>'}
-    </div>`;
+    </div>
+    ${orphanHTML}`;
   // auto-size textareas
   document.querySelectorAll('#note-list .note-text').forEach(t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; });
   enableDrag(document.getElementById('note-list'), ids => {
@@ -6095,8 +6112,12 @@ document.addEventListener('click', async (ev) => {
     const n = wipeEverything();
     const p = mediaTotals();
     toast(n + ' items' + (p.photos + p.voice ? ` and ${p.photos + p.voice} photos/voice notes` : '') + ' erased. Daylog is empty.');
-    // Reload only once the photo database is really gone, or it survives the "delete everything".
-    Promise.all([mediaWipe(), new Promise(r => setTimeout(r, 900))]).then(() => location.reload());
+    // The photo database must really go too. A flag survives the reload so a delete that was
+    // blocked or slow is finished at the next start; the time limit means the reload always comes.
+    try { localStorage.setItem('dp.mediaWipe', '1'); } catch (e) {}
+    const wiped = mediaWipe().then(ok => { if (ok) localStorage.removeItem('dp.mediaWipe'); });
+    Promise.all([Promise.race([wiped, new Promise(r => setTimeout(r, 5000))]), new Promise(r => setTimeout(r, 900))])
+      .then(() => location.reload());
     return;
   }
   if (ev.target.id === 'export') exportData();
@@ -6359,10 +6380,12 @@ async function mediaLoad() {
   if (!mediaSupported()) return;
   try {
     const all = await mediaReadAll();
+    _mediaUrls.forEach(u => URL.revokeObjectURL(u)); _mediaUrls.clear();
     _media.clear(); all.forEach(r => { if (r && r.id) _media.set(r.id, r); });
   } catch (e) { /* stays empty; mediaSlotHTML says it cannot open storage */ }
   _mediaReady = true;
   refreshMediaSlots();
+  mediaAfterNote();
   // "On this day" renders before IndexedDB answers; redraw just that card if a photo changes it.
   try { const slot = document.getElementById('otd-slot'); if (slot) slot.innerHTML = throwbackHTML(); } catch (e) {}
 }
@@ -6388,7 +6411,7 @@ async function mediaDelete(ids) {
   if (!ids.length) return true;
   try { await mediaWrite(s => ids.forEach(id => s.delete(id))); }
   catch (e) { toast('Could not delete it — try again', true); return false; }
-  ids.forEach(id => { if (_play && _play.id === id) voiceHalt(); mediaRevoke(id); _media.delete(id); });
+  ids.forEach(id => { if (_play && _play.id === id) voiceHalt(); clearTimeout(_capTimers.get(id)); _capTimers.delete(id); mediaRevoke(id); _media.delete(id); });
   return true;
 }
 function mediaUrl(rec, which) {
@@ -6408,13 +6431,30 @@ function mediaHas(ctx) { for (const r of _media.values()) if (r.ctx === ctx) ret
 /* "Photo note" / "Voice note" on the Notes screen. The note is created only AFTER the media is
    safely written — a cancelled camera or a full disk must not leave an empty note behind. */
 function mediaNewNoteId() { return 'n' + Date.now(); }
-function mediaCommitNote(id) {
-  const ns = DB.notes(); if (ns.some(n => n.id === id)) return;
+function mediaCommitNote(id, text) {
+  const ns = DB.notes(); if (ns.some(n => n.id === id)) return true;
   const inp = document.getElementById('note-input');
-  const text = inp ? inp.value.trim() : '';
-  if (inp) inp.value = '';
+  if (text == null) text = inp ? inp.value.trim() : '';
   ns.unshift({ id, text, color: '', created: todayStr() });
-  DB.saveNotes(ns); syncNotes();
+  // The media is already saved; if the note cannot be, the Notes screen still shows it under
+  // "Unattached" (mediaOrphanCtxs) rather than losing it — but say so.
+  if (DB.saveNotes(ns) === false) { toast('The photo is saved, but the note could not be — phone storage is full', true); return false; }
+  if (inp && inp.value.trim() === text) inp.value = '';
+  syncNotes();
+  return true;
+}
+/* Media whose note no longer exists — deleted on another synced device, replaced by an older
+   backup, or a note save that failed. Never silently dropped: the Notes screen lists them. */
+function mediaOrphanCtxs() {
+  const ids = new Set(DB.notes().map(n => 'note:' + n.id)), out = new Set();
+  _media.forEach(r => { if (r.ctx.indexOf('note:') === 0 && r.ctx !== 'note:new' && !ids.has(r.ctx)) out.add(r.ctx); });
+  return [...out];
+}
+/* Things that must not be cut off by an app-update reload (see the controllerchange handler). */
+let _mediaBusy = 0, _reloadWhenIdle = false;
+function mediaBusyNow() { return !!(_rec || _recStarting || _mediaBusy); }
+function mediaIdleCheck() {
+  if (_reloadWhenIdle && !mediaBusyNow()) { _reloadWhenIdle = false; toast('Daylog updated — reloading'); setTimeout(() => location.reload(), 1500); }
 }
 function mediaAfterNote() {
   const sc = document.getElementById('s-notes');
@@ -6448,6 +6488,12 @@ async function mediaDecode(file) {
   // createImageBitmap honours the camera's EXIF rotation; without it a portrait shot from
   // many Android cameras lands sideways.
   if (window.createImageBitmap) {
+    /* A 50 MP camera file decodes to ~200 MB of bitmap — enough to kill the WebView on a 3 GB
+       phone. Big files are decoded already shrunk. Only width is given, so the browser keeps
+       the aspect ratio; small files are left alone so they are never upscaled. */
+    if (file.size > 4 * 1048576) {
+      try { return await createImageBitmap(file, { imageOrientation: 'from-image', resizeWidth: 2048, resizeQuality: 'high' }); } catch (e) {}
+    }
     try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) {}
   }
   return new Promise((res, rej) => {
@@ -6503,19 +6549,25 @@ async function mediaTakeFiles(files) {
   const newNote = t.ctx === 'note:new' ? mediaNewNoteId() : null;
   const ctx = newNote ? 'note:' + newNote : t.ctx;
   let saved = 0, bad = 0;
-  for (const f of imgs) {
-    let rec;
-    try { rec = await mediaPhotoRecord(f, ctx, t.day); } catch (e) { bad++; continue; }
-    if (await mediaAdd(rec)) saved++; else break;      // out of space: stop, mediaAdd said so
-  }
-  if (newNote && saved) { mediaCommitNote(newNote); mediaAfterNote(); }
+  _mediaBusy++;
+  try {
+    for (const f of imgs) {
+      let rec;
+      try { rec = await mediaPhotoRecord(f, ctx, t.day); } catch (e) { bad++; continue; }
+      if (await mediaAdd(rec)) saved++; else break;      // out of space: stop, mediaAdd said so
+      // The note exists from the FIRST saved photo, so an interruption cannot strand the rest.
+      if (newNote && saved === 1) { mediaCommitNote(newNote); mediaAfterNote(); }
+    }
+  } finally { _mediaBusy--; }
   refreshMediaSlots();
+  mediaIdleCheck();
   if (saved) { buzz(8); toast(saved === 1 ? 'Photo saved' : saved + ' photos saved'); }
   if (bad) toast(bad === 1 ? 'That photo could not be read — try a different one' : bad + ' photos could not be read', true);
 }
 
 /* ---------- voice notes ---------- */
 let _rec = null;    // { mr, chunks, t0, ctx, day, stream, mime, tick, cap }
+let _recStarting = false;   // set BEFORE awaiting the mic, so a double-tap cannot start two
 function voiceMime() {
   if (!window.MediaRecorder) return null;
   for (const m of ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm']) {
@@ -6524,23 +6576,26 @@ function voiceMime() {
   return '';
 }
 async function voiceStart(ctx, day) {
-  if (_rec) return;
+  if (_rec || _recStarting) return;
   if (!mediaSupported() || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || voiceMime() === null) {
     toast('Voice notes need a newer browser or Android System WebView', true); return;
   }
   voiceHalt();
+  _recStarting = true;
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
   catch (e) {
+    _recStarting = false; mediaIdleCheck();
     toast(e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')
       ? 'Microphone is off for Daylog — allow it in your phone’s Settings ▸ Apps ▸ Daylog ▸ Permissions'
       : 'Could not start the microphone' + (e && e.name === 'NotReadableError' ? ' — another app is using it' : ''), true);
     return;
   }
+  _recStarting = false;
   const mime = voiceMime();
   let mr;
   try { mr = new MediaRecorder(stream, Object.assign({ audioBitsPerSecond: 32000 }, mime ? { mimeType: mime } : {})); }
-  catch (e) { stream.getTracks().forEach(t => t.stop()); toast('This phone cannot record audio here', true); return; }
+  catch (e) { stream.getTracks().forEach(t => t.stop()); toast('This phone cannot record audio here', true); mediaIdleCheck(); return; }
   const r = _rec = { mr, chunks: [], t0: Date.now(), ctx, day, stream, mime: mr.mimeType || mime || 'audio/webm', peak: 0 };
   /* A live level meter. A recording of silence — mic muted, another app holding it, a case
      over the hole — is the classic voice-note failure, and it is invisible until playback. */
@@ -6554,9 +6609,16 @@ async function voiceStart(ctx, day) {
   mr.onstop = () => voiceFinish(r);
   mr.onerror = () => voiceStop(false);
   try { mr.start(1000); }
-  catch (e) { _rec = null; stream.getTracks().forEach(t => t.stop()); toast('Could not start recording', true); return; }
+  catch (e) {
+    _rec = null; stream.getTracks().forEach(t => t.stop()); try { if (r.ac) r.ac.close(); } catch (_) {}
+    toast('Could not start recording', true); mediaIdleCheck(); return;
+  }
   r.tick = setInterval(voiceTick, 250);
-  r.cap = setTimeout(() => { voiceStop(false); toast('Ten minutes is the limit for one note — saved'); }, VOICE_MAX_MS);
+  // Only ever stops THIS recording — a stray timer must not cut a later one short.
+  r.cap = setTimeout(() => { if (_rec === r) { voiceStop(false); toast('Ten minutes is the limit for one note — saved'); } }, VOICE_MAX_MS);
+  /* Keep the screen on. Otherwise the phone's screen timeout (30 s on many) hides the page,
+     and hiding saves the note — so the timeout, not the person, decided where it ended. */
+  try { if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request('screen').then(l => { if (_rec === r) r.wake = l; else l.release(); }).catch(() => {}); } catch (e) {}
   buzz(12);
   refreshMediaSlots();
 }
@@ -6580,9 +6642,17 @@ function voiceStop(cancel) {
 }
 async function voiceFinish(r) {
   if (r.done) return; r.done = true;
+  // The recorder can stop by ITSELF (a Bluetooth headset dropping the mic), bypassing
+  // voiceStop — so everything voiceStop does is repeated here.
+  clearInterval(r.tick); clearTimeout(r.cap);
+  if (r.dur == null) r.dur = Date.now() - r.t0;
   try { r.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { if (r.ac) r.ac.close(); } catch (e) {}
+  try { if (r.wake) r.wake.release(); } catch (e) {}
   if (_rec === r) _rec = null;
+  try { await voiceSave(r); } finally { mediaIdleCheck(); }
+}
+async function voiceSave(r) {
   if (r.cancelled) { refreshMediaSlots(); toast('Recording discarded'); return; }
   const blob = new Blob(r.chunks, { type: r.mime });
   if (!blob.size || r.dur < VOICE_MIN_MS) { refreshMediaSlots(); toast('Too short to keep — hold on a little longer', true); return; }
@@ -6749,12 +6819,17 @@ function mediaSwipe(el) {
     else if (dy > 90 && Math.abs(dy) > Math.abs(dx) * 1.5) mediaViewClose();   // swipe down to close
   }, { passive: true });
 }
-let _capTimer = null;
+const _capTimers = new Map();   // one per photo: a shared timer dropped photo A's caption when B was edited
 function mediaSaveCaption(id, text) {
   const rec = _media.get(id); if (!rec) return;
   rec.caption = String(text || '').slice(0, 200);
-  clearTimeout(_capTimer);
-  _capTimer = setTimeout(() => { mediaWrite(s => s.put(rec)).catch(e => toast(mediaQuotaMsg(e) + ' — caption not saved', true)); }, 400);
+  clearTimeout(_capTimers.get(id));
+  _capTimers.set(id, setTimeout(() => {
+    _capTimers.delete(id);
+    // A put() for a photo deleted in the meantime would bring it back from the dead.
+    if (!_media.has(id)) return;
+    mediaWrite(s => s.put(rec)).catch(e => toast(mediaQuotaMsg(e) + ' — caption not saved', true));
+  }, 400));
 }
 function b64ToBlob(b64, mime) {
   const bin = atob(b64), u = new Uint8Array(bin.length);
@@ -6850,6 +6925,31 @@ async function mediaForBackup() {
   }
   return { items, skipped, bytes };
 }
+/* What goes into an export, decided BEFORE anything is read:
+   - an old Play build with no file writer falls back to a copy-paste box, and a clipboard
+     cannot carry megabytes of photos — so they are left out, and the user is told so;
+   - past ~35 MB the file is at risk of running the WebView out of memory on its way to
+     Downloads, so ask first;
+   - reading IndexedDB gets a time limit, so a stuck database can never block the backup of
+     everything else (the crash screen's "Export backup" depends on this). */
+const MEDIA_BACKUP_WARN_MB = 35;
+async function mediaForExport() {
+  const none = (note, skipped) => ({ items: [], skipped: skipped || 0, bytes: 0, note: note || '' });
+  if (!mediaSupported()) return none();
+  if (!_mediaReady) await Promise.race([mediaLoad(), new Promise(r => setTimeout(r, 8000))]);
+  const t = mediaTotals(), n = t.photos + t.voice;
+  if (!n) return none();
+  const sp = nativeSharePlugin();
+  if (window.Capacitor && !(sp && sp.saveTextFile)) {
+    return none(`This app version can only copy a backup as text, so your ${n} photos and voice notes are NOT in it. Update Daylog in the Play Store to back them up.`);
+  }
+  const mb = Math.round(t.bytes * 1.37 / 1048576);
+  if (mb > MEDIA_BACKUP_WARN_MB && !confirm(`Your ${n} photos and voice notes make this backup about ${mb} MB. A file that big can fail to save on some phones.\n\nOK: include them anyway\nCancel: back up everything else, without them`)) {
+    return none('Backed up WITHOUT your photos and voice notes, as you chose. They are still on this phone.');
+  }
+  const m = await Promise.race([mediaForBackup(), new Promise(r => setTimeout(() => r(null), 20000))]);
+  return m ? Object.assign(m, { note: '' }) : none('', -1);
+}
 /* Shape-check one backed-up item. Pure, so tests can feed it junk. */
 function mediaItemValid(it) {
   return !!it && typeof it === 'object'
@@ -6880,7 +6980,9 @@ async function mediaRestore(list) {
     try { await mediaWrite(s => s.put(rec)); _media.set(rec.id, rec); res.added++; }
     catch (e) { res.failed++; break; }        // out of space: further writes fail the same way
   }
-  refreshMediaSlots();
+  // Freshly decoded blobs live in memory; re-read so they become disk-backed handles again,
+  // or a big restore keeps the whole library in RAM for the rest of the session.
+  if (res.added) await mediaLoad(); else refreshMediaSlots();
   return res;
 }
 /* Delete everything: close our handle first, or deleteDatabase waits on it forever. */
@@ -6890,9 +6992,11 @@ function mediaWipe() {
   if (!mediaSupported()) return Promise.resolve();
   const closing = _mediaDbP ? _mediaDbP.then(db => db.close()).catch(() => {}) : Promise.resolve();
   _mediaDbP = null;
+  // Resolves true only when the database is actually gone. "Blocked" (another tab holds it
+  // open) is NOT done: the caller's time limit and the dp.mediaWipe flag cover that.
   return closing.then(() => new Promise(res => {
-    try { const rq = indexedDB.deleteDatabase(MEDIA_DB); rq.onsuccess = rq.onerror = rq.onblocked = () => res(); }
-    catch (e) { res(); }
+    try { const rq = indexedDB.deleteDatabase(MEDIA_DB); rq.onsuccess = () => res(true); rq.onerror = () => res(false); }
+    catch (e) { res(false); }
   }));
 }
 
@@ -6927,6 +7031,7 @@ const BACKUP_EXCLUDED = [
   // nothing, so there is deliberately nothing about a donor worth restoring
   'tip',
   'playNudge',                         // "get the Play app" card state — about this browser, not the user
+  'mediaWipe',                         // a delete-everything still finishing; restoring it would wipe photos
   'celeb',   // which day's one-per-day celebration budget is spent — meaningless on another install
   'errlog',                            // crash log for the feedback mail, not user data
   'onboarded', 'toured', 'whatsnew',   // one-shot "seen it" flags for THIS install
@@ -7033,7 +7138,7 @@ function wipeEverything() {
 
 async function exportData() {
   const { data: out, skipped } = backupBlob();
-  const media = await mediaForBackup();
+  const media = await mediaForExport();
   if (media.items.length) out._media = media.items;
   // Await it, and only stamp the date if the file actually reached the user. Stamping
   // unconditionally meant Settings said "last backup: today ✅" after a cancelled share
@@ -7044,6 +7149,8 @@ async function exportData() {
   // this app keeps having to unlearn — and here it would not be noticed until a restore.
   if (saveOk(r) && skipped.length) {
     toast(`Backed up, but ${skipped.length} section(s) were unreadable and left out: ${skipped.join(', ')}`, true);
+  } else if (saveOk(r) && media.note) {
+    toast(media.note, true);
   } else if (saveOk(r) && media.skipped) {
     toast(media.skipped < 0 ? 'Backed up, but your photos and voice notes could not be read and are NOT in this file'
       : `Backed up, but ${media.skipped} photo(s)/voice note(s) could not be read and were left out`, true);
@@ -12735,7 +12842,9 @@ function show(name) {
   // Leaving Settings abandons a half-finished delete. An in-progress irreversible action
   // must never survive navigating away and come back still armed.
   if (name !== 'settings') { try { wipeReset(); } catch (e) {} settingsPage = null; }
-  voiceSaveIfRecording(); voiceHalt(); mediaViewClose();
+  const leaving = (document.querySelector('.screen.on') || {}).id !== 's-' + name;
+  if (leaving) { voiceSaveIfRecording(); voiceHalt(); }
+  mediaViewClose();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
   const sec = document.getElementById('s-' + name);
   if (sec) sec.classList.add('on');
@@ -13178,7 +13287,11 @@ document.getElementById('nav').classList.add('ready');   // reveal the bar now t
 const _topbar = document.querySelector('.topbar');
 addEventListener('scroll', () => { if (_topbar) _topbar.classList.toggle('scrolled', scrollY > 4); }, { passive: true });
 refreshStreak();
-mediaLoad();
+// A delete-everything whose photo database did not finish going is finished first.
+if (localStorage.getItem('dp.mediaWipe') === '1' && mediaSupported()) {
+  Promise.race([mediaWipe().then(ok => { if (ok) localStorage.removeItem('dp.mediaWipe'); }), new Promise(r => setTimeout(r, 5000))])
+    .then(() => mediaLoad());
+} else mediaLoad();
 // Returning from the standalone How-to guide (index.html?go=settings) lands on Settings, not home.
 const _go = new URLSearchParams(location.search).get('go');
 navigateTo((_go && RENDER[_go]) ? _go : defaultTab());
@@ -13235,7 +13348,10 @@ if ('serviceWorker' in navigator) {
   if (navigator.serviceWorker.controller) {
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return; refreshing = true; location.reload();
+      if (refreshing) return;
+      // A voice note is only in memory until it is saved; a reload now would lose it.
+      if (mediaBusyNow()) { _reloadWhenIdle = true; return; }
+      refreshing = true; location.reload();
     });
   }
   navigator.serviceWorker.register('sw.js').then(reg => reg.update && reg.update()).catch(() => {});

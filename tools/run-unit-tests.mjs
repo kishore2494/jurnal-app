@@ -128,6 +128,17 @@ try {
   process.exit(1);
 }
 
+// The async suite: IndexedDB, FileReader and the recorder, which the synchronous suite can only
+// fake by writing into _media directly. It runs after, against an in-memory IndexedDB it brings.
+const ASYNC = join(ROOT, "tests/unit-async.js");
+if (existsSync(ASYNC)) {
+  let a;
+  try { a = await w.eval(readFileSync(ASYNC, "utf8")); }
+  catch (e) { console.error(`\n\x1b[31m✗ the async suite threw: ${String(e.message).slice(0, 200)}\x1b[0m\n`); process.exit(1); }
+  if (!a || typeof a.pass !== "number") { console.error("\n\x1b[31m✗ the async suite returned nothing — it went blind\x1b[0m\n"); process.exit(1); }
+  summary.pass += a.pass; summary.fail += a.fail; summary.results.push(...a.results);
+}
+
 const total = (summary?.pass ?? 0) + (summary?.fail ?? 0);
 if (total < MIN_ASSERTIONS) {
   console.error(`\n\x1b[31m✗ only ${total} assertions ran (expected at least ${MIN_ASSERTIONS}).\x1b[0m`);
