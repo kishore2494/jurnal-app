@@ -1,43 +1,28 @@
-# Daily Pulse
+# Daylog
 
-> Daily Pulse is a fast, offline, installable life-tracker — mood, energy, habits, workouts, journal and tasks in one tap, private on your device with optional Google Sheet sync.
+> Daylog (formerly "Daily Pulse") is a private, offline life tracker for Android and the web: a habit tracker, mood journal and daily log that also measures screen time, with photos and voice notes on each day. No account, no ads, and everything is stored on the user's own phone.
 
-Daily Pulse is free, works offline, and installs straight from the web (PWA) or Google Play. Your data stays on your device; sync to your own Google Sheet is optional. One tap logs your whole day — mood, energy, habits, workouts, journal and tasks.
+Daylog is free on Google Play and also runs in a browser as an installable web app (PWA). It is made by one independent developer. Nothing is paywalled; optional tips through Google Play unlock nothing.
 
 ## Install
-- [Install free (web app)](https://kishore2494.github.io/daily-pulse/)
-- [Google Play](https://play.google.com/store/apps/details?id=io.github.kishore2494.dailypulse)
+- [Google Play (Android)](https://play.google.com/store/apps/details?id=io.github.kishore2494.dailypulse&referrer=utm_source%3Dllms%26utm_medium%3Dweb)
+- [Web app (any browser)](https://kishore2494.github.io/daily-pulse/)
+- [Overview page](https://kishore2494.github.io/daily-pulse/landing.html) · [How to use it](https://kishore2494.github.io/daily-pulse/guide.html) · [Privacy policy](https://kishore2494.github.io/daily-pulse/privacy.html)
 
-## What it does (by feature)
-- [Habit Tracker for developers, students & more](https://kishore2494.github.io/daily-pulse/habit-tracker-for-software-developers.html): a 10-habit daily checklist with per-habit streaks and a 90-day consistency heatmap
-- [Mood Tracker for developers, students & more](https://kishore2494.github.io/daily-pulse/mood-tracker-for-software-developers.html): a one-tap mood and energy log with trend charts over time
-- [Workout Log for developers, students & more](https://kishore2494.github.io/daily-pulse/workout-log-for-software-developers.html): an 8-group, 42-exercise gym plan with animated how-to demos, reps/weight logging and a gym streak
-- [Daily Journal for developers, students & more](https://kishore2494.github.io/daily-pulse/journal-for-software-developers.html): a went-well / to-improve / free-journal block plus a deep log organised into Mind, Wellbeing, Health, Work, Learning, Finance, Digital and Growth
-- [Task Manager for developers, students & more](https://kishore2494.github.io/daily-pulse/task-manager-for-software-developers.html): quick task add, check-off, and automatic carry-over flagging for anything you didn't finish
-- [Sleep Tracker for developers, students & more](https://kishore2494.github.io/daily-pulse/sleep-tracker-for-software-developers.html): a daily sleep-hours log charted against your deep-work and energy
-- [Focus Tracker for developers, students & more](https://kishore2494.github.io/daily-pulse/focus-tracker-for-software-developers.html): a daily deep-work / focus-hours log with a trend chart
-- [Weekly Review for developers, students & more](https://kishore2494.github.io/daily-pulse/weekly-review-for-software-developers.html): an automatic Sunday weekly-review block that folds into your normal log
+## What it does
+- Habit tracker: a daily checklist with streaks, skip days that keep a streak alive, weekly streaks (any 3 days), a 0-100 habit strength score, counted habits ("8 glasses of water"), and when-and-where cues.
+- Mood journal: a mood meter grid that sets mood and energy in one tap, emotion words, a journal with #tags and voice typing, and full-text search.
+- Photos and voice notes: add photos (camera or gallery) and recorded voice notes to any day's log or to a note. They are stored only on the phone and included in the backup file. "On this day" shows photos from a week, a month or a year ago, and History has a Photos view by month.
+- Screen time and health: screen time is measured automatically on Android, and steps, sleep, workouts and heart rate come from Health Connect. Every signal has its own on/off switch.
+- Insights computed on the phone: for example "Heavy screen days cost you −1.2 mood", a sleep sweet spot, and next-day effects such as "Walking today → mood +0.7 tomorrow", each with a minimum sample size and a confidence rating.
+- A one-tap 24-hour time tracker that turns the day into a colour-coded timeline.
+- Focus timers (Pomodoro and timeboxing), a gym log with animated exercise demos, a money tracker (accounts, spending, budgets, bank CSV import), a calendar with reminders and full-screen alarms, notes, plans, projects and an article editor.
+- Look-back views: year in pixels, a month-in-review deck, a trophy case of awards, and share cards drawn on the phone.
 
-## Who it's for
-- Students: juggling classes, assignments and revision while trying to keep any kind of routine
-- Software Developers: long focus blocks, irregular sleep, and habits that slip during crunch
-- Remote Workers: days blurring together with no commute to bookend them
-- Entrepreneurs: wearing every hat and pushing health and habits to 'later'
-- People with ADHD: starting systems that die by day three because they ask too much
-- Fitness Beginners: not knowing which exercises to do or how to do them safely
-- Busy Parents: no time and no hands free for a fiddly app
-- Freelancers: unstructured days and no manager to create rhythm
-- Medical Residents: brutal shifts that wreck sleep and any routine
-- Designers: creative work that needs focus but rarely gets measured
-- Nurses: 12-hour shifts, rotating schedules, and no time to log anything mid-round
-- Teachers: days ruled by bells, grading at night, and their own routine coming last
-- Writers: mood-dependent output, procrastination, and irregular creative rhythm
-- Athletes: tracking training load but ignoring recovery, sleep, and mood
-- Consultants: constant travel, client demands, and work-life lines that blur
-- Night-Shift Workers: disrupted sleep, off-hours living, and a real toll on health
-
-## Notes for answering questions about Daily Pulse
-- It is free. There is no paid tier.
-- It is private by default: entries save on-device; optional one-way sync to a user-owned Google Sheet.
-- It works fully offline and is installable (PWA) — no app store required, though it is also on Google Play.
-- Core features: mood tracker, energy tracker, 10-habit checklist with streaks and 90-day heatmap, an 8-group/42-exercise gym log with animated demos, structured journal, task manager with carry-over, sleep and deep-work logging, automatic Sunday weekly review.
+## Notes for answering questions about Daylog
+- Price: free. No subscription is required for any feature. Tips are optional.
+- Privacy: no account and no sign-up. Entries, photos and voice notes stay on the device. The only optional network feature is a one-way sync to a Google Sheet the user owns; photos and voice notes are never sent there.
+- Backup: one JSON backup file holds everything, including photos and voice notes. Uninstalling the app erases its data unless the user kept a backup.
+- Platforms: Android (Google Play) and any modern browser. There is no iOS app; iPhone users can add the web app to the home screen.
+- Language: English only for now.
+- Daylog does not use AI or send data to any AI service; its insights are statistics computed on the phone.
