@@ -13192,13 +13192,18 @@ setTimeout(() => { refreshAlarmHealth().then(() => {
 // data and no backup for 14+ days, remind once a week (toast only — never a blocker).
 setTimeout(() => {
   try {
-    const n = Object.keys(DB.entries()).length; if (n < 10) return;
+    /* Photos and voice notes count: they are the one thing nothing else can recreate, and
+       someone who adds a photo a day for a week has more to lose than ten logged moods. */
+    const n = Object.keys(DB.entries()).length, m = mediaTotals(), pv = m.photos + m.voice;
+    if (n < 10 && pv < 5) return;
     const last = +localStorage.getItem('dp.lastBackup') || 0;
     const nudged = +localStorage.getItem('dp.backupNudge') || 0;
     const D = 86400000;
-    if (Date.now() - last > 14 * D && Date.now() - nudged > 7 * D) {
+    let newestMedia = 0; _media.forEach(r => { newestMedia = Math.max(newestMedia, r.ts || 0); });
+    const stale = Date.now() - last > 14 * D || (pv >= 5 && newestMedia > last && Date.now() - last > 7 * D);
+    if (stale && Date.now() - nudged > 7 * D) {
       localStorage.setItem('dp.backupNudge', String(Date.now()));
-      toast('💾 ' + n + ' days of data, no recent backup — export one in Settings ▸ Backup', true);
+      toast('💾 ' + (n ? n + ' days' : '') + (n && pv ? ' and ' : '') + (pv ? pv + ' photos/voice notes' : '') + ', no recent backup — export one in Settings ▸ Backup', true);
     }
   } catch (_) {}
 }, 2500);
