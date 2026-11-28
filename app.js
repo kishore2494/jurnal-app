@@ -1065,7 +1065,7 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
    Deliberately conservative: a lone zero on an auto-mirrored counter is not content, and an
    all-false habits map is not content — but a SKIP (0) is, because choosing to skip is a
    choice you tapped. */
-const ENTRY_META = ['updatedAt', 'tasks', 'tasksPlanned', 'sample', 'habitsAt', 'autoAt', 'fieldAt', 'lift'];   // lift: a Lift tick or a dismissed card is not a log
+const ENTRY_META = ['updatedAt', 'tasks', 'tasksPlanned', 'sample', 'habitsAt', 'autoAt', 'fieldAt', 'lift', 'hnotesAt'];   // hnotesAt (v281): a removed note's stamp is not a log   // lift: a Lift tick or a dismissed card is not a log
 function entryHasContent(en) {
   if (!en) return false;
   for (const k of Object.keys(en)) {
@@ -4788,6 +4788,16 @@ function overlappingBlocks(block, log) {
 /* Deleted time blocks: id → when (see the time-log merge in applyRemoteState). Kept 90 days —
    long enough to reach every phone that syncs at all. */
 function timelogDels() { const v = safeParse(localStorage.getItem('dp.timelogDel'), {}); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+/* v281: a block the restore brought back outranks this phone's record of deleting it, as listRestored
+   does for list items. Left alone, the local and the Sheet's delete records (both newer than the
+   block's upd) removed the restored block again at the first pull. */
+function timelogRestored() {
+  const del = timelogDels(), log = safeParse(localStorage.getItem('dp.timelog'), []);
+  if (!Array.isArray(log)) return;
+  let hit = false;
+  log.forEach(b => { if (b && b.id != null && del[b.id]) { b.upd = Math.max(+b.upd || 0, +del[b.id] + 1); delete del[b.id]; hit = true; } });
+  if (hit) { safeSet('dp.timelog', JSON.stringify(log)); safeSet('dp.timelogDel', JSON.stringify(del)); }
+}
 function timelogForget(ids) {
   const del = timelogDels(), now = Date.now();
   [].concat(ids).forEach(id => { if (id) del[id] = now; });
@@ -6030,10 +6040,8 @@ function entriesFromCSV(text, opts) {
   // month/day. With neither, day/month (as before) and the preview says so, with a switch.
   let order = opts.order || 'dmy', dateAsk = false;
   if (!daylio && !opts.order) {
-    let dFirst = false, mFirst = false, slashed = 0;
-    rows.slice(1).forEach(r => { const m = String(r[col.date] || '').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (!m) return; slashed++; if (+m[1] > 12) dFirst = true; if (+m[2] > 12) mFirst = true; });
-    if (mFirst && !dFirst) order = 'mdy';
-    dateAsk = slashed > 0 && !dFirst && !mFirst;
+    const o = csvDateOrder(rows.slice(1).map(r => r[col.date]));
+    order = o.order; dateAsk = o.ask;
   }
   const hx = csviHabitIndex(), habitCols = {};
   if (!daylio) head.forEach((h, i) => { if (h in hx && !Object.values(col).includes(i)) habitCols[i] = hx[h]; });
@@ -7030,7 +7038,7 @@ function renderHistory() {
   if (!dates.length) { document.getElementById('s-history').innerHTML = tabs + '<div class="empty">No entries yet. Log your first day on the Log tab.</div>'; return; }
   const items = dates.map(d => {
     const en = e[d];
-    const hc = en.habits ? Object.values(en.habits).filter(Boolean).length : 0;
+    const hc = HABITS.filter(h => hVal(en, h.key, d, e) === H_DONE).length;   // v281: a counter below its goal or a removed habit is not done
     return `<div class="hist-item" data-hday="${d}" role="button" tabindex="0">
       <div><div class="hist-date">${prettyDate(d)}</div>
         <div class="hist-meta">${en.journal ? escapeHtml(en.journal.slice(0,46)) + (en.journal.length>46?'…':'') : '—'}</div></div>
@@ -9671,7 +9679,7 @@ function renderCal() {
     const future = ds > today;
     let bg = '';
     if (en && en.mood) bg = `background:hsla(${Math.round((en.mood - 1) / 9 * 120)},62%,45%,.4)`;
-    else if (en) bg = 'background:rgba(109,140,255,.18)';       // logged, no mood yet
+    else if (entryHasContent(en)) bg = 'background:rgba(109,140,255,.18)';       // logged, no mood yet (v281: not an empty ghost day)
     const dots =
       (gym[ds] && Object.values(gym[ds].done || {}).some(Boolean) ? '<i style="background:#f87171"></i>' : '') +
       (segsForDay(ds).length ? '<i style="background:#4ad6c0"></i>' : '') +
@@ -9682,7 +9690,7 @@ function renderCal() {
 
   // ---- selected-day panel ----
   const en = e[calSel];
-  const hc = en && en.habits ? Object.values(en.habits).filter(Boolean).length : 0;
+  const hc = en ? HABITS.filter(h => hVal(en, h.key, calSel, e) === H_DONE).length : 0;   // v281: as the History list
   const evs = eventsOn(calSel);
   const evRows = evs.map(x => `<div class="lrow"><div class="lrow-main">
       <span class="ev-time">${x.time || '—'}</span>
@@ -12819,6 +12827,7 @@ function importData(file, after) {
       const listsBefore = listIds(check.keys), gymBefore = check.keys.includes('gym') ? DB.gym() : null, cfgBefore = cfgRaw();
       check.keys.forEach(k => { if (safeSet('dp.' + k, JSON.stringify(d[k])) === false) failed++; else wrote++; });
       listRestored(listsBefore, backupTime(d._at, d.entries, d.timelog), d._stamps);
+      if (check.keys.includes('timelog')) timelogRestored();
       if (gymBefore) gymRestored(gymBefore, backupTime(d._at, d.entries, d.timelog));
       cfgRestored(cfgBefore, backupTime(d._at, d.entries, d.timelog), d._stamps);
       // This install's sample markers point at rows the restore has just replaced; left in place,
@@ -15644,7 +15653,7 @@ function vsCtx() {
     return (v != null && v !== '' && !isNaN(+v)) ? +v : null; };
   const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
   return { e, hs, log, hkeys, num,
-    logged: w => w.days.filter(d => e[d]).length,
+    logged: w => w.days.filter(d => entryHasContent(e[d])).length,   // v281: a ghost day (a habit tapped and untapped) is not logged
     avgField: (w, k) => { const v = w.days.map(d => num(d, k)).filter(x => x != null);
       return v.length ? { v: mean(v), n: v.length } : null; },
     avgHealth: (w, k) => { const v = w.days.map(d => (hs[d] || {})[k])
@@ -15679,7 +15688,7 @@ const VS_METRICS = [
     fmt: v => v.toFixed(1),
     get: (c, w) => { if (!c.hkeys.length) return null;
       // per LOGGED day, so unlogged days do not read as zero-habit days
-      const per = w.days.filter(d => c.e[d])
+      const per = w.days.filter(d => entryHasContent(c.e[d]))
         .map(d => c.hkeys.filter(k => hVal(c.e[d], k) === H_DONE).length);
       return per.length ? { v: per.reduce((a, b) => a + b, 0) / per.length, n: per.length } : null; } },
   { k: 'tracked',  label: '⏱ Time tracked', dir:  0, eps: 0.5,
@@ -18387,6 +18396,16 @@ function finCat(id) {
 /* ---- stores ---- */
 function finAccts() { const v = safeParse(localStorage.getItem('dp.finaccts'), []); return Array.isArray(v) ? v : []; }
 function finSaveAccts(a) { const ok = listSave('dp.finaccts', a); pushState(); return ok; }
+/* v281: a card's starting figure is "what was owed" — but it was stored as typed, positive, so net
+   worth counted the debt as an asset (a minus could not even be typed: parseAmt drops it). Every
+   positive card opening before v281 meant a debt; flipping it is idempotent (only > 0 flips), so two
+   phones running it cannot flip it back. */
+function finCardOpeningFix() {
+  const all = finAccts(); let hit = false;
+  all.forEach(a => { if (a && a.kind === 'card' && +a.opening > 0) { a.opening = -a.opening; hit = true; } });
+  if (hit) finSaveAccts(all);
+  return hit;
+}
 function finTx() { const v = safeParse(localStorage.getItem('dp.fintx'), []); return Array.isArray(v) ? v : []; }
 function finSaveTx(t) { const ok = listSave('dp.fintx', t); pushState(); return ok; }
 function finMarks() { const v = safeParse(localStorage.getItem('dp.finmarks'), []); return Array.isArray(v) ? v : []; }
@@ -18697,6 +18716,7 @@ function mnShiftMonth(n) {
 }
 
 function renderMoney() {
+  try { finCardOpeningFix(); } catch (e) {}
   const el = document.getElementById('s-money');
   if (!el) return;
   document.getElementById('screen-title').textContent = 'Money';
@@ -19024,7 +19044,7 @@ function mnAcctFormHTML(a) {
                you record, so entering today's balance and then adding a past expense left the
                account short by that expense. */''}
          <div class="field"><label>Starting balance <span class="hint">${k.k === 'card' ? 'what was owed at the start' : 'before anything you record'}</span></label>
-          <input type="text" id="mn-a-open" inputmode="decimal" value="${isNew || !a.opening ? '' : (a.opening / 100)}" placeholder="0"></div>
+          <input type="text" id="mn-a-open" inputmode="decimal" value="${isNew || !a.opening ? '' : ((k.k === 'card' ? Math.abs(a.opening) : a.opening) / 100)}" placeholder="0"></div>
          <div class="field"><label>Starting from</label>
           <input type="date" id="mn-a-since" value="${escapeHtml(isNew ? todayStr() : (finSince(a) || todayStr()))}" max="${todayStr()}"></div>
          <div class="hint" style="margin-bottom:9px">The balance is this figure plus everything you record after that date, so it can never disagree with your own ledger. Before that date the account simply does not count — your net-worth history stays honest instead of pretending it always existed.</div>`
@@ -19156,6 +19176,14 @@ function csvParse(text) {
 /* Banks write dates every possible way. Handles ISO, dd/mm/yyyy, dd-mm-yy and "12 Jan 2026".
    dd/mm is assumed over mm/dd — this app's users are not all American, and guessing wrong
    silently reorders someone's whole year. Ambiguous rows are dropped, not guessed. */
+/* v281: one day/month order for a whole file (both CSV importers): a first part above 12 anywhere
+   means day/month, a second part above 12 means month/day; with neither it stays day/month and
+   `ask` says the file was ambiguous. */
+function csvDateOrder(vals) {
+  let dFirst = false, mFirst = false, slashed = 0;
+  vals.forEach(v => { const m = String(v || '').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (!m) return; slashed++; if (+m[1] > 12) dFirst = true; if (+m[2] > 12) mFirst = true; });
+  return { order: mFirst && !dFirst ? 'mdy' : 'dmy', ask: slashed > 0 && !dFirst && !mFirst };
+}
 function csvDate(v, order) {   // order 'mdy' reads 05/11/2026 as 11 May (v281); day/month otherwise
   const s = String(v || '').trim();
   if (!s) return null;
@@ -19201,10 +19229,14 @@ function mnImportRows() {
   if (!mnImport) return { rows: [], bad: 0, dupes: 0 };
   const { rows, map } = mnImport;
   const has = k => map[k] !== '' && map[k] != null;
-  const existing = new Set(finTx().map(t => t.d + '|' + t.a + '|' + t.dir));
+  // v281: the same day, amount, direction AND account; counted, so two real ₹500 rows on one day
+  // are not one, and a cash spend no longer hides a bank row of the same amount.
+  const existing = new Map();
+  finTx().forEach(t => { const k = t.d + '|' + t.a + '|' + t.dir + '|' + (t.ac || ''); existing.set(k, (existing.get(k) || 0) + 1); });
+  const order = has('date') ? csvDateOrder(rows.map(r => r[map.date])).order : 'dmy';   // v281: US statements
   const out = []; let bad = 0, dupes = 0;
   rows.forEach(r => {
-    const d = has('date') ? csvDate(r[map.date]) : null;
+    const d = has('date') ? csvDate(r[map.date], order) : null;
     if (!d || d > todayStr()) { bad++; return; }
     let a = null, dir = 'out';
     const rawOut = has('out') ? String(r[map.out] || '').trim() : '';
@@ -19214,11 +19246,13 @@ function mnImportRows() {
       a = parseAmt(rawOut);
       /* One-column statements carry the sign. With separate debit/credit columns the sign is
          already implied by which column it sat in, so a stray minus must not flip it. */
-      dir = (!has('in') && /^\s*-/.test(rawOut)) ? 'out' : (!has('in') && !/^\s*-/.test(rawOut) ? 'in' : 'out');
+      // v281: "1,234.00 Dr" and "(2,000.00)" are money out on Indian and accounting statements, "Cr" money in
+      const neg = /^\s*-/.test(rawOut) || /^\s*\(.*\)\s*$/.test(rawOut) || /\bdr\.?\s*$/i.test(rawOut);
+      dir = has('in') ? 'out' : (neg ? 'out' : 'in');
     }
     if (!a) { bad++; return; }
-    const key = d + '|' + a + '|' + dir;
-    if (existing.has(key)) { dupes++; return; }
+    const key = d + '|' + a + '|' + dir + '|' + (map.acct || '');
+    if (existing.get(key) > 0) { existing.set(key, existing.get(key) - 1); dupes++; return; }
     out.push({ d, a, dir, n: has('desc') ? String(r[map.desc] || '').trim().slice(0, 90) : '',
       c: dir === 'in' ? 'otherin' : 'otherout', ac: map.acct });
   });
@@ -19267,7 +19301,7 @@ document.addEventListener('click', (ev) => {
       const a = all.find(x => x.id === id); if (!a) return;
       a.name = name;
       if (k.mode === 'tx') {
-        const v = parseAmt(document.getElementById('mn-a-open').value); a.opening = v == null ? 0 : v;
+        const v = parseAmt(document.getElementById('mn-a-open').value); a.opening = v == null ? 0 : (a.kind === 'card' ? -Math.abs(v) : v);   // v281: a card's starting figure is owed
         const sc = document.getElementById('mn-a-since');
         if (sc && sc.value) a.since = sc.value;
       }
@@ -19276,7 +19310,7 @@ document.addEventListener('click', (ev) => {
       const nid = 'a' + Date.now();
       const rec = { id: nid, name, kind, opening: 0, created: todayStr() };
       if (k.mode === 'tx') {
-        const v = parseAmt(document.getElementById('mn-a-open').value); rec.opening = v == null ? 0 : v;
+        const v = parseAmt(document.getElementById('mn-a-open').value); rec.opening = v == null ? 0 : (kind === 'card' ? -Math.abs(v) : v);   // v281: owed
         const sc = document.getElementById('mn-a-since');
         rec.since = (sc && sc.value) || todayStr();
       }

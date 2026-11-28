@@ -1460,6 +1460,39 @@
     }
   }
 
+  // ---- v281: second audit (restore, money, ghost days) ----
+  {
+    const snaps = {}; ['dp.entries', 'dp.timelog', 'dp.timelogDel', 'dp.finaccts', 'dp.fintx', 'dp.listAt'].forEach(k => { snaps[k] = localStorage.getItem(k); });
+    try {
+      // a removed habit note leaves no logged day behind
+      ok('ghost: a day with only hnotesAt is not logged', !entryHasContent({ habits: {}, updatedAt: '2026-01-01T00:00:00Z', hnotesAt: { workout: 5 } }));
+      // You vs you counts only days with content
+      const e = {}, t = todayStr(); for (let i = 1; i <= 7; i++) e[addDays(t, -i)] = { habits: { workout: false }, tasks: '' };
+      DB.saveEntries(e);
+      const c = vsCtx(); const w = { days: Object.keys(e) };
+      ok('ghost: You vs you does not count empty days as logged', c.logged(w) === 0, c.logged(w));
+      // a restored time block outranks this phone's delete record
+      localStorage.setItem('dp.timelog', JSON.stringify([{ id: 'tsA', start: 1, end: 2, upd: 100 }, { id: 'tsB', start: 3, end: 4, upd: 100 }]));
+      localStorage.setItem('dp.timelogDel', JSON.stringify({ tsB: 500 }));
+      timelogRestored();
+      const tl = JSON.parse(localStorage.getItem('dp.timelog'));
+      ok('restore: a restored block gets upd past its delete record, and the record goes', tl.find(b => b.id === 'tsB').upd === 501 && !('tsB' in timelogDels()) && tl.find(b => b.id === 'tsA').upd === 100, [tl, timelogDels()]);
+      // card openings are debts
+      localStorage.setItem('dp.finaccts', JSON.stringify([{ id: 'c1', name: 'Card', kind: 'card', opening: 500000 }, { id: 'b1', name: 'Bank', kind: 'bank', opening: 100000 }]));
+      ok('money: a positive card opening flips to a debt, once', finCardOpeningFix() === true && finAcct('c1').opening === -500000 && finAcct('b1').opening === 100000 && finCardOpeningFix() === false);
+      // money CSV: Dr / Cr / brackets, US dates, account-aware counted duplicates
+      localStorage.setItem('dp.fintx', JSON.stringify([{ id: 'x1', d: '2026-11-05', a: 50000, dir: 'out', ac: 'cash' }]));
+      mnImport = { rows: [['11/05/2026', '1,234.00 Dr'], ['11/25/2026', '(2,000.00)'], ['10/03/2026', '300 Cr'], ['11/05/2026', '-500'], ['11/05/2026', '-500']], map: { date: 0, out: 1, in: '', desc: '', acct: 'bank' } };
+      const R = mnImportRows();
+      ok('money csv: a second part above 12 makes the file month/day', R.rows.some(x => x.d === '2026-11-25') && R.rows.some(x => x.d === '2026-10-03') && R.bad === 0, R);
+      ok('money csv: Dr and (brackets) are money out, Cr money in', R.rows.find(x => x.a === 123400).dir === 'out' && R.rows.find(x => x.a === 200000).dir === 'out' && R.rows.find(x => x.a === 30000).dir === 'in', R.rows);
+      ok('money csv: a cash spend does not hide a bank row; two real rows stay two', R.rows.filter(x => x.a === 50000).length === 2 && R.dupes === 0, R);
+      mnImport = { rows: [['2026-11-05', '-500']], map: { date: 0, out: 1, in: '', desc: '', acct: 'cash' } };
+      ok('money csv: the same row in the same account is a duplicate', mnImportRows().dupes === 1);
+      mnImport = null;
+    } finally { Object.keys(snaps).forEach(k => { if (snaps[k] == null) localStorage.removeItem(k); else localStorage.setItem(k, snaps[k]); }); }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));
