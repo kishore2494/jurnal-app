@@ -7141,7 +7141,7 @@ function historyDayHTML(d) {
   let refl = '';
   if (en) {
     coreCfg().filter(f => f.type === 'text').forEach(f => { refl += qa(f.label, en[f.key]); });
-    if (has(en.journal) && String(en.journal).trim()) refl += `<div class="hd-qa hd-journal"><div class="hd-ql">Journal</div><div class="hd-q">${hdText(en.journal)}</div></div>`;
+    if (has(en.journal) && String(en.journal).trim()) refl += `<div class="hd-qa hd-journal"><div class="hd-ql">Journal</div><div class="hd-q">${hdText(en.journal)}</div>${tags.length ? `<div class="tag-cloud hd-tagrow">${tags.slice(0, 8).map(t => `<button type="button" class="tag-chip" data-th-open="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('')}</div>` : ''}</div>`;   // v281: a tag opens its Threads page
     refl += qa('Wins this week', en.weekWins) + qa('Focus for next week', en.weekFocus);
   }
 
@@ -15431,6 +15431,7 @@ function thRender() {
 document.addEventListener('click', ev => {
   const t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
   if (t.id === 'th-close' || t.id === 'thsheet') { thClose(); return; }
+  const to = t.closest('[data-th-open]'); if (to) { thOpen(to.dataset.thOpen); return; }
   const dd = t.closest('[data-th-day]');
   if (dd) { const d = dd.dataset.thDay; thClose(); dayOpen(d); return; }
   if (t.closest('[data-th-search]') && thTag) { searchQ = thTag; thClose(); navigateTo('search'); return; }

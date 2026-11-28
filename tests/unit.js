@@ -1416,6 +1416,8 @@
       ok('th: recent mentions newest first, with the words around the tag', r.recent[0].d === addDays(t, -3) && /#run by the lake/.test(r.recent[0].text), r.recent[0]);
       const few = tagThread('#nope');
       ok('th: a tag used too little claims nothing', few.n === 0 && !few.mood.ok);
+      const dayHtml = historyDayHTML(addDays(t, -3));
+      ok('th: a day page lists its tags, each opening the tag page', /data-th-open="#run"/.test(dayHtml), dayHtml.slice(0, 80));
       thOpen('#run');
       const sh = document.getElementById('thsheet');
       ok('th: the page opens with the numbers and the comparison', sh.classList.contains('on') && /On days with #run/.test(sh.textContent) && /Mood the day after/.test(sh.textContent) && /about the same/.test(sh.textContent));

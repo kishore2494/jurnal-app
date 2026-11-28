@@ -4723,3 +4723,4 @@ html.locked #alarm { z-index: 400; }
 .ch-n { font-size: 14.5px; font-weight: 700; color: var(--text); }
 .ch-r { font-size: 12.5px; color: var(--text-dim); }
 .ch-going { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; font-size: 14px; color: var(--text); }
+.hd-tagrow { margin-top: 10px; }
