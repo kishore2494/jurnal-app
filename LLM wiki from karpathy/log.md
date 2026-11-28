@@ -1,3 +1,11 @@
+## 2026-11-29 — old sheets imported; archived in a private repo
+
+- Kishore imported `daylog-import-old-sheets.csv` on his phone. Expected totals: 396 dates (4 Nov 2024 → 28 Nov
+  2026), 394 "days logged all time" (2 older entries have no content).
+- Originals (7 exports), the import file, the per-cell audit and the converter are in the PRIVATE repo
+  `kishore2494/daylog-old-sheets` (fresh clone byte-identical). Local copies moved to the Mac's Trash; scratch copies removed.
+  An older `Jurnal App Data Sync Log.csv` (Sep 14) is still in Downloads: not part of this set.
+
 ## 2026-11-29 — v280 LIVE (deployed same day): CSV import fills every daily field; Kishore's old sheets converted
 
 - Kishore asked to bring his old Google Sheets into Daylog "without losing data". Route chosen: one CSV through
