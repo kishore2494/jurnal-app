@@ -4690,3 +4690,20 @@ html.locked #alarm { z-index: 400; }
 .otd-mem > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .otd-mem svg { flex: 0 0 auto; color: color-mix(in srgb, var(--oc) 60%, var(--text-dim)); }
 .otd-mem i { font-style: normal; color: var(--text-faint); }
+
+/* v281 Your year */
+.yr-months { display: flex; align-items: flex-end; gap: 4px; height: 132px; margin-top: 4px; }
+.yr-m { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
+.yr-m > i { display: block; width: 100%; border-radius: 6px 6px 3px 3px; background: var(--bg-input); }
+.yr-m > b { font-size: 10px; font-weight: 700; color: var(--text-dim); min-height: 12px; }
+.yr-m > span { font-size: 11px; font-weight: 700; color: var(--text-dim); }
+.yr-m.none > span { opacity: .45; }
+.yr-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.yr-tags > span { padding: 4px 10px; border-radius: 99px; background: var(--bg-input); font-size: 12.5px; font-weight: 600; color: var(--text); }
+.yr-tags em { font-style: normal; color: var(--text-dim); margin-left: 2px; }
+.yr-quote { margin: 14px 0 0; padding: 12px 14px; border-left: 3px solid var(--accent); border-radius: 0 12px 12px 0; background: var(--bg-input); font-size: 14px; line-height: 1.45; color: var(--text); }
+.yr-quote cite { display: block; margin-top: 6px; font-style: normal; font-size: 12px; color: var(--text-dim); }
+.yr-vs { flex: 0 0 auto; font-size: 12.5px; color: var(--text-dim); }
+.yr-vs b { color: var(--text); }
+.yr-d.up { color: var(--good, #16a34a); }
+.yr-d.down { color: var(--bad, #dc2626); }

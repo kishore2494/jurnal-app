@@ -1206,6 +1206,48 @@
     }
   }
 
+  // ---- v281: Your year ----
+  {
+    const eSnap = localStorage.getItem('dp.entries'), hSnap = localStorage.getItem('dp.habitcfg'), seenSnap = localStorage.getItem('dp.yrSeen');
+    try {
+      localStorage.setItem('dp.habitcfg', JSON.stringify([{ key: 'workout', emoji: '💪', label: 'Workout' }, { key: 'reading', emoji: '📖', label: 'Reading' }]));
+      reloadCfg();
+      const e = {};
+      // 2024: 20 days logged in March; 2025: Jan 1–30 in a row, plus 10 days in June
+      for (let i = 1; i <= 20; i++) e['2024-03-' + String(i).padStart(2, '0')] = { mood: 5, journal: 'old year', sleepHours: 7 };
+      for (let i = 1; i <= 30; i++) e['2025-01-' + String(i).padStart(2, '0')] = { mood: 4, journal: 'cold #work day', habits: { workout: true }, sleepHours: 6 };
+      for (let i = 1; i <= 10; i++) e['2025-06-' + String(i).padStart(2, '0')] = { mood: 8, journal: 'summer #work #trip', habits: { reading: true }, sleepHours: 8 };
+      e['2025-06-05'] = { mood: 9, journal: 'The best day of the year, by far.\n\nFrom my old sheets:\n- Food: dosa', habits: { reading: true } };
+      e['2025-09-01'] = { mood: 9, journal: 'short' };   // same top mood, fewer own words
+      e['2023-05-01'] = { mood: 6, journal: 'too few days for a year' };
+      DB.saveEntries(e);
+      ok('yr: only years with 14+ days logged by hand are offered, newest first', JSON.stringify(yrYears()) === '["2025","2024"]', yrYears());
+      const r = yearReview('2025');
+      ok('yr: days logged, coverage and the longest run inside the year', r.logged === 41 && r.best === 30 && r.coverage === Math.round(41 / 365 * 100) && !r.partial, r);
+      ok('yr: months carry their mood average; best and hardest month need 3 rated days', r.months[0].mood === 4 && r.months[5].logged === 10 && r.bestM.m === 6 && r.worstM.m === 1, [r.months[0], r.bestM, r.worstM]);
+      ok('yr: habits ranked by days done', r.habitRows[0].key === 'workout' && r.habitRows[0].done === 30 && r.habitRows[1].done === 10, r.habitRows);
+      ok('yr: top tags counted per day', r.topTags[0].t === '#work' && r.topTags[0].n === 39 && r.topTags[1].t === '#trip', r.topTags);
+      ok('yr: the best day is the top mood with the most of your own words, quoted without the imported block', r.bestDay === '2025-06-05' && /best day of the year/.test(r.quote) && !/old sheets|dosa/.test(r.quote), [r.bestDay, r.quote]);
+      const cards = yrCards(r, yearReview('2024'));
+      ok('yr: six cards, ending with the year before', cards.length === 6 && cards[0].t === 'Your 2025' && cards[5].t === 'vs 2024' && /20 → <b>41<\/b>/.test(cards[5].body), cards.map(c => c.t));
+      ok('yr: a year with too little before it has no comparison card', yrCards(yearReview('2024'), null).every(c => !/^vs /.test(c.t)));
+      yrOpen('2025');
+      const deck = () => document.getElementById('yrdeck');
+      ok('yr: the deck opens on the first card and remembers the year as seen', deck().classList.contains('on') && /Your 2025/.test(deck().textContent) && localStorage.getItem('dp.yrSeen') === '2025');
+      deck().querySelector('[data-yr-step="1"]').click();
+      ok('yr: Next goes to month by month', /Month by month/.test(deck().textContent) && deck().querySelectorAll('.yr-m').length === 12);
+      deck().querySelector('[data-yr-go="2024"]').click();
+      ok('yr: the arrow moves to the earlier year, back on card one', /Your 2024/.test(deck().textContent));
+      document.getElementById('yr-close').click();
+      ok('yr: close hides it', !deck().classList.contains('on'));
+      ok('yr: Stats offers the newest year', /Your 20(25|26)/.test(yearCardHTML()) || /Your 2025/.test(yearCardHTML()), yearCardHTML().slice(0, 200));
+    } finally {
+      [['dp.entries', eSnap], ['dp.habitcfg', hSnap], ['dp.yrSeen', seenSnap]].forEach(([k, v]) => { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); });
+      try { reloadCfg(); } catch (e) {}
+      const d = document.getElementById('yrdeck'); if (d) d.remove();
+    }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));

@@ -2088,8 +2088,9 @@ function renderDeepSections() {
    Testers get silent web updates; this makes improvements visible so they keep
    giving feedback. Bump WHATS_NEW.v to re-show with new items. */
 const WHATS_NEW = {
-  v: 'w42',
+  v: 'w43',
   items: [
+    '📅 <b>Your year, in six cards</b> — Stats ▸ Overview (and the Log, through December): days logged, your longest run, mood month by month, your habits, what you wrote with your best day quoted, and how it compares with the year before. Made on this phone; nothing is sent anywhere.',
     '📥 <b>Spreadsheet import reads every field</b> — Settings ▸ Backup & restore ▸ Import days from a CSV now also fills stress, focus, clarity, motivation, sleep quality, meditation, water, weight, screen time, income, expenses, tasks and gratitude, by column name. It still only fills what is empty.',
     '⚡ <b>Faster with years of entries</b> — History opens about four times faster on a long log, and the Log and the Time screen render in less time too. Nothing about your data changed.',
     '🖼️ <b>Memories on their day</b> — a day\'s page in History now shows the memories dated that day, and Back from one returns to the day. <b>On this day</b> on the Log shows them too, a week, a month or a year on.',
@@ -6585,6 +6586,7 @@ function renderDash() {
     ${goalsCardHTML()}
 
     ${monthCardHTML()}
+    ${yearCardHTML()}
 
     ${vsPastHTML()}
 
@@ -13680,6 +13682,7 @@ function nudgeCardKind() {
   if (freshLandmark() && !freshSeen()[freshLandmark().k]) return '';   // a landmark card owns today
   try { if (notifAskKind()) return ''; } catch (e) {}
   try { if (filmCardYM()) return 'film'; } catch (e) {}                 // last month's film, first week only
+  try { if (yrCardY()) return 'year'; } catch (e) {}                   // the year in review, 1 Dec – 10 Jan
   const seen = localStorage.getItem('dp.insightSeen') || '';
   if (!seen && firstInsight()) return 'insight';
   if (seen === todayStr()) return '';                                   // one card a day
@@ -13699,6 +13702,17 @@ function nudgeCardHTML() {
         <button type="button" class="fresh-x" data-film-x="${ym}" aria-label="Dismiss">✕</button>
       </div>
       <button type="button" class="btn btn-primary btn-sm film-go" data-film-open="${ym}">${icon('playFill', 15)} Watch it</button>
+    </div>`;
+  }
+  if (k === 'year') {
+    const y = yrCardY();
+    return `<div class="card fresh-card yr-offer">
+      <div class="fresh-body">
+        <div class="fresh-ico">📅</div>
+        <div class="fresh-txt"><div class="fresh-t">Your ${y}, in six cards</div><div class="fresh-l">Days, your longest run, mood month by month, habits and what you wrote. Made on this phone.</div></div>
+        <button type="button" class="fresh-x" data-yr-x="${y}" aria-label="Dismiss">✕</button>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm film-go" data-yr-open="${y}">See ${y}</button>
     </div>`;
   }
   if (k === 'insight') {
@@ -15030,6 +15044,197 @@ document.addEventListener('click', (ev) => {
   if (pg) { mrPage = +pg.dataset.mrPage; mrRender(); return; }
   const st = t.closest('[data-mr-step]');
   if (st) { mrPage += +st.dataset.mrStep; mrRender(); buzz(5); return; }
+});
+
+/* ============================================================
+   YOUR YEAR (v281) — a year-in-review deck for any calendar year you logged: days, the longest
+   run, mood month by month, habits, what you wrote, body, and the year before. Worked out on the
+   phone from your own log every time it opens; nothing is sent anywhere and no AI reads the
+   journal (the privacy objection in Day One's "Year in Journaling" request thread). Same deck as
+   Month in review. Offered on the Log from 1 December to 10 January, and always on Stats.
+   ============================================================ */
+const YR_MIN_DAYS = 14;          // fewer days logged by hand than this: the year is not offered
+function yrYears() {
+  const e = DB.entriesRO(), n = {};
+  for (const d in e) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && filmDayLogged(e[d])) n[d.slice(0, 4)] = (n[d.slice(0, 4)] || 0) + 1;
+  return Object.keys(n).filter(y => n[y] >= YR_MIN_DAYS).sort().reverse();
+}
+/* The part of a journal the person wrote: a CSV import made from old sheets keeps the cells it had
+   no field for under "From my old sheets:", which is not a quote anyone wants back. */
+function yrOwnText(j) {
+  const p = String(j || '').split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  const own = p.filter(x => !/^From my old sheets:/.test(x));
+  return own.join(' ');
+}
+function yearReview(y) {
+  const e = DB.entriesRO(), hs = healthStore(), today = todayStr();
+  const partial = y === today.slice(0, 4), last = partial ? today : y + '-12-31';
+  const days = [];
+  for (let d = y + '-01-01'; d <= last; d = addDays(d, 1)) days.push(d);
+  const logged = days.filter(d => filmDayLogged(e[d]));
+  const num = (d, k) => { const v = e[d] && e[d][k]; return (v != null && v !== '' && !isNaN(+v)) ? +v : null; };
+  const mean = a => a.length ? a.reduce((x, z) => x + z, 0) / a.length : null;
+  const vals = (ds, k) => ds.map(d => num(d, k)).filter(x => x != null);
+  let best = 0, run = 0, prev = null;
+  logged.forEach(d => { run = prev && addDays(prev, 1) === d ? run + 1 : 1; best = Math.max(best, run); prev = d; });
+  const months = [];
+  for (let m = 1; m <= 12; m++) {
+    const ym = y + '-' + String(m).padStart(2, '0'), ds = logged.filter(d => d.slice(0, 7) === ym), mv = vals(ds, 'mood');
+    months.push({ ym, m, logged: ds.length, mood: mean(mv), n: mv.length });
+  }
+  const rated = months.filter(x => x.n >= 3);
+  const bestM = rated.length > 1 ? rated.reduce((a, b) => b.mood > a.mood ? b : a) : null;
+  const worstM = rated.length > 1 ? rated.reduce((a, b) => b.mood < a.mood ? b : a) : null;
+  let ticks = 0;
+  const habitRows = habitCfg().filter(h => !h.hidden).map(h => {
+    const done = logged.filter(d => hVal(e[d], h.key) === H_DONE).length;
+    const skip = logged.filter(d => hVal(e[d], h.key, d, e) === H_SKIP).length;
+    ticks += done;
+    return { key: h.key, emoji: h.emoji || '•', label: h.label || h.key, done, pct: Math.round(done / Math.max(1, logged.length - skip) * 100) };
+  }).filter(h => h.done > 0).sort((a, b) => b.done - a.done || b.pct - a.pct);
+  const tags = {}; let words = 0, written = 0;
+  logged.forEach(d => {
+    const j = (e[d].journal || '').trim(); if (!j) return;
+    written++; words += j.split(/\s+/).length;
+    extractTags(j).forEach(t => { tags[t] = (tags[t] || 0) + 1; });
+  });
+  const topTags = Object.keys(tags).sort((a, b) => tags[b] - tags[a] || (a < b ? -1 : 1)).slice(0, 6).map(t => ({ t, n: tags[t] }));
+  const ownLen = d => yrOwnText(e[d].journal).split(/\s+/).filter(Boolean).length;
+  const moodDays = logged.filter(d => num(d, 'mood') != null);
+  const bestDay = moodDays.length ? moodDays.reduce((a, b) => (num(b, 'mood') > num(a, 'mood') || (num(b, 'mood') === num(a, 'mood') && ownLen(b) > ownLen(a))) ? b : a) : null;
+  const weights = logged.filter(d => num(d, 'weight') != null);
+  const steps = days.map(d => (hs[d] || {}).steps).filter(x => x != null && !isNaN(+x)).map(Number);
+  return {
+    y, partial, elapsed: days.length, logged: logged.length, coverage: Math.round(logged.length / Math.max(1, days.length) * 100),
+    best, ticks, months, bestM, worstM, habitRows, words, written, topTags,
+    bestDay, bestMood: bestDay ? num(bestDay, 'mood') : null, quote: bestDay ? filmClip(yrOwnText(e[bestDay].journal), 170) : '',
+    mood: mean(vals(logged, 'mood')), sleep: mean(vals(logged, 'sleepHours')), stepsAvg: mean(steps),
+    workouts: logged.filter(d => +e[d].workoutsDone > 0 || hVal(e[d], 'workout') === H_DONE).length,
+    weight: weights.length >= 2 ? { from: num(weights[0], 'weight'), to: num(weights[weights.length - 1], 'weight') } : null,
+  };
+}
+function yrCards(r, p) {
+  const n1 = v => v == null ? '–' : (Math.round(v * 10) / 10).toFixed(1);
+  const big = (v, l) => `<div class="mr-big"><div class="mr-v">${v}</div><div class="mr-l">${l}</div></div>`;
+  const cards = [];
+  cards.push({ t: 'Your ' + r.y, body: `
+    <div class="mr-grid">
+      ${big(r.logged, r.logged === 1 ? 'day logged' : 'days logged')}
+      ${big(r.coverage + '%', 'of the year')}
+      ${big(r.best, r.best === 1 ? 'day, longest run' : 'days, longest run')}
+      ${big(r.ticks.toLocaleString(), 'habits ticked')}
+    </div>
+    ${r.partial ? `<div class="hint mr-note">${r.y} is still running: this covers the ${r.elapsed} day${r.elapsed === 1 ? '' : 's'} so far.</div>` : ''}` });
+  const L = 'JFMAMJJASOND';
+  if (r.months.some(m => m.mood != null)) cards.push({ t: 'Month by month', body: `
+    <div class="yr-months" role="img" aria-label="Average mood for each month of ${r.y}">${r.months.map(m => `<div class="yr-m${m.logged ? '' : ' none'}">
+      <b>${m.mood == null ? '' : n1(m.mood)}</b>
+      <i style="height:${m.mood == null ? 3 : Math.max(8, Math.round(m.mood * 10))}%;${m.mood == null ? '' : `background:${moodColor(Math.round(m.mood))}`}"></i>
+      <span>${L[m.m - 1]}</span></div>`).join('')}</div>
+    <div class="hint mr-note">Average mood each month${r.bestM ? `. Best: <b>${MR_MON[r.bestM.m - 1]}</b> (${n1(r.bestM.mood)})` : ''}${r.worstM && r.worstM !== r.bestM ? `, hardest: <b>${MR_MON[r.worstM.m - 1]}</b> (${n1(r.worstM.mood)})` : ''}.</div>` });
+  if (r.habitRows.length) cards.push({ t: 'Habits', body: `
+    ${r.habitRows.slice(0, 7).map(h => `<div class="mr-row">
+      <span class="mr-row-n">${h.emoji} ${escapeHtml(h.label)}</span>
+      <span class="mr-bar"><i style="width:${Math.max(2, h.pct)}%"></i></span>
+      <span class="mr-row-v">${h.done}d</span></div>`).join('')}
+    <div class="hint mr-note">Days done in ${r.y}. The bar is the share of the days you logged, rest days left out.</div>` });
+  if (r.written || r.quote) cards.push({ t: 'What you wrote', body: `
+    <div class="mr-grid">
+      ${big(r.words.toLocaleString(), 'words')}
+      ${big(r.written, r.written === 1 ? 'day written' : 'days written')}
+    </div>
+    ${r.topTags.length ? `<div class="yr-tags">${r.topTags.map(x => `<span>${escapeHtml(x.t)} <em>${x.n}</em></span>`).join('')}</div>` : ''}
+    ${r.quote ? `<blockquote class="yr-quote">“${escapeHtml(r.quote)}”<cite>${prettyDate(r.bestDay)}${r.bestMood != null ? ` · mood ${r.bestMood}/10` : ''}</cite></blockquote>` : ''}` });
+  const body = [];
+  if (r.mood != null) body.push(big(n1(r.mood), 'avg mood'));
+  if (r.sleep != null) body.push(big(n1(r.sleep) + 'h', 'avg sleep'));
+  if (r.stepsAvg != null) body.push(big(Math.round(r.stepsAvg).toLocaleString(), 'steps a day'));
+  if (r.workouts) body.push(big(r.workouts, r.workouts === 1 ? 'workout day' : 'workout days'));
+  if (body.length) cards.push({ t: 'Body and mind', body: `<div class="mr-grid">${body.join('')}</div>
+    ${r.weight ? `<div class="hint mr-note">Weight: ${n1(r.weight.from)} → ${n1(r.weight.to)} kg over the year.</div>` : ''}` });
+  if (p && p.logged >= YR_MIN_DAYS) {
+    const row = (lab, a, b, fmt, goodUp) => {
+      if (a == null || b == null) return '';
+      const d = b - a, same = Math.abs(d) < (fmt === 'n1' ? 0.05 : 0.5);
+      const f = v => fmt === 'n1' ? n1(v) : Math.round(v).toLocaleString();
+      const cls = same ? '' : ((d > 0) === goodUp ? ' up' : ' down');
+      return `<div class="mr-row"><span class="mr-row-n">${lab}</span><span class="yr-vs">${f(a)} → <b>${f(b)}</b></span><span class="mr-row-v yr-d${cls}">${same ? 'same' : (d > 0 ? '+' : '−') + f(Math.abs(d))}</span></div>`;
+    };
+    const rows = [row('Days logged', p.logged, r.logged, 'n', true), row('Avg mood', p.mood, r.mood, 'n1', true),
+      row('Avg sleep (h)', p.sleep, r.sleep, 'n1', true), row('Words written', p.words, r.words, 'n', true), row('Longest run', p.best, r.best, 'n', true)].join('');
+    if (rows) cards.push({ t: 'vs ' + p.y, body: rows + (r.partial ? `<div class="hint mr-note">${r.y} is not over yet, so its totals are still growing.</div>` : '') });
+  }
+  return cards;
+}
+let yrY = null, yrPage = 0;
+function yrOpen(y) {
+  yrY = String(y); yrPage = 0;
+  try { safeSet('dp.yrSeen', yrY); } catch (e) {}
+  let el = document.getElementById('yrdeck');
+  if (!el) { el = document.createElement('div'); el.id = 'yrdeck'; el.className = 'sharesheet'; document.body.appendChild(el); }
+  el.classList.add('on');
+  yrRender();
+}
+function yrClose() { const el = document.getElementById('yrdeck'); if (el) el.classList.remove('on'); yrY = null; }
+function yrRender() {
+  const el = document.getElementById('yrdeck');
+  if (!el || !yrY) return;
+  const years = yrYears(), i = years.indexOf(yrY);
+  const r = yearReview(yrY), p = years.includes(String(+yrY - 1)) ? yearReview(String(+yrY - 1)) : null;
+  const cards = yrCards(r, p);
+  yrPage = Math.max(0, Math.min(yrPage, cards.length - 1));
+  const c = cards[yrPage];
+  const older = i >= 0 && i < years.length - 1 ? years[i + 1] : null, newer = i > 0 ? years[i - 1] : null;
+  el.innerHTML = `<div class="ss-inner">
+    <div class="ss-head">
+      <button type="button" class="mr-nav" data-yr-go="${older || ''}" ${older ? '' : 'disabled'} aria-label="Earlier year">‹</button>
+      <span class="mr-title">${r.y}</span>
+      <button type="button" class="mr-nav" data-yr-go="${newer || ''}" ${newer ? '' : 'disabled'} aria-label="Later year">›</button>
+      <button type="button" class="ss-x" id="yr-close" aria-label="Close">✕</button>
+    </div>
+    <div class="card mr-card"><h2 class="mr-card-t">${c.t}</h2>${c.body}</div>
+    <div class="mr-dots">${cards.map((x, n) => `<button type="button" class="mr-dot ${n === yrPage ? 'on' : ''}" data-yr-page="${n}" aria-label="${escapeHtml(x.t)}"></button>`).join('')}</div>
+    <div class="mr-steps">
+      <button type="button" class="btn btn-ghost btn-sm" data-yr-step="-1" ${yrPage === 0 ? 'disabled' : ''}>← Back</button>
+      <button type="button" class="btn btn-primary btn-sm" data-yr-step="1" ${yrPage === cards.length - 1 ? 'disabled' : ''}>Next →</button>
+    </div>
+    <div class="hint ss-note">Worked out on this phone from your log every time you open it. Nothing is sent or stored.</div>
+  </div>`;
+}
+/* Which year the Log offers: the running one through December, the one just gone until 10 January. */
+function yrCardY() {
+  const t = todayStr(), m = +t.slice(5, 7), dd = +t.slice(8, 10);
+  const y = m === 12 ? t.slice(0, 4) : (m === 1 && dd <= 10 ? String(+t.slice(0, 4) - 1) : null);
+  if (!y || localStorage.getItem('dp.yrSeen') === y) return null;
+  return yrYears().includes(y) ? y : null;
+}
+function yearCardHTML() {
+  const years = yrYears();
+  if (!years.length) return '';
+  const fresh = (() => { const t = todayStr(), m = +t.slice(5, 7), dd = +t.slice(8, 10); return m === 12 ? t.slice(0, 4) : (m === 1 && dd <= 10 ? String(+t.slice(0, 4) - 1) : null); })();
+  const target = fresh && years.includes(fresh) ? fresh : years[0];
+  const r = yearReview(target);
+  return `<div class="card mr-entry${fresh === target ? ' fresh' : ''}">
+    <h2 class="h2-icon">${hicon('calendar')}<span>Your ${target}</span>
+      <span class="hint" style="margin-left:auto">${years.length} year${years.length === 1 ? '' : 's'}</span></h2>
+    <div class="hint">${r.logged} days logged, ${r.ticks.toLocaleString()} habits ticked, ${r.words.toLocaleString()} words. The year in six cards.</div>
+    <div class="mr-entry-btns"><button class="btn btn-primary" data-yr-open="${target}">See ${target}</button></div>
+  </div>`;
+}
+document.addEventListener('click', (ev) => {
+  const t = ev.target;
+  if (!t || !t.closest) return;
+  const op = t.closest('[data-yr-open]');
+  if (op) { yrOpen(op.dataset.yrOpen); const c = t.closest('.yr-offer'); if (c) c.remove(); buzz(10); return; }
+  const x = t.closest('[data-yr-x]');
+  if (x) { try { safeSet('dp.yrSeen', x.dataset.yrX); } catch (e) {} const c = t.closest('.yr-offer'); if (c) c.remove(); buzz(6); return; }
+  if (t.id === 'yr-close' || t.id === 'yrdeck') { yrClose(); return; }
+  const go = t.closest('[data-yr-go]');
+  if (go && go.dataset.yrGo) { yrY = go.dataset.yrGo; yrPage = 0; yrRender(); buzz(6); return; }
+  const pg = t.closest('[data-yr-page]');
+  if (pg) { yrPage = +pg.dataset.yrPage; yrRender(); return; }
+  const st = t.closest('[data-yr-step]');
+  if (st) { yrPage += +st.dataset.yrStep; yrRender(); buzz(5); return; }
 });
 
 /* ============================================================
