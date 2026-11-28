@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v279';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v280';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -2066,8 +2066,9 @@ function renderDeepSections() {
    Testers get silent web updates; this makes improvements visible so they keep
    giving feedback. Bump WHATS_NEW.v to re-show with new items. */
 const WHATS_NEW = {
-  v: 'w41',
+  v: 'w42',
   items: [
+    '📥 <b>Spreadsheet import reads every field</b> — Settings ▸ Backup & restore ▸ Import days from a CSV now also fills stress, focus, clarity, motivation, sleep quality, meditation, water, weight, screen time, income, expenses, tasks and gratitude, by column name. It still only fills what is empty.',
     '⚡ <b>Faster with years of entries</b> — History opens about four times faster on a long log, and the Log and the Time screen render in less time too. Nothing about your data changed.',
     '🖼️ <b>Memories on their day</b> — a day\'s page in History now shows the memories dated that day, and Back from one returns to the day. <b>On this day</b> on the Log shows them too, a week, a month or a year on.',
     '📆 <b>Week starts on Sunday, if you like</b> — Settings ▸ Week starts on. Week streaks, times-a-week habits, the weekly review, calendars and charts all follow it. Monday stays the default.',
@@ -5884,6 +5885,17 @@ function csviNote(v) {   // Daylio notes can carry <br> and a few tags
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
 }
 function csviRealDay(d) { return !!d && todayStr(new Date(d + 'T12:00:00')) === d; }
+/* v280: every other daily field Daylog has (the core fields and the deep metrics, matched by key or
+   label), so a sheet's stress, focus, weight or expenses land in their own fields instead of being
+   dropped. CSVI_COLS keeps its own handling (Daylio moods, the 1–5 scale, joined notes). */
+function csviFieldIndex() {
+  const ix = {}, own = new Set(Object.keys(CSVI_COLS));
+  const add = (key, label, type) => { if (own.has(key)) return; [key, label].forEach(n => { const k = csviKey(n); if (k && !(k in ix)) ix[k] = { key, label: label || key, type }; }); };
+  coreCfg().forEach(f => { if (f.type === 'scale' || f.type === 'num' || f.type === 'text') add(f.key, f.label, f.type); });
+  deepCfg().forEach(sec => { (sec.scales || []).forEach(x => add(x.key, x.label, 'scale')); (sec.nums || []).forEach(x => add(x.key, x.label, 'num')); (sec.texts || []).forEach(x => add(x.key, x.label, 'text')); });
+  add('workoutDetail', 'Workout details', 'text'); add('workoutsDone', 'Exercises done', 'num');
+  return ix;
+}
 /* Text → { kind, days: {date: fields}, rows, bad, moodsUnknown[], matched{activity: habitKey}, unmatched[], cols[] }
    or { error }. Pure: reads the habit list, writes nothing. */
 function entriesFromCSV(text) {
@@ -5896,13 +5908,15 @@ function entriesFromCSV(text) {
   if (col.date == null) return { error: 'No date column. The first row needs a column called "date".' };
   const hx = csviHabitIndex(), habitCols = {};
   if (!daylio) head.forEach((h, i) => { if (h in hx && !Object.values(col).includes(i)) habitCols[i] = hx[h]; });
+  const fx = csviFieldIndex(), fieldCols = {}, fieldTaken = new Set();
+  if (!daylio) head.forEach((h, i) => { const f = fx[h]; if (f && !fieldTaken.has(f.key) && !Object.values(col).includes(i) && !(i in habitCols)) { fieldCols[i] = f; fieldTaken.add(f.key); } });
   const titleI = head.indexOf('notetitle'), actI = head.indexOf('activities');
   const acc = {}, moodsUnknown = new Set(), matched = {}, unmatched = new Set();
   let bad = 0, nums = [];
   rows.slice(1).forEach(r => {
     const d = csvDate(r[col.date]);
     if (!csviRealDay(d)) { bad++; return; }
-    const a = acc[d] || (acc[d] = { moods: [], nmoods: [], notes: [], habits: {}, acts: [] });
+    const a = acc[d] || (acc[d] = { moods: [], nmoods: [], notes: [], habits: {}, acts: [], f: {} });
     if (col.mood != null) {
       const raw = String(r[col.mood] || '').trim(), lbl = raw.toLowerCase();
       if (raw && lbl in CSVI_DAYLIO_MOOD) a.moods.push(CSVI_DAYLIO_MOOD[lbl]);
@@ -5923,6 +5937,12 @@ function entriesFromCSV(text) {
     });
     if (col.journal == null && titleI >= 0) { const tt = csviNote(r[titleI]); if (tt) a.notes.push(tt); }
     Object.keys(habitCols).forEach(i => { if (csviYes(r[i])) a.habits[habitCols[i]] = true; });
+    Object.keys(fieldCols).forEach(i => {
+      const f = fieldCols[i];
+      if (f.type === 'text') { const t = csviNote(r[i]); if (t) a.f[f.key] = a.f[f.key] ? a.f[f.key] + '\n' + t : t; return; }
+      const v = csviNum(r[i], f.type === 'scale' ? 1 : 0, f.type === 'scale' ? 10 : 1e9);
+      if (v != null) a.f[f.key] = f.type === 'scale' ? Math.round(v) : v;
+    });
     if (actI >= 0) String(r[actI] || '').split('|').map(s => s.trim()).filter(Boolean).forEach(act => {
       const k = hx[csviKey(act)];
       if (k) { a.habits[k] = true; matched[act] = k; } else { unmatched.add(act); if (!a.acts.includes(act)) a.acts.push(act); }
@@ -5936,15 +5956,17 @@ function entriesFromCSV(text) {
     const ms = a.moods.concat(a.nmoods.map(n => fiveScale ? 1 + (n - 1) * 2.25 : n));
     if (ms.length) o.mood = Math.round(ms.reduce((s, m) => s + m, 0) / ms.length);
     ['energy', 'sleepHours', 'deepWorkHours', 'wentWell', 'improve'].forEach(f => { if (a[f] != null && a[f] !== '') o[f] = a[f]; });
+    Object.keys(a.f).forEach(f => { if (a.f[f] != null && a.f[f] !== '') o[f] = a.f[f]; });
     const notes = a.notes.slice();
     if (a.acts.length) notes.push('Activities: ' + a.acts.join(', '));
     if (notes.length) o.journal = notes.join('\n\n');
     if (Object.keys(a.habits).length) o.habits = a.habits;
     if (Object.keys(o).length) days[d] = o;
   });
-  const cols = Object.keys(col).filter(f => f !== 'date').concat(Object.values(habitCols).map(k => 'habit:' + k));
+  const cols = Object.keys(col).filter(f => f !== 'date').concat(Object.values(habitCols).map(k => 'habit:' + k), Object.values(fieldCols).map(f => f.key));
+  const labels = {}; Object.values(fieldCols).forEach(f => { labels[f.key] = f.label; });
   if (!Object.keys(days).length) return { error: bad ? 'No row had a date Daylog could read' : 'The file has dates but nothing Daylog can use next to them' };
-  return { kind: daylio ? 'daylio' : 'table', days, rows: rows.length - 1, bad, moodsUnknown: [...moodsUnknown], matched, unmatched: [...unmatched], cols };
+  return { kind: daylio ? 'daylio' : 'table', days, rows: rows.length - 1, bad, moodsUnknown: [...moodsUnknown], matched, unmatched: [...unmatched], cols, labels };
 }
 /* What importing would do to the days already here: new days, days that gain something, days that
    gain nothing (everything in the file is already filled in). */
@@ -5993,7 +6015,7 @@ function csviCardHTML() {
   if (p && p.error) body = `<p class="hint csvi-err">${escapeHtml(p.error)}</p>`;
   else if (p) {
     const ds = Object.keys(p.days), plan = csviPlan(p.days, DB.entriesRO());
-    const nice = f => ({ mood: 'mood', energy: 'energy', sleepHours: 'sleep', deepWorkHours: 'deep work', journal: 'notes', wentWell: 'went well', improve: 'improve' }[f] || (f.indexOf('habit:') === 0 ? (habitCfg().find(h => h.key === f.slice(6)) || {}).label || f.slice(6) : f));
+    const nice = f => ({ mood: 'mood', energy: 'energy', sleepHours: 'sleep', deepWorkHours: 'deep work', journal: 'notes', wentWell: 'went well', improve: 'improve' }[f] || (p.labels && p.labels[f]) || (f.indexOf('habit:') === 0 ? (habitCfg().find(h => h.key === f.slice(6)) || {}).label || f.slice(6) : f));
     const li = [];
     li.push(`<b>${ds.length}</b> day${ds.length === 1 ? '' : 's'}, ${prettyDate(ds[0])} → ${prettyDate(ds[ds.length - 1])}`);
     li.push([plan.add ? `${plan.add} new` : '', plan.fill ? `${plan.fill} you already logged: only their empty fields get filled` : '',
@@ -6012,7 +6034,7 @@ function csviCardHTML() {
   }
   return `<div class="card">
       <h2>📥 Import days from a CSV <span class="hint">Daylio or a spreadsheet</span></h2>
-      <p class="hint">Moving from Daylio? Export your entries from Daylio as a CSV file and pick it here. A sheet works too: one row per day, a <b>date</b> column, and any of mood (1–10), energy, sleep, notes, or a column named after one of your habits. Days you already logged keep what they have.</p>
+      <p class="hint">Moving from Daylio? Export your entries from Daylio as a CSV file and pick it here. A sheet works too: one row per day, a <b>date</b> column, and any of mood (1–10), energy, sleep, notes, a column named after one of your habits, or any of your daily fields by name (stress, focus, weight, expenses…). Days you already logged keep what they have.</p>
       ${p && !p.error ? '' : '<div class="btn-row"><button class="btn btn-ghost btn-sm" id="csvi-pick">Choose a CSV file</button></div>'}
       <input type="file" id="csvi-file" accept=".csv,text/csv,text/plain" style="display:none">
       ${body}

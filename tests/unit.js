@@ -794,6 +794,27 @@
       ok('csv: no date column is said plainly', /No date column/.test(entriesFromCSV('mood,note\n5,x\n').error || ''));
       ok('csv: a header with no rows is refused', !!entriesFromCSV('date,mood\n').error);
       ok('csv: dates with nothing usable are refused', /nothing Daylog can use/.test(entriesFromCSV('date,colour\n2026-01-01,blue\n').error || ''));
+      // v280: every daily field, by key or label, lands in its own field
+      const F = entriesFromCSV('date,mood,stress,Focus quality,weight,meditationMin,gratitude,income,tasksDone,Workout,workoutDetail,Sleep quality\n' +
+        '2026-08-01,3,6.6,8,77.2,15,family,13500,4,yes,Push Up; Squat,11\n' +
+        '2026-08-01,,2,,,,friends,,,,,\n' +
+        '2026-08-02,4,0,,,,,,,,,7\n');
+      const f1 = F.days['2026-08-01'] || {}, f2 = F.days['2026-08-02'] || {};
+      ok('csv v280: deep fields by key and label (stress, Focus quality, weight, meditation, income, tasks)',
+        f1.focus === 8 && f1.weight === 77.2 && f1.meditationMin === 15 && f1.income === 13500 && f1.tasksDone === 4, f1);
+      ok('csv v280: a scale rounds to 1–10 and the later row wins; text rows join', f1.stress === 2 && f1.gratitude === 'family\nfriends', f1);
+      ok('csv v280: a scale outside 1–10 is left out (11, 0)', f1.sleepQuality === undefined && f2.stress === undefined && f2.sleepQuality === 7, [f1, f2]);
+      ok('csv v280: the 1–5 mood spread never touches other scales', f1.mood === 6 && f2.mood === 8 && f2.sleepQuality === 7, [f1.mood, f2.mood]);
+      ok('csv v280: a column named like a habit still ticks the habit; workout details are text', f1.habits && f1.habits.workout === true && f1.workoutDetail === 'Push Up; Squat', f1);
+      ok('csv v280: the columns used are listed with their labels', ['stress', 'focus', 'weight', 'gratitude', 'income', 'tasksDone', 'workoutDetail', 'sleepQuality'].every(c => F.cols.includes(c)) && F.labels.focus === 'Focus quality', [F.cols, F.labels]);
+      {
+        const eHere = localStorage.getItem('dp.entries');
+        DB.saveEntries({ '2026-08-01': { mood: 5, stress: 9, habits: {}, updatedAt: '2026-08-01T10:00:00.000Z' } });
+        const rr = csviApply(F.days), E8 = DB.entries()['2026-08-01'];
+        ok('csv v280: fill-only for deep fields too: a logged stress stays, an empty weight fills and is stamped',
+          rr.changed === 2 && E8.stress === 9 && E8.mood === 5 && E8.weight === 77.2 && +(E8.fieldAt || {}).weight > 0, E8);
+        localStorage.setItem('dp.entries', eHere);
+      }
 
       // applying: fill-only, stamped, idempotent, undoable
       DB.saveEntries({ '2026-11-20': { mood: 4, journal: '', habits: { reading: false }, updatedAt: '2026-11-20T10:00:00.000Z' }, '2026-11-19': { mood: 6, journal: 'mine', habits: {} , updatedAt: '2026-11-19T10:00:00.000Z' } });
