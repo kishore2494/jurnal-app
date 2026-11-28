@@ -1360,6 +1360,10 @@
       DB.saveEntries(e); _rdOffset = 0;
       const pool = rediscoverPool();
       ok('rd: older days you wrote about; not low-mood, short, recent or sample days', JSON.stringify(pool) === JSON.stringify([addDays(t, -80), addDays(t, -40)]), pool);
+      _media.set('rdp1', { id: 'rdp1', day: addDays(t, -60), ctx: 'log', kind: 'photo' });
+      e[addDays(t, -60)].journal = 'short again'; DB.saveEntries(e);
+      ok('rd: a short day with a photo counts', rediscoverPool().includes(addDays(t, -60)), rediscoverPool());
+      _media.delete('rdp1'); DB.saveEntries(Object.assign({}, e, { [addDays(t, -60)]: { mood: 6, journal: 'short' } }));
       const p1 = rediscoverDay(), p2 = rediscoverDay();
       ok('rd: the pick holds for the day', p1 === p2 && pool.includes(p1));
       const seen = new Set(); for (let i = 0; i < 12; i++) { _rdOffset = i; seen.add(rediscoverDay()); }
