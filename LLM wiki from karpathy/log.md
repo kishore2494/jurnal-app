@@ -1,4 +1,4 @@
-## 2026-11-29 — v280 built (NOT deployed): CSV import fills every daily field; Kishore's old sheets converted
+## 2026-11-29 — v280 LIVE (deployed same day): CSV import fills every daily field; Kishore's old sheets converted
 
 - Kishore asked to bring his old Google Sheets into Daylog "without losing data". Route chosen: one CSV through
   Settings ▸ Backup & restore ▸ Import CSV (fill-only, preview, field stamps, pushes to the Sheet). Rejected: a
