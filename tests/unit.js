@@ -1422,6 +1422,42 @@
     } finally { if (eSnap == null) localStorage.removeItem('dp.entries'); else localStorage.setItem('dp.entries', eSnap); const x = document.getElementById('thsheet'); if (x) x.remove(); searchQ = ''; }
   }
 
+  // ---- v281: Life chapters ----
+  {
+    const eSnap = localStorage.getItem('dp.entries'), cSnap = localStorage.getItem('dp.chapters'), aSnap = localStorage.getItem('dp.listAt'), sSnap = localStorage.getItem('dp.settings');
+    try {
+      const e = {};
+      for (let i = 1; i <= 20; i++) e['2025-03-' + String(i).padStart(2, '0')] = { mood: 8, sleepHours: 7, journal: 'new job #office', habits: {} };
+      for (let i = 1; i <= 20; i++) e['2025-05-' + String(i).padStart(2, '0')] = { mood: 4, sleepHours: 7, journal: 'later' };
+      DB.saveEntries(e); localStorage.removeItem('dp.chapters');
+      const st0 = DB.settings(); st0.syncUrl = 'https://example.invalid/exec'; DB.saveSettings(st0);
+      ok('ch: chapters is an id list that syncs item by item and is backed up', LIST_SYNC.includes('chapters') && BACKUP_KEYS.includes('chapters'));
+      chOpen(null, 'edit');
+      const sh = document.getElementById('chsheet');
+      document.getElementById('ch-name').value = 'First job'; document.getElementById('ch-start').value = '2025-03-01';
+      sh.querySelector('[data-ch-save]').click();
+      ok('ch: Save needs an end or Still going (ticked by default), and saves', chList().length === 1 && chList()[0].end === '' && /First job/.test(sh.textContent), chList());
+      const id = chList()[0].id;
+      ok('ch: the save is stamped for the sync merge', !!(listMeta('dp.listAt').chapters || {})[id]);
+      sh.querySelector('[data-ch-edit]').click();
+      document.getElementById('ch-going').click();
+      document.getElementById('ch-end').value = '2025-02-01'; sh.querySelector('[data-ch-save]').click();
+      ok('ch: an end before the start is refused, plainly', /ends before it starts/.test(document.getElementById('ch-err').textContent) && chList()[0].end === '');
+      document.getElementById('ch-end').value = '2025-03-31'; sh.querySelector('[data-ch-save]').click();
+      const c = chList()[0], st = chStats(c);
+      ok('ch: a closed chapter counts its own days and compares with all of them', c.end === '2025-03-31' && st.logged === 20 && st.span === 31 && st.mood === 8 && st.moodAll === 6 && st.tags[0].t === '#office', [c, st.logged, st.span, st.mood, st.moodAll]);
+      ok('ch: the page names the range and says how it compares', /Mar 2025 – Mar 2025/.test(sh.textContent) && /\+2\.0/.test(sh.textContent), sh.textContent.slice(0, 200));
+      ok('ch: Stats lists it', /First job/.test(chCardHTML()) && /20 days/.test(chCardHTML()));
+      sh.querySelector('[data-ch-edit]').click(); sh.querySelector('[data-ch-del]').click();
+      ok('ch: Delete removes it (with Undo)', chList().length === 0 && !!document.querySelector('.toast-undo'));
+      document.querySelector('.toast-undo').click();
+      ok('ch: Undo brings it back', chList().length === 1 && chList()[0].id === id);
+    } finally {
+      [['dp.entries', eSnap], ['dp.chapters', cSnap], ['dp.listAt', aSnap], ['dp.settings', sSnap]].forEach(([k, v]) => { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); });
+      const x = document.getElementById('chsheet'); if (x) x.remove();
+    }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));
@@ -4195,7 +4231,7 @@
       ok('a 200-day-old time-block delete record is dropped in the merge, a young one kept', !('old' in td) && !('older' in td) && td.young === now - day, td);
       ok('…without a push to put it back', !sent.some(x => x.type === 'state'), sent.length);
       const savers = { tasks: DB.saveTasks, notes: DB.saveNotes, plans: DB.savePlans, projects: DB.saveProjects, reminders: DB.saveReminders, exercises: DB.saveExercises, timeacts: DB.saveTimeacts, events: DB.saveEvents, docs: DB.saveDocs, timebox: DB.saveTimebox, goals: saveGoals, finaccts: finSaveAccts, fintx: finSaveTx, finmarks: finSaveMarks,
-        meals: mealSavePlan, meallib: mealSaveLib, mealshop: mealSaveShop };
+        meals: mealSavePlan, meallib: mealSaveLib, mealshop: mealSaveShop, chapters: chSave };
       ok('every list in the sync is saved through listSave', LIST_SYNC.every(k => savers[k] && savers[k].toString().includes("listSave('dp." + k + "'")), LIST_SYNC.filter(k => !(savers[k] && savers[k].toString().includes("listSave('dp." + k + "'"))));
     } finally {
       window.fetch = fSnap; window.toast = tSnap; clearTimeout(pushTimer); _pushPending = null;

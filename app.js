@@ -322,7 +322,7 @@ function savedToast(ok, msg) {
    them now compares it with what is stored and records beside it when each item last changed
    (dp.listAt) and when each was deleted (dp.listDel), per list, by id. The pull (mergeList)
    then merges item by item. Recorded at save time, so no screen has to remember to do it. */
-const LIST_SYNC = ['tasks', 'notes', 'plans', 'projects', 'reminders', 'exercises', 'timeacts', 'events', 'docs', 'timebox', 'goals', 'finaccts', 'fintx', 'finmarks',
+const LIST_SYNC = ['tasks', 'notes', 'plans', 'projects', 'reminders', 'exercises', 'timeacts', 'events', 'docs', 'timebox', 'goals', 'finaccts', 'fintx', 'finmarks', 'chapters',
   'meals', 'meallib', 'mealshop'];   // Meals: the plan, your meals, the shopping list (see the Meals block)
 const LIST_DEL_KEEP = 90 * 864e5;   // long enough to reach every phone that syncs at all
 // The feedback box keeps its draft: Back or a tab switch used to wipe a long message.
@@ -1448,7 +1448,7 @@ function pushState(now) {
       timelog: DB.timelog(), timeacts: DB.timeacts(), events: DB.events(),
       docs: DB.docs(), habitcfg: habitCfg(), actcfg: actCfg(), deepcfg: deepCfg(), gymcfg: gymCfg(),
       corecfg: coreCfg(), daycfg: gymDays(), gymgroups: gymGroups(), navcfg: navCfg(),
-      pomo: DB.pomo(), timebox: DB.timebox(), goals: DBgoals(),
+      pomo: DB.pomo(), timebox: DB.timebox(), goals: DBgoals(), chapters: chList(),
       /* Added after the first cut of the sync. NOT here on purpose: dp.health (Health
          Connect readings never leave the phone — see the Data Safety note in Settings),
          and dp.cardratio (a per-device preference, not data). */
@@ -2125,6 +2125,7 @@ function renderDeepSections() {
 const WHATS_NEW = {
   v: 'w43',
   items: [
+    '📖 <b>Chapters of your life</b> — Stats ▸ Chapters: name a stretch (a job, a city, a year at college) and see it whole: days logged, mood and sleep next to your overall average, your top #tags and habits. They sync and back up like everything else.',
     '#️⃣ <b>A page for each #tag</b> — tap a topic in Stats ▸ Your topics: how often it comes up month by month, when you first and last wrote it, your mood and sleep on those days next to the others, and the latest mentions to open.',
     '🔁 <b>Rediscover an older day</b> — On this day now also brings back a random day you wrote about, weeks or years ago (never a low-mood one). Tap ↻ another day for a different one. <b>Year in pixels</b> has ‹ › to see other years.',
     '📅 <b>Your year, in six cards</b> — Stats ▸ Overview (and the Log, through December): days logged, your longest run, mood month by month, your habits, what you wrote with your best day quoted, and how it compares with the year before. Made on this phone; nothing is sent anywhere.',
@@ -6705,6 +6706,7 @@ function renderDash() {
 
     ${monthCardHTML()}
     ${yearCardHTML()}
+    ${chCardHTML()}
 
     ${vsPastHTML()}
 
@@ -12429,7 +12431,7 @@ function recTotals() {
 }
 
 /* Everything the app stores, for a COMPLETE backup/restore. */
-const BACKUP_KEYS = ['entries', 'tasks', 'notes', 'plans', 'projects', 'pjnames', 'actnames', 'gapskip', 'cardratio',
+const BACKUP_KEYS = ['entries', 'tasks', 'notes', 'plans', 'projects', 'pjnames', 'actnames', 'gapskip', 'cardratio', 'chapters',
   'finaccts', 'fintx', 'finmarks', 'finbudget', 'fincats', 'finset', 'gym', 'exercises', 'reminders', 'timelog', 'timeacts', 'events', 'docs', 'habitcfg', 'actcfg', 'deepcfg', 'gymcfg', 'corecfg', 'daycfg', 'gymgroups', 'navcfg', 'pomo', 'timebox', 'pomohist', 'health', 'goals', 'logsec', 'awards', 'freshSeen',
   /* Added v230. These are the user's own CHOICES and earned state, and leaving them out meant
      a wipe-then-restore silently reset them while the app said "Backup restored" — the export
@@ -15422,6 +15424,116 @@ document.addEventListener('click', ev => {
   const dd = t.closest('[data-th-day]');
   if (dd) { const d = dd.dataset.thDay; thClose(); dayOpen(d); return; }
   if (t.closest('[data-th-search]') && thTag) { searchQ = thTag; thClose(); navigateTo('search'); return; }
+});
+/* v281 Life chapters: name stretches of your life ("Final year", "Bangalore job") and see each one
+   as a whole — days logged, mood and sleep against your overall average, top #tags and habits.
+   McAdams' life-story interviews ask people to split their life into 2–7 chapters; no tracker does.
+   dp.chapters is an id list in LIST_SYNC (item-by-item sync, listAt/listDel stamps) and in backups.
+   { id, name, start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' | '' (still going) }. Ranges may overlap. */
+function chList() { const v = safeParse(localStorage.getItem('dp.chapters'), []); return Array.isArray(v) ? v.filter(c => c && c.id && c.start) : []; }
+function chSave(list) { const ok = listSave('dp.chapters', list); pushState(); return ok; }
+function chSorted() { return chList().slice().sort((a, b) => (b.start > a.start ? 1 : b.start < a.start ? -1 : 0)); }
+function chEnd(c) { return c.end || todayStr(); }
+function chStats(c) {
+  const e = DB.entriesRO(), end = chEnd(c);
+  const all = Object.keys(e).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && e[d] && !e[d].sample && filmDayLogged(e[d]));
+  const ds = all.filter(d => d >= c.start && d <= end).sort();
+  const num = (d, k) => { const v = e[d] && e[d][k]; return (v != null && v !== '' && !isNaN(+v)) ? +v : null; };
+  const mean = a => a.length ? a.reduce((x, z) => x + z, 0) / a.length : null;
+  const avg = (list, k) => mean(list.map(d => num(d, k)).filter(v => v != null));
+  const tags = {}; let words = 0;
+  ds.forEach(d => { const j = e[d].journal || ''; if (j.trim()) words += j.trim().split(/\s+/).length; extractTags(j).forEach(t => { tags[t] = (tags[t] || 0) + 1; }); });
+  const habits = habitCfg().filter(h => !h.hidden).map(h => ({ h, n: ds.filter(d => hVal(e[d], h.key) === H_DONE).length })).filter(x => x.n).sort((a, b) => b.n - a.n).slice(0, 3);
+  const span = Math.round((new Date(end + 'T12:00:00') - new Date(c.start + 'T12:00:00')) / 86400000) + 1;
+  return { days: ds, logged: ds.length, span: Math.max(1, span), words,
+    mood: avg(ds, 'mood'), moodAll: avg(all, 'mood'), sleep: avg(ds, 'sleepHours'), sleepAll: avg(all, 'sleepHours'),
+    tags: Object.keys(tags).sort((a, b) => tags[b] - tags[a] || (a < b ? -1 : 1)).slice(0, 5).map(t => ({ t, n: tags[t] })), habits };
+}
+function chRange(c) {
+  const f = d => fmtDate(new Date(d + 'T12:00:00'), { month: 'short', year: 'numeric' });
+  return f(c.start) + ' – ' + (c.end ? f(c.end) : 'now');
+}
+function chCardHTML() {
+  const list = chSorted();
+  if (!list.length && contentDates().length < 30) return '';   // a new log has no chapters to name yet
+  return `<div class="card ch-card">
+    <h2 class="h2-icon">${hicon('book')}<span>Chapters</span><span class="hint" style="margin-left:auto">${list.length ? list.length + ' named' : 'stretches of your life'}</span></h2>
+    ${list.length ? list.map(c => { const st = chStats(c); return `<button type="button" class="ch-row" data-ch-open="${escapeHtml(String(c.id))}">
+      <span class="ch-n">${escapeHtml(c.name || 'Untitled')}</span><span class="ch-r">${escapeHtml(chRange(c))} · ${st.logged} days</span></button>`; }).join('')
+      : `<div class="hint">Name a stretch of your life (a job, a city, a year at college) and see it as a whole: mood, sleep, what you wrote about.</div>`}
+    <div class="mr-entry-btns"><button class="btn btn-ghost btn-sm" data-ch-new>+ Add a chapter</button></div>
+  </div>`;
+}
+let chId = null, chMode = 'view';
+function chOpen(id, mode) {
+  chId = id; chMode = mode || 'view';
+  let el = document.getElementById('chsheet');
+  if (!el) { el = document.createElement('div'); el.id = 'chsheet'; el.className = 'sharesheet'; document.body.appendChild(el); }
+  el.classList.add('on'); chRender();
+}
+function chClose() { const el = document.getElementById('chsheet'); if (el) el.classList.remove('on'); chId = null; }
+function chRender() {
+  const el = document.getElementById('chsheet'); if (!el) return;
+  const c = chList().find(x => String(x.id) === String(chId)) || null;
+  if (chMode === 'edit') {
+    const v = c || { name: '', start: '', end: '' };
+    el.innerHTML = `<div class="ss-inner">
+      <div class="ss-head"><span class="mr-title">${c ? 'Edit chapter' : 'New chapter'}</span><button type="button" class="ss-x" id="ch-close" aria-label="Close">✕</button></div>
+      <div class="card mr-card th-card">
+        <div class="field"><label for="ch-name">Name</label><input id="ch-name" type="text" maxlength="60" placeholder="e.g. Bangalore job" value="${escapeHtml(v.name || '')}"></div>
+        <div class="field"><label for="ch-start">From</label><input id="ch-start" type="date" value="${escapeHtml(v.start || '')}"></div>
+        <div class="field"><label for="ch-end">To</label><input id="ch-end" type="date" value="${escapeHtml(v.end || '')}"${v.end ? '' : ' disabled'}></div>
+        <label class="ch-going"><input id="ch-going" type="checkbox"${v.end ? '' : ' checked'}> Still going</label>
+        <div class="hint" id="ch-err" role="alert"></div>
+        <div class="btn-row"><button type="button" class="btn btn-primary" data-ch-save>Save</button>${c ? `<button type="button" class="btn btn-ghost" data-ch-del>Delete</button>` : ''}</div>
+      </div></div>`;
+    return;
+  }
+  if (!c) { chClose(); return; }
+  const st = chStats(c), n1 = v => v == null ? '–' : (Math.round(v * 10) / 10).toFixed(1);
+  const big = (v, l) => `<div class="mr-big"><div class="mr-v">${v}</div><div class="mr-l">${l}</div></div>`;
+  const vs = (lab, a, b, unit) => a == null ? '' : `<div class="mr-row"><span class="mr-row-n">${lab}</span><span class="yr-vs"><b>${n1(a)}${unit}</b> vs ${n1(b)}${unit} overall</span><span class="mr-row-v yr-d${b == null || Math.abs(a - b) < 0.3 ? '' : a > b ? ' up' : ' down'}">${b == null || Math.abs(a - b) < 0.3 ? 'about the same' : (a > b ? '+' : '−') + n1(Math.abs(a - b))}</span></div>`;
+  el.innerHTML = `<div class="ss-inner">
+    <div class="ss-head"><span class="mr-title">${escapeHtml(c.name || 'Untitled')}</span><button type="button" class="ss-x" id="ch-close" aria-label="Close">✕</button></div>
+    <div class="card mr-card th-card">
+      <div class="hint">${escapeHtml(chRange(c))} · ${st.span} days</div>
+      <div class="mr-grid" style="margin-top:10px">${big(st.logged, st.logged === 1 ? 'day logged' : 'days logged')}${big(Math.round(st.logged / st.span * 100) + '%', 'of the chapter')}</div>
+      ${vs('Mood', st.mood, st.moodAll, '')}${vs('Sleep', st.sleep, st.sleepAll, 'h')}
+      ${st.tags.length ? `<div class="yr-tags">${st.tags.map(x => `<span>${escapeHtml(x.t)} <em>${x.n}</em></span>`).join('')}</div>` : ''}
+      ${st.habits.length ? `<div class="hint mr-note">Most done: ${st.habits.map(x => escapeHtml((x.h.emoji || '') + ' ' + x.h.label) + ' (' + x.n + 'd)').join(', ')}</div>` : ''}
+      ${st.words ? `<div class="hint mr-note">${st.words.toLocaleString()} words written.</div>` : ''}
+    </div>
+    <div class="ss-acts"><button type="button" class="btn btn-ghost" data-ch-edit>Edit</button></div>
+  </div>`;
+}
+document.addEventListener('click', ev => {
+  const t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
+  const o = t.closest('[data-ch-open]'); if (o) { chOpen(o.dataset.chOpen, 'view'); buzz(8); return; }
+  if (t.closest('[data-ch-new]')) { chOpen(null, 'edit'); return; }
+  if (t.id === 'ch-close' || t.id === 'chsheet') { chClose(); return; }
+  if (t.closest('[data-ch-edit]')) { chMode = 'edit'; chRender(); return; }
+  if (t.id === 'ch-going') { const en = document.getElementById('ch-end'); if (en) { en.disabled = t.checked; if (t.checked) en.value = ''; } return; }
+  if (t.closest('[data-ch-save]')) {
+    const name = (document.getElementById('ch-name').value || '').trim().slice(0, 60), start = document.getElementById('ch-start').value;
+    const going = document.getElementById('ch-going').checked, end = going ? '' : document.getElementById('ch-end').value, err = document.getElementById('ch-err');
+    if (!name) { err.textContent = 'Give it a name.'; return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) { err.textContent = 'Pick the day it started.'; return; }
+    if (!going && !/^\d{4}-\d{2}-\d{2}$/.test(end)) { err.textContent = 'Pick the day it ended, or tick Still going.'; return; }
+    if (end && end < start) { err.textContent = 'It ends before it starts.'; return; }
+    const list = chList(), i = list.findIndex(x => String(x.id) === String(chId));
+    const item = { id: i >= 0 ? list[i].id : 'ch' + Date.now().toString(36), name, start, end };
+    if (i >= 0) list[i] = item; else list.push(item);
+    if (!chSave(list)) { err.textContent = 'Phone storage is full, so it was not saved.'; return; }
+    chId = item.id; chMode = 'view'; chRender(); if (typeof renderStats === 'function' && document.getElementById('s-dash') && document.getElementById('s-dash').classList.contains('on')) { try { show('dash'); } catch (e) {} }
+    toast('Chapter saved'); return;
+  }
+  if (t.closest('[data-ch-del]')) {
+    const list = chList(), gone = list.find(x => String(x.id) === String(chId)); if (!gone) return;
+    chSave(list.filter(x => x !== gone)); chClose();
+    try { if (document.getElementById('s-dash').classList.contains('on')) show('dash'); } catch (e) {}
+    undoToast('Chapter deleted', () => { chSave(chList().concat([gone])); try { if (document.getElementById('s-dash').classList.contains('on')) show('dash'); } catch (e) {} });
+    return;
+  }
 });
 /* v281 Welcome back: after 3 or more days with nothing logged, the Log's top card greets you and
    points at today, instead of the first thing being a broken run (people lapse by forgetting,
