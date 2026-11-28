@@ -1,3 +1,20 @@
+## 2026-11-29 — v280 built (NOT deployed): CSV import fills every daily field; Kishore's old sheets converted
+
+- Kishore asked to bring his old Google Sheets into Daylog "without losing data". Route chosen: one CSV through
+  Settings ▸ Backup & restore ▸ Import CSV (fill-only, preview, field stamps, pushes to the Sheet). Rejected: a
+  backup restore (it REPLACES sections) and writing the Sheet with the sync link (the phone's next push wins).
+- v280: `entriesFromCSV` also maps any core field or deep metric by key or label (`csviFieldIndex`): scales → int
+  1–10, nums ≥ 0, texts join across rows; habit columns keep priority; `workoutDetail` / `workoutsDone` too.
+  7 new unit checks; 4 zones + release checks pass; preview checked at 360 px.
+- Converter (scratchpad, not in the repo: private data): Google Form (2 versions, 47 responses), Tracker.xlsx (8 tabs),
+  Habbit track, War map (template says 2019, real year 2025 — weekday alignment of the months he re-aligned), Content
+  planner (✅ platform → Posted content habit). Sheets swapped day/month whenever the day ≤ 12; fixed by sequence and
+  the weekday column. Everything without a field goes to that day's journal under "From my old sheets". Checks: every
+  source cell present in the output; the real importer reads all 258 days with 0 cell differences in 4 timezones;
+  applying it to his 139 synced days changes none of their values.
+- **Import only after v280 is live** — v279 ignores the new columns. Not importable: 144 undated content-planner
+  topics. 30 May 2026 already has a Daylog journal, so the form's text for that day must be pasted by hand.
+
 ## 2026-11-28 — Play vitals readable: zero crash/ANR reports; bulk reports still pending
 
 - Kishore ticked the ACCOUNT-level "View app information and download bulk reports" and enabled the
