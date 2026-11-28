@@ -1,3 +1,14 @@
+## 2026-11-28 — v279 LIVE (Kishore said "deploy")
+
+- `tools/deploy.sh --tag`: all checks green, tag `web-v279` on both remotes, Pages build success,
+  live app.js / sw.js / index.html all serve v279.
+- Metrics still blocked. Kishore couldn't find "View app information and download bulk reports":
+  it is an ACCOUNT permission, not an app one. Path in the 2026 Play Console: leave the app menu →
+  Manage account (or Home) → Users and permissions → service-account row → **Account permissions**
+  tab. The Reporting API (vitals) also still needs enabling in Cloud project 387412896984.
+- His dashboard screenshot (28 days to 28 Nov): 86 device first opens (+16%), ~146 monthly users,
+  67 installs on the 21 Nov release.
+
 ## 2026-11-28 — v279 built (not deployed): faster with years of data; metrics still blocked
 
 - Kishore asked "what's next" → "measure first". Seeded 3 years (1,095 days, 6,570 time blocks) in
