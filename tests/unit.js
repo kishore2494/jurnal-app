@@ -1395,6 +1395,33 @@
     }
   }
 
+  // ---- v281: Threads (a page per #tag) ----
+  {
+    const eSnap = localStorage.getItem('dp.entries');
+    try {
+      const t = todayStr(), e = {};
+      for (let i = 1; i <= 30; i++) {
+        const d = addDays(t, -i), tagged = i % 3 === 0;
+        e[d] = { mood: tagged ? 8 : 5, sleepHours: tagged ? 7 : 7, journal: tagged ? 'went for a #run by the lake, legs tired' : 'ordinary day at work' };
+      }
+      e[addDays(t, -400)] = { mood: 6, journal: 'my first #Run ever' };
+      DB.saveEntries(e);
+      const r = tagThread('#run');
+      ok('th: every day with the tag, any case, first and last', r.n === 11 && r.first === addDays(t, -400) && r.last === addDays(t, -3) && r.since === 3, [r.n, r.first, r.last, r.since]);
+      ok('th: mood with vs without, once both sides have enough days', r.mood.ok && r.mood.with > 7.5 && r.mood.without === 5, r.mood);
+      ok('th: sleep the same on both sides', r.sleep.ok && Math.abs(r.sleep.with - r.sleep.without) < 0.01, r.sleep);
+      ok('th: the last 12 months count days', r.months.length === 12 && r.months.reduce((a, m) => a + m.n, 0) === 10, r.months);
+      ok('th: recent mentions newest first, with the words around the tag', r.recent[0].d === addDays(t, -3) && /#run by the lake/.test(r.recent[0].text), r.recent[0]);
+      const few = tagThread('#nope');
+      ok('th: a tag used too little claims nothing', few.n === 0 && !few.mood.ok);
+      thOpen('#run');
+      const sh = document.getElementById('thsheet');
+      ok('th: the page opens with the numbers and the comparison', sh.classList.contains('on') && /On days with #run/.test(sh.textContent) && /Mood the day after/.test(sh.textContent) && /about the same/.test(sh.textContent));
+      sh.querySelector('[data-th-search]').click();
+      ok('th: Search every mention goes to Search with the tag', !sh.classList.contains('on') && searchQ === '#run');
+    } finally { if (eSnap == null) localStorage.removeItem('dp.entries'); else localStorage.setItem('dp.entries', eSnap); const x = document.getElementById('thsheet'); if (x) x.remove(); searchQ = ''; }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));

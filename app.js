@@ -2125,6 +2125,7 @@ function renderDeepSections() {
 const WHATS_NEW = {
   v: 'w43',
   items: [
+    '#️⃣ <b>A page for each #tag</b> — tap a topic in Stats ▸ Your topics: how often it comes up month by month, when you first and last wrote it, your mood and sleep on those days next to the others, and the latest mentions to open.',
     '🔁 <b>Rediscover an older day</b> — On this day now also brings back a random day you wrote about, weeks or years ago (never a low-mood one). Tap ↻ another day for a different one. <b>Year in pixels</b> has ‹ › to see other years.',
     '📅 <b>Your year, in six cards</b> — Stats ▸ Overview (and the Log, through December): days logged, your longest run, mood month by month, your habits, what you wrote with your best day quoted, and how it compares with the year before. Made on this phone; nothing is sent anywhere.',
     '📥 <b>Spreadsheet import reads every field</b> — Settings ▸ Backup & restore ▸ Import days from a CSV now also fills stress, focus, clarity, motivation, sleep quality, meditation, water, weight, screen time, income, expenses, tasks and gratitude, by column name. It still only fills what is empty.',
@@ -6971,7 +6972,7 @@ document.addEventListener('input', (ev) => {
 document.addEventListener('click', (ev) => {
   // tag chips in Stats → search that tag
   const tc = ev.target.closest('.tag-chip[data-searchtag]');
-  if (tc) { searchQ = tc.dataset.searchtag; navigateTo('search'); return; }
+  if (tc) { thOpen(tc.dataset.searchtag); return; }   // v281: a page for the tag (Threads); Search is one tap from it
   if (ev.target.closest('#search-clear')) { searchQ = ''; renderSearch(); const i = document.getElementById('search-q'); if (i) i.focus(); return; }
   const row = ev.target.closest('.sr-row'); if (!row || !document.getElementById('s-search').classList.contains('on')) return;
   if (ev.target.closest('[data-mview]')) return;   // a caption hit's thumbnail opens the photo, not the day
@@ -15339,6 +15340,89 @@ function yrCardY() {
   if (!y || localStorage.getItem('dp.yrSeen') === y) return null;
   return yrYears().includes(y) ? y : null;
 }
+/* v281 Threads: a page for one #tag across the whole log — how often it comes up, when it first and
+   last did, and what the days with it look like next to the days without (mood, sleep, and the mood
+   of the day after), with recent mentions to open. The comparisons wait for enough days on both
+   sides (TH_MIN) and call a small gap "about the same", so a tag used three times claims nothing.
+   Exist's custom tags and Bearable's factor report do the same comparison; here it is on the phone. */
+const TH_MIN = 5;
+function tagThread(tag) {
+  const e = DB.entriesRO(), today = todayStr();
+  const all = Object.keys(e).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && e[d] && !e[d].sample).sort();
+  const on = all.filter(d => hasTag(e[d].journal || '', tag)), set = new Set(on);
+  const num = (d, k) => { const v = e[d] && e[d][k]; return (v != null && v !== '' && !isNaN(+v)) ? +v : null; };
+  const mean = a => a.length ? a.reduce((x, z) => x + z, 0) / a.length : null;
+  const cmp = (k, shift) => {
+    const pick = ds => ds.map(d => num(shift ? addDays(d, 1) : d, k)).filter(v => v != null);
+    const a = pick(on), b = pick(all.filter(d => !set.has(d)));
+    return { with: mean(a), without: mean(b), n: a.length, m: b.length, ok: a.length >= TH_MIN && b.length >= TH_MIN };
+  };
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today + 'T12:00:00'); d.setDate(1); d.setMonth(d.getMonth() - i);
+    const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    months.push({ ym, m: d.getMonth(), n: on.filter(x => x.slice(0, 7) === ym).length });
+  }
+  const since = on.length ? Math.round((new Date(today + 'T12:00:00') - new Date(on[on.length - 1] + 'T12:00:00')) / 86400000) : null;
+  const snip = d => {
+    const t = yrOwnText(e[d].journal || '').replace(/\s+/g, ' '), i = t.toLowerCase().indexOf(tag.toLowerCase());
+    if (i < 0) return filmClip(t, 110);
+    const a = Math.max(0, i - 50), b = Math.min(t.length, i + tag.length + 60);
+    return (a > 0 ? '…' : '') + t.slice(a, b).trim() + (b < t.length ? '…' : '');
+  };
+  return { tag, days: on, n: on.length, first: on[0] || null, last: on[on.length - 1] || null, since, months,
+    mood: cmp('mood'), sleep: cmp('sleepHours'), next: cmp('mood', true),
+    recent: on.slice(-8).reverse().map(d => ({ d, text: snip(d) })) };
+}
+let thTag = null;
+function thOpen(tag) {
+  thTag = tag;
+  let el = document.getElementById('thsheet');
+  if (!el) { el = document.createElement('div'); el.id = 'thsheet'; el.className = 'sharesheet'; document.body.appendChild(el); }
+  el.classList.add('on');
+  thRender(); buzz(8);
+}
+function thClose() { const el = document.getElementById('thsheet'); if (el) el.classList.remove('on'); thTag = null; }
+function thRender() {
+  const el = document.getElementById('thsheet'); if (!el || !thTag) return;
+  const r = tagThread(thTag), n1 = v => v == null ? '–' : (Math.round(v * 10) / 10).toFixed(1);
+  const big = (v, l) => `<div class="mr-big"><div class="mr-v">${v}</div><div class="mr-l">${l}</div></div>`;
+  const max = Math.max(1, ...r.months.map(m => m.n));
+  const row = (lab, c, unit) => {
+    if (!c.ok) return `<div class="mr-row"><span class="mr-row-n">${lab}</span><span class="hint">needs ${TH_MIN} days on each side</span></div>`;
+    const d = c.with - c.without, same = Math.abs(d) < (unit === 'h' ? 0.25 : 0.4);
+    return `<div class="mr-row"><span class="mr-row-n">${lab}</span><span class="yr-vs"><b>${n1(c.with)}${unit}</b> vs ${n1(c.without)}${unit}</span><span class="mr-row-v yr-d${same ? '' : d > 0 ? ' up' : ' down'}">${same ? 'about the same' : (d > 0 ? '+' : '−') + n1(Math.abs(d))}</span></div>`;
+  };
+  el.innerHTML = `<div class="ss-inner">
+    <div class="ss-head"><span class="mr-title">${escapeHtml(r.tag)}</span><button type="button" class="ss-x" id="th-close" aria-label="Close">✕</button></div>
+    <div class="card mr-card th-card">
+      <div class="mr-grid">
+        ${big(r.n, r.n === 1 ? 'day' : 'days')}
+        ${big(r.since == null ? '–' : r.since === 0 ? 'today' : r.since + 'd', 'since last')}
+      </div>
+      ${r.first ? `<div class="hint mr-note">First ${escapeHtml(prettyDate(r.first))}${r.first.slice(0, 4) !== todayStr().slice(0, 4) ? ' ' + r.first.slice(0, 4) : ''} · last ${escapeHtml(prettyDate(r.last))}</div>` : ''}
+      <div class="yr-months th-months" role="img" aria-label="Days with ${escapeHtml(r.tag)} in each of the last 12 months">${r.months.map(m => `<div class="yr-m${m.n ? '' : ' none'}"><b>${m.n || ''}</b><i style="height:${m.n ? Math.max(8, Math.round(m.n / max * 100)) : 3}%;${m.n ? 'background:var(--accent)' : ''}"></i><span>${'JFMAMJJASOND'[m.m]}</span></div>`).join('')}</div>
+    </div>
+    <div class="card mr-card th-card">
+      <h2 class="mr-card-t">On days with ${escapeHtml(r.tag)}</h2>
+      ${row('Mood', r.mood, '')}
+      ${row('Sleep', r.sleep, 'h')}
+      ${row('Mood the day after', r.next, '')}
+      <div class="hint mr-note">Compared with the days you logged without it. A pattern, not a cause.</div>
+    </div>
+    ${r.recent.length ? `<div class="card mr-card th-card"><h2 class="mr-card-t">Recent mentions</h2>
+      ${r.recent.map(x => `<button type="button" class="th-mention" data-th-day="${x.d}"><span class="th-d">${escapeHtml(prettyDate(x.d))}${x.d.slice(0, 4) !== todayStr().slice(0, 4) ? ' ' + x.d.slice(0, 4) : ''}</span><span class="th-t">${escapeHtml(x.text)}</span></button>`).join('')}
+    </div>` : ''}
+    <div class="ss-acts"><button type="button" class="btn btn-ghost" data-th-search>Search every mention</button></div>
+  </div>`;
+}
+document.addEventListener('click', ev => {
+  const t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
+  if (t.id === 'th-close' || t.id === 'thsheet') { thClose(); return; }
+  const dd = t.closest('[data-th-day]');
+  if (dd) { const d = dd.dataset.thDay; thClose(); dayOpen(d); return; }
+  if (t.closest('[data-th-search]') && thTag) { searchQ = thTag; thClose(); navigateTo('search'); return; }
+});
 /* v281 Welcome back: after 3 or more days with nothing logged, the Log's top card greets you and
    points at today, instead of the first thing being a broken run (people lapse by forgetting,
    upkeep, skipping or suspending, and showing past failures demotivates the return: Epstein et

@@ -4712,3 +4712,9 @@ html.locked #alarm { z-index: 400; }
 .yp-sub { margin: -4px 0 10px; }
 .yp-nav .mr-nav { width: 32px; height: 32px; font-size: 18px; border-radius: 10px; background: var(--bg-input); color: var(--text); }
 .otd-shuf { margin-left: auto; margin-right: 10px; padding: 8px 4px; border: 0; background: none; font: 600 12.5px/1 var(--font-ui); color: var(--accent-ink); cursor: pointer; }
+.th-months { height: 96px; margin-top: 14px; }
+.th-mention { display: block; width: 100%; text-align: left; padding: 10px 0; border: 0; border-top: 1px solid var(--border); background: none; font: inherit; color: var(--text); cursor: pointer; }
+.th-mention:first-of-type { border-top: 0; }
+.th-d { display: block; font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 3px; }
+.th-t { display: block; font-size: 13.5px; line-height: 1.45; }
+.th-card { min-height: 0; }
