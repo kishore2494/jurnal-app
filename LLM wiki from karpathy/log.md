@@ -12,6 +12,9 @@
 - **Open, needs Kishore:** (a) linking a Sheet writes `timeSummary` into days that only have timer blocks, and
   `timeSummary` counts as content, so the streak and awards change with the sync setting. Fix = put
   `timeSummary` in ENTRY_META (timer-only days stop counting as logged) — his streak may drop, so asked first.
+  Measured on his synced data (28 Nov): 36 of 137 logged days count only through a timer summary; with
+  `timeSummary` as meta his longest run would drop 65 → 18. Recommended instead: keep counting tracked time,
+  and count timer days the same way when no Sheet is linked (consistent, no one loses a streak).
   (b) ntfy alarms already queued for 3 days are not cancelled when a reminder is turned off/retimed (opt-in
   feature; ntfy has no cancel by id in the free API we use) — documented.
 
