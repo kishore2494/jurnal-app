@@ -1370,6 +1370,31 @@
     } finally { if (eSnap == null) localStorage.removeItem('dp.entries'); else localStorage.setItem('dp.entries', eSnap); logDate = ldSnap; _rdOffset = 0; }
   }
 
+  // ---- v281: Welcome back ----
+  {
+    const eSnap = localStorage.getItem('dp.entries'), bSnap = localStorage.getItem('dp.backSeen');
+    try {
+      const t = todayStr(), e = {};
+      e[addDays(t, -5)] = { mood: 6, journal: 'last time' };
+      DB.saveEntries(e); localStorage.removeItem('dp.backSeen');
+      ok('back: 4 days missed since the last log', backGap() === 4, backGap());
+      e[addDays(t, -3)] = { mood: 6, journal: 'closer' }; DB.saveEntries(e);
+      ok('back: 2 days missed is not a break', backGap() === 0, backGap());
+      delete e[addDays(t, -3)]; e[t] = { mood: 7, journal: 'today' }; DB.saveEntries(e);
+      ok('back: once today is logged, no card', backGap() === 0);
+      delete e[t]; DB.saveEntries(e);
+      const html = (() => { const ld = logDate; logDate = t; try { return nudgeCardKind(); } finally { logDate = ld; } })();
+      ok('back: the Log picks the welcome-back card (when nothing else owns the slot)', ['back', '', 'film', 'year', 'insight'].includes(html), html);
+      localStorage.setItem('dp.backSeen', t);
+      ok('back: dismissed today, it stays away today', (() => { const ld = logDate; logDate = t; try { return nudgeCardKind() !== 'back'; } finally { logDate = ld; } })());
+      DB.saveEntries({});
+      ok('back: a brand-new install never sees it', backGap() === 0);
+    } finally {
+      if (eSnap == null) localStorage.removeItem('dp.entries'); else localStorage.setItem('dp.entries', eSnap);
+      if (bSnap == null) localStorage.removeItem('dp.backSeen'); else localStorage.setItem('dp.backSeen', bSnap);
+    }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));

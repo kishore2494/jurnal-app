@@ -2125,6 +2125,7 @@ function renderDeepSections() {
 const WHATS_NEW = {
   v: 'w43',
   items: [
+    '🔁 <b>Rediscover an older day</b> — On this day now also brings back a random day you wrote about, weeks or years ago (never a low-mood one). Tap ↻ another day for a different one. <b>Year in pixels</b> has ‹ › to see other years.',
     '📅 <b>Your year, in six cards</b> — Stats ▸ Overview (and the Log, through December): days logged, your longest run, mood month by month, your habits, what you wrote with your best day quoted, and how it compares with the year before. Made on this phone; nothing is sent anywhere.',
     '📥 <b>Spreadsheet import reads every field</b> — Settings ▸ Backup & restore ▸ Import days from a CSV now also fills stress, focus, clarity, motivation, sleep quality, meditation, water, weight, screen time, income, expenses, tasks and gratitude, by column name. It still only fills what is empty.',
     '⚡ <b>Faster with years of entries</b> — History opens about four times faster on a long log, and the Log and the Time screen render in less time too. Nothing about your data changed.',
@@ -12468,6 +12469,7 @@ const BACKUP_EXCLUDED = [
   'firstSeen', 'insightSeen', 'checkin',   // v269: first open here, first-pattern card seen, day-5 question answered
   'filmSeen',                          // v270: which month's film the Log already offered here
   'yrSeen',                            // v281: which year's review the Log already offered here
+  'backSeen',                          // v281: the day the welcome-back card was last dismissed here
   'notifAsk',                          // the one-time notification ask; permission belongs to this device
   'notifDone',                         // notification presses already handled here (replayed intents are ignored)
   'reviewAsk',                         // Play rating-sheet asks on this install (Google's quota is per device too)
@@ -13800,6 +13802,7 @@ function nudgeCardKind() {
   try { if (notifAskKind()) return ''; } catch (e) {}
   try { if (filmCardYM()) return 'film'; } catch (e) {}                 // last month's film, first week only
   try { if (yrCardY()) return 'year'; } catch (e) {}                   // the year in review, 1 Dec – 10 Jan
+  try { if (backGap() && localStorage.getItem('dp.backSeen') !== todayStr()) return 'back'; } catch (e) {}   // after 3+ days away
   const seen = localStorage.getItem('dp.insightSeen') || '';
   if (!seen && firstInsight()) return 'insight';
   if (seen === todayStr()) return '';                                   // one card a day
@@ -13819,6 +13822,17 @@ function nudgeCardHTML() {
         <button type="button" class="fresh-x" data-film-x="${ym}" aria-label="Dismiss">✕</button>
       </div>
       <button type="button" class="btn btn-primary btn-sm film-go" data-film-open="${ym}">${icon('playFill', 15)} Watch it</button>
+    </div>`;
+  }
+  if (k === 'back') {
+    const n = backGap();
+    return `<div class="card fresh-card back-card">
+      <div class="fresh-body">
+        <div class="fresh-ico">👋</div>
+        <div class="fresh-txt"><div class="fresh-t">Welcome back</div><div class="fresh-l">It has been ${n} days. No need to fill them in: one line about today is a fine place to start again.</div></div>
+        <button type="button" class="fresh-x" data-back-x aria-label="Dismiss">✕</button>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm film-go" data-back-go>Write about today</button>
     </div>`;
   }
   if (k === 'year') {
@@ -15325,6 +15339,29 @@ function yrCardY() {
   if (!y || localStorage.getItem('dp.yrSeen') === y) return null;
   return yrYears().includes(y) ? y : null;
 }
+/* v281 Welcome back: after 3 or more days with nothing logged, the Log's top card greets you and
+   points at today, instead of the first thing being a broken run (people lapse by forgetting,
+   upkeep, skipping or suspending, and showing past failures demotivates the return: Epstein et
+   al., CHI 2015). It asks for nothing about the missed days and changes no streak. Once a day. */
+function backGap() {
+  const today = todayStr(), e = DB.entriesRO();
+  if (entryHasContent(e[today])) return 0;
+  const ds = contentDates(e).filter(d => d < today);
+  if (!ds.length) return 0;
+  const gap = Math.round((new Date(today + 'T12:00:00') - new Date(ds[ds.length - 1] + 'T12:00:00')) / 86400000) - 1;
+  return gap >= 3 ? gap : 0;
+}
+document.addEventListener('click', ev => {
+  const t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
+  if (t.closest('[data-back-x]')) { try { safeSet('dp.backSeen', todayStr()); } catch (e) {} const c = t.closest('.back-card'); if (c) c.remove(); buzz(6); return; }
+  if (t.closest('[data-back-go]')) {
+    try { safeSet('dp.backSeen', todayStr()); } catch (e) {}
+    const c = t.closest('.back-card'); if (c) c.remove();
+    const j = document.querySelector('#s-today [data-txt="journal"]');
+    if (j) { j.scrollIntoView({ block: 'center', behavior: 'smooth' }); try { j.focus({ preventScroll: true }); } catch (e) {} }
+    buzz(8); return;
+  }
+});
 function yearCardHTML() {
   const years = yrYears();
   if (!years.length) return '';
