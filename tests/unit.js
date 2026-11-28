@@ -1248,6 +1248,66 @@
     }
   }
 
+  // ---- v281: audit fixes (CSV import, settings stamps, lock clock, weekly memo) ----
+  {
+    const eSnap = localStorage.getItem('dp.entries'), hSnap = localStorage.getItem('dp.habitcfg'), sSnap = localStorage.getItem('dp.settings'), aSnap = localStorage.getItem('dp.cfgAt');
+    try {
+      const T = entriesFromCSV('date,notes,income,sleep\n2026-07-01,"sleep <6h, mood >7 today",1234,7\n2026-07-02,A <- B -> C &amp; D,"10,000","7,5"\n');
+      ok('v281 csv: a sheet keeps text between < and >, and &amp; as written', T.days['2026-07-01'].journal === 'sleep <6h, mood >7 today' && T.days['2026-07-02'].journal === 'A <- B -> C &amp; D', T.days);
+      ok('v281 csv: thousands separators are thousands, a decimal comma is still a decimal', T.days['2026-07-02'].income === 10000 && T.days['2026-07-01'].income === 1234 && T.days['2026-07-02'].sleepHours === 7.5, T.days['2026-07-02']);
+      const Dl = entriesFromCSV('full_date,date,weekday,time,mood,activities,note_title,note\n2026-07-03,Jul 3,Friday,21:10,good,,,"a<br>b &amp; c"\n');
+      ok('v281 csv: a Daylio note still turns <br> into a line and decodes &amp;', Dl.days['2026-07-03'].journal === 'a\nb & c', Dl.days['2026-07-03']);
+      const US = entriesFromCSV('date,mood\n11/20/2026,7\n11/05/2026,6\n');
+      ok('v281 csv: a second part above 12 makes the whole file month/day', US.dateOrder === 'mdy' && US.days['2026-11-20'] && US.days['2026-11-05'] && !US.days['2026-05-11'] && US.bad === 0, Object.keys(US.days));
+      const EU = entriesFromCSV('date,mood\n20/11/2026,7\n05/11/2026,6\n');
+      ok('v281 csv: a first part above 12 makes it day/month', EU.dateOrder === 'dmy' && EU.days['2026-11-05'] && !EU.dateAsk, Object.keys(EU.days));
+      const AMB = entriesFromCSV('date,mood\n05/11/2026,7\n');
+      ok('v281 csv: an ambiguous file reads day/month and asks', AMB.dateAsk && AMB.days['2026-11-05'], AMB);
+      const AMB2 = entriesFromCSV('date,mood\n05/11/2026,7\n', { order: 'mdy' });
+      ok('v281 csv: …and month/day when switched', AMB2.days['2026-05-11'] && AMB2.dateOrder === 'mdy' && AMB2.dateAsk, Object.keys(AMB2.days));
+      const LOW = entriesFromCSV('date,mood\n2026-07-01,3\n2026-07-02,5\n');
+      ok('v281 csv: an all-1-to-5 mood column is spread, and says so', LOW.canSpread && LOW.fiveScale && LOW.days['2026-07-02'].mood === 10, LOW);
+      const LOW2 = entriesFromCSV('date,mood\n2026-07-01,3\n2026-07-02,5\n', { noSpread: true });
+      ok('v281 csv: …and kept as written when switched off', !LOW2.fiveScale && LOW2.days['2026-07-02'].mood === 5 && LOW2.days['2026-07-01'].mood === 3, LOW2.days);
+      navigateTo('settings'); settingsPage = 'data';
+      _csvImp = Object.assign({ name: 'low.csv', text: 'date,mood\n2026-07-01,3\n2026-07-02,5\n', opts: {} }, LOW); renderSettings();
+      const sw = document.querySelector('[data-csvi-opt="noSpread"]');
+      ok('v281 csv: the preview names the 1–5 reading with a switch', !!sw && /read as a 1–5 scale/.test(document.getElementById('s-settings').textContent));
+      sw.click();
+      ok('v281 csv: the switch re-reads the file out of 10', _csvImp && _csvImp.days['2026-07-02'].mood === 5 && !!document.querySelector('[data-csvi-opt="spread"]'), _csvImp && _csvImp.days);
+      _csvImp = null; renderSettings();
+
+      // settings stamps never go backwards on a phone whose clock runs behind
+      const st = DB.settings(); st.syncUrl = 'https://example.invalid/exec'; DB.saveSettings(st);
+      const future = Date.now() + 60000; localStorage.setItem('dp.cfgAt', JSON.stringify({ habitcfg: future }));
+      const hc = habitCfg(); hc[0] = Object.assign({}, hc[0], { label: (hc[0].label || 'x') + ' renamed' }); saveHabitCfg(hc);
+      ok('v281 cfgSave: a stamp is max(now, last + 1)', +listMeta('dp.cfgAt').habitcfg === future + 1, listMeta('dp.cfgAt'));
+
+      // weekly counts follow a goal added to the habit
+      localStorage.setItem('dp.habitcfg', JSON.stringify([{ key: 'water', emoji: '💧', label: 'Water' }])); reloadCfg();
+      const wsk = weekStart(todayStr()), ew = {}; ew[wsk] = { habits: { water: 3 } }; ew[addDays(wsk, 1)] = { habits: { water: 3 } }; DB.saveEntries(ew);
+      const wBefore = habitWeek('water', wsk).done;
+      saveHabitCfg([{ key: 'water', emoji: '💧', label: 'Water', goal: { n: 8, cmp: 'atleast', unit: 'glasses' } }]);
+      const wAfter = habitWeek('water', wsk).done;
+      ok('v281 habitWeek: adding a goal is counted at once, not after the next save', wBefore === 2 && wAfter === 0, [wBefore, wAfter]);
+
+      // the lock: a clock set back while away asks for the PIN
+      const oOn = window.lockOn, oShow = window.lockShow, oHide = window.lockHide; let shown = '', hid = 0;
+      try {
+        window.lockOn = () => true; window.lockShow = m => { shown = m; }; window.lockHide = () => { hid++; };
+        _lk = { mode: 'unlock', soft: true }; _lockAway = Date.now() + 3600000; lockBack();
+        ok('v281 lock: coming back to a clock earlier than when it left does not skip the PIN', hid === 0 && _lk.soft === false, [hid, _lk]);
+        _lk = { mode: 'none' }; _lockAway = Date.now() + 3600000; shown = ''; lockBack();
+        ok('v281 lock: …and shows the keypad when it was closed', shown === 'unlock', shown);
+        _lk = { mode: 'unlock', soft: true }; _lockAway = Date.now() - 1000; hid = 0; lockBack();
+        ok('v281 lock: a short real absence still opens without the PIN', hid === 1, hid);
+      } finally { window.lockOn = oOn; window.lockShow = oShow; window.lockHide = oHide; _lk = null; _lockAway = 0; try { lockRender && 0; } catch (e) {} }
+    } finally {
+      [['dp.entries', eSnap], ['dp.habitcfg', hSnap], ['dp.settings', sSnap], ['dp.cfgAt', aSnap]].forEach(([k, v]) => { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); });
+      try { reloadCfg(); } catch (e) {}
+    }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));

@@ -222,7 +222,8 @@
     });
     // the habit list is one whole setting: its latest save wins as a whole (v277 dp.cfgAt)
     const hc = canonJSON(habitCfg());
-    if (hc !== b.cfg) stampIt(truth.cfg, 'habitcfg', { stamp: now, phone: p, json: hc });
+    // the stamp the app actually wrote (v281: max(now, last + 1)), like the day fields' fieldAt
+    if (hc !== b.cfg) stampIt(truth.cfg, 'habitcfg', { stamp: +objOf(listMeta('dp.cfgAt')).habitcfg || now, phone: p, json: hc });
     const g = objOf(DB.gym());
     new Set([...Object.keys(g), ...Object.keys(b.gym)]).forEach(d => ['done', 'log'].forEach(part => {
       const x = objOf(objOf(g[d])[part]), y = objOf(objOf(b.gym[d])[part]);
@@ -561,7 +562,7 @@
   /* ---------------- main ---------------- */
   const saved = {};
   const STUB = ['syncTimelog', 'syncEntry', 'syncDocs', 'syncEvents', 'checkNewAwardsSoon', 'saveSheetOpen', 'refreshTimerNotif'];
-  const out = { seeds: 0, ops: 0, pushes: 0, fails: [], known: {}, ms: 0, checked: { items: 0, blocks: 0, fields: 0, habits: 0, gym: 0, sums: 0, wo: 0 } };
+  const out = { seeds: 0, ops: 0, pushes: 0, fails: [], known: {}, ms: 0, checked: { items: 0, blocks: 0, fields: 0, habits: 0, gym: 0, cfg: 0, sums: 0, wo: 0 } };
   const t0 = RealDate.now();
   try {
     saved.Date = window.Date; saved.fetch = window.fetch; saved.toast = window.toast;

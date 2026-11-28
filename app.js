@@ -49,6 +49,7 @@ let HABITS = habitCfg().filter(h => !h.hidden);
 function reloadCfg() {
   HABITS = habitCfg().filter(h => !h.hidden);
   _goalMap = null; _schedMap = null; _weekFirst = null;                // goal + schedule caches follow the cfg
+  try { _wkMemo = new WeakMap(); } catch (e) {}                        // v281: habitWeek counts depend on goals too (try: reloadCfg can run before the let)
   if (typeof actCfg === 'function') TIME_ACTS_ALL = actCfg();
   if (typeof deepCfg === 'function') DEEP_SECTIONS = cookDeep(deepCfg());
 }
@@ -339,7 +340,7 @@ const CFG_SYNC = [['habitcfg', 'dp.habitcfg'], ['actcfg', 'dp.actcfg'], ['deepcf
 function cfgSave(store, value) {
   const prev = localStorage.getItem(store), next = JSON.stringify(value), ok = safeSet(store, next);
   const key = (CFG_SYNC.find(x => x[1] === store) || [])[0];
-  if (ok && key && prev !== next && DB.settings().syncUrl) { const at = listMeta('dp.cfgAt'); at[key] = Date.now(); safeSet('dp.cfgAt', JSON.stringify(at)); }
+  if (ok && key && prev !== next && DB.settings().syncUrl) { const at = listMeta('dp.cfgAt'); at[key] = Math.max(Date.now(), (+at[key] || 0) + 1); safeSet('dp.cfgAt', JSON.stringify(at)); }   // v281: max(now, last + 1), like the day fields, so a phone whose clock runs behind still stamps its edit newer
   return ok;
 }
 function listMetaSave(at, del) {
@@ -814,7 +815,8 @@ function lockAway() {
 }
 function lockBack() {
   if (!_lockAway) return;
-  const away = Date.now() - _lockAway; _lockAway = 0;
+  let away = Date.now() - _lockAway; _lockAway = 0;
+  if (away < 0) away = Infinity;   // v281: the clock was set back while away: ask for the PIN, never skip it
   const k = _lk; if (!k || !lockOn()) return;
   const m = lockAfterMin(), limit = m ? m * 60000 : LOCK_GRACE_MS;
   if (k.mode === 'unlock' && k.soft) { if (away < limit) lockHide(); else { k.soft = false; lockRender(); } return; }
@@ -911,7 +913,9 @@ function addDays(str, n) { const d = new Date(str + 'T00:00:00'); d.setDate(d.ge
 const _dtf = new Map();
 function fmtDate(d, opts, loc) {
   if (!(d instanceof Date) || isNaN(d)) return new Date(NaN).toLocaleDateString(loc, opts);
-  const k = (loc || '') + '|' + JSON.stringify(opts || {});
+  // v281: + the zone offset at that date. A formatter keeps the zone it was built in, so after a flight
+  // (the app still open) a cached one put dates a day out until a reload. Same offset = same wall date.
+  const k = (loc || '') + '|' + JSON.stringify(opts || {}) + '|' + d.getTimezoneOffset();
   let f = _dtf.get(k);
   if (!f) { f = new Intl.DateTimeFormat(loc, opts); _dtf.set(k, f); }
   return f.format(d);
@@ -1220,7 +1224,7 @@ function weekdayOf(d) { return new Date(d + 'T12:00:00').getDay(); }
 /* Done and skipped days in the Monday-to-Sunday week starting `ws`, from the stored values.
    Memoised per entries object: DB.entriesRO() hands out the same object until the store
    changes, and DB.entries() a fresh one, so a memo can never outlive the data it counted. */
-const _wkMemo = new WeakMap();
+let _wkMemo = new WeakMap();   // v281: let, so reloadCfg can drop it when goals or schedules change
 function habitWeek(key, ws, ents) {
   const e = ents || DB.entriesRO();
   let m = _wkMemo.get(e); if (!m) { m = new Map(); _wkMemo.set(e, m); }
@@ -5900,10 +5904,13 @@ function csviHabitIndex() {
 function csviYes(v) { return /^(1|y|yes|true|x|✓|✔|done)$/i.test(String(v == null ? '' : v).trim()); }
 function csviNum(v, lo, hi) {
   const s = String(v == null ? '' : v).trim(); if (!s) return null;
-  const n = /^\d{1,2}:\d{2}$/.test(s) ? hmToHours(s) : Number(s.replace(',', '.'));
+  // v281: "1,234" / "10,000" are thousands (they read as 1.23 and 10); "7,5" is still a decimal comma.
+  const plain = /^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s) ? s.replace(/,/g, '') : s.replace(',', '.');
+  const n = /^\d{1,2}:\d{2}$/.test(s) ? hmToHours(s) : Number(plain);
   return Number.isFinite(n) && n >= lo && n <= hi ? +n.toFixed(2) : null;
 }
-function csviNote(v) {   // Daylio notes can carry <br> and a few tags
+function csviNote(v, daylio) {   // Daylio notes can carry <br> and a few tags; a sheet's "sleep <6h, mood >7" is text (v281)
+  if (!daylio) return String(v == null ? '' : v).replace(/\r\n?/g, '\n').trim();
   return String(v == null ? '' : v).replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p>/gi, '\n\n').replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
 }
@@ -5921,7 +5928,8 @@ function csviFieldIndex() {
 }
 /* Text → { kind, days: {date: fields}, rows, bad, moodsUnknown[], matched{activity: habitKey}, unmatched[], cols[] }
    or { error }. Pure: reads the habit list, writes nothing. */
-function entriesFromCSV(text) {
+function entriesFromCSV(text, opts) {
+  opts = opts || {};
   const rows = csvParse(text || '');
   if (rows.length < 2) return { error: 'That file has no rows Daylog can read' };
   const head = rows[0].map(csviKey), col = {};
@@ -5929,6 +5937,16 @@ function entriesFromCSV(text) {
   const daylio = head.includes('fulldate') && head.includes('activities');
   if (daylio) col.date = head.indexOf('fulldate');
   if (col.date == null) return { error: 'No date column. The first row needs a column called "date".' };
+  // v281: one day/month order for the whole file. 05/11/2026 is 5 Nov to most of the world and
+  // 11 May in the US: a first part above 12 anywhere means day/month, a second part above 12 means
+  // month/day. With neither, day/month (as before) and the preview says so, with a switch.
+  let order = opts.order || 'dmy', dateAsk = false;
+  if (!daylio && !opts.order) {
+    let dFirst = false, mFirst = false, slashed = 0;
+    rows.slice(1).forEach(r => { const m = String(r[col.date] || '').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (!m) return; slashed++; if (+m[1] > 12) dFirst = true; if (+m[2] > 12) mFirst = true; });
+    if (mFirst && !dFirst) order = 'mdy';
+    dateAsk = slashed > 0 && !dFirst && !mFirst;
+  }
   const hx = csviHabitIndex(), habitCols = {};
   if (!daylio) head.forEach((h, i) => { if (h in hx && !Object.values(col).includes(i)) habitCols[i] = hx[h]; });
   const fx = csviFieldIndex(), fieldCols = {}, fieldTaken = new Set();
@@ -5937,7 +5955,7 @@ function entriesFromCSV(text) {
   const acc = {}, moodsUnknown = new Set(), matched = {}, unmatched = new Set();
   let bad = 0, nums = [];
   rows.slice(1).forEach(r => {
-    const d = csvDate(r[col.date]);
+    const d = csvDate(r[col.date], order);
     if (!csviRealDay(d)) { bad++; return; }
     const a = acc[d] || (acc[d] = { moods: [], nmoods: [], notes: [], habits: {}, acts: [], f: {} });
     if (col.mood != null) {
@@ -5953,16 +5971,16 @@ function entriesFromCSV(text) {
     });
     CSVI_TEXT.forEach(f => {
       if (col[f] == null) return;
-      const t = csviNote(r[col[f]]);
+      const t = csviNote(r[col[f]], daylio);
       if (!t) return;
-      if (f === 'journal') { const tt = titleI >= 0 ? csviNote(r[titleI]) : ''; a.notes.push(tt ? tt + '\n' + t : t); }
+      if (f === 'journal') { const tt = titleI >= 0 ? csviNote(r[titleI], daylio) : ''; a.notes.push(tt ? tt + '\n' + t : t); }
       else a[f] = a[f] ? a[f] + '\n' + t : t;
     });
-    if (col.journal == null && titleI >= 0) { const tt = csviNote(r[titleI]); if (tt) a.notes.push(tt); }
+    if (col.journal == null && titleI >= 0) { const tt = csviNote(r[titleI], daylio); if (tt) a.notes.push(tt); }
     Object.keys(habitCols).forEach(i => { if (csviYes(r[i])) a.habits[habitCols[i]] = true; });
     Object.keys(fieldCols).forEach(i => {
       const f = fieldCols[i];
-      if (f.type === 'text') { const t = csviNote(r[i]); if (t) a.f[f.key] = a.f[f.key] ? a.f[f.key] + '\n' + t : t; return; }
+      if (f.type === 'text') { const t = csviNote(r[i], daylio); if (t) a.f[f.key] = a.f[f.key] ? a.f[f.key] + '\n' + t : t; return; }
       const v = csviNum(r[i], f.type === 'scale' ? 1 : 0, f.type === 'scale' ? 10 : 1e9);
       if (v != null) a.f[f.key] = f.type === 'scale' ? Math.round(v) : v;
     });
@@ -5972,7 +5990,7 @@ function entriesFromCSV(text) {
     });
   });
   // A 1–5 number scale (every number in the file ≤ 5) is spread over Daylog's 1–10: 1, 3, 6, 8, 10.
-  const fiveScale = nums.length > 0 && nums.every(n => n <= 5);
+  const canSpread = nums.length > 0 && nums.every(n => n <= 5), fiveScale = canSpread && !opts.noSpread;   // v281: said in the preview, with a switch
   const days = {};
   Object.keys(acc).sort().forEach(d => {
     const a = acc[d], o = {};
@@ -5989,7 +6007,8 @@ function entriesFromCSV(text) {
   const cols = Object.keys(col).filter(f => f !== 'date').concat(Object.values(habitCols).map(k => 'habit:' + k), Object.values(fieldCols).map(f => f.key));
   const labels = {}; Object.values(fieldCols).forEach(f => { labels[f.key] = f.label; });
   if (!Object.keys(days).length) return { error: bad ? 'No row had a date Daylog could read' : 'The file has dates but nothing Daylog can use next to them' };
-  return { kind: daylio ? 'daylio' : 'table', days, rows: rows.length - 1, bad, moodsUnknown: [...moodsUnknown], matched, unmatched: [...unmatched], cols, labels };
+  return { kind: daylio ? 'daylio' : 'table', days, rows: rows.length - 1, bad, moodsUnknown: [...moodsUnknown], matched, unmatched: [...unmatched], cols, labels,
+    canSpread, fiveScale, dateOrder: order, dateAsk: dateAsk || !!opts.order && !daylio };
 }
 /* What importing would do to the days already here: new days, days that gain something, days that
    gain nothing (everything in the file is already filled in). */
@@ -6049,6 +6068,12 @@ function csviCardHTML() {
     if (p.unmatched.length) li.push(`Other activities (${p.unmatched.length}) are kept in that day's note: ` + escapeHtml(p.unmatched.slice(0, 6).join(', ')) + (p.unmatched.length > 6 ? '…' : ''));
     if (p.moodsUnknown.length) li.push('Moods Daylog does not know were left out: ' + escapeHtml(p.moodsUnknown.slice(0, 5).join(', ')));
     if (p.bad) li.push(`${p.bad} row${p.bad === 1 ? '' : 's'} skipped: no date Daylog could read`);
+    if (p.canSpread) li.push(p.fiveScale
+      ? `Every mood in the file is 1–5, so they are read as a 1–5 scale (3 → 6, 5 → 10). <button type="button" class="linkbtn" data-csvi-opt="noSpread">They are out of 10</button>`
+      : `Moods are taken as written, out of 10. <button type="button" class="linkbtn" data-csvi-opt="spread">They are 1–5</button>`);
+    if (p.dateAsk) li.push(p.dateOrder === 'mdy'
+      ? `Dates like 05/11 are read as month/day (11 May). <button type="button" class="linkbtn" data-csvi-opt="dmy">They are day/month</button>`
+      : `Dates like 05/11 are read as day/month (5 November). <button type="button" class="linkbtn" data-csvi-opt="mdy">They are month/day</button>`);
     const n = plan.add + plan.fill;
     body = `<div class="csvi-prev"><div class="csvi-name">${escapeHtml(p.name)}${p.kind === 'daylio' ? ' · Daylio export' : ''}</div>
       <ul class="csvi-list">${li.map(x => `<li>${x}</li>`).join('')}</ul>
@@ -6067,6 +6092,12 @@ document.addEventListener('click', ev => {
   const t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
   if (t.closest('#csvi-pick')) { const f = document.getElementById('csvi-file'); if (f) { f.value = ''; f.click(); } return; }
   if (t.closest('#csvi-cancel')) { _csvImp = null; renderSettingsIfShown(); return; }
+  const co = t.closest('[data-csvi-opt]');
+  if (co && _csvImp && _csvImp.text != null) {   // v281: re-read the same file with the other mood scale / date order
+    const o = Object.assign({}, _csvImp.opts || {}), v = co.dataset.csviOpt;
+    if (v === 'noSpread') o.noSpread = true; else if (v === 'spread') delete o.noSpread; else o.order = v;
+    _csvImp = Object.assign({ name: _csvImp.name, text: _csvImp.text, opts: o }, entriesFromCSV(_csvImp.text, o)); renderSettingsIfShown(); return;
+  }
   if (t.closest('#csvi-go') && _csvImp && _csvImp.days) {
     const r = csviApply(_csvImp.days); _csvImp = null; renderSettingsIfShown();
     if (r.failed) { toast('Phone storage is full, so nothing was imported. Free up space and try again.', true); return; }
@@ -6082,7 +6113,7 @@ document.addEventListener('click', ev => {
 document.addEventListener('change', ev => {
   const t = ev.target; if (!t || t.id !== 'csvi-file' || !t.files || !t.files[0]) return;
   const f = t.files[0], rd = new FileReader();
-  rd.onload = () => { const r = entriesFromCSV(String(rd.result || '')); _csvImp = Object.assign({ name: f.name }, r); renderSettingsIfShown(); };
+  rd.onload = () => { const text = String(rd.result || ''), r = entriesFromCSV(text); _csvImp = Object.assign({ name: f.name, text, opts: {} }, r); renderSettingsIfShown(); };
   rd.onerror = () => { _csvImp = { name: f.name, error: 'Could not read that file' }; renderSettingsIfShown(); };
   rd.readAsText(f);
 });
@@ -18776,7 +18807,7 @@ function csvParse(text) {
 /* Banks write dates every possible way. Handles ISO, dd/mm/yyyy, dd-mm-yy and "12 Jan 2026".
    dd/mm is assumed over mm/dd — this app's users are not all American, and guessing wrong
    silently reorders someone's whole year. Ambiguous rows are dropped, not guessed. */
-function csvDate(v) {
+function csvDate(v, order) {   // order 'mdy' reads 05/11/2026 as 11 May (v281); day/month otherwise
   const s = String(v || '').trim();
   if (!s) return null;
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
@@ -18784,6 +18815,7 @@ function csvDate(v) {
   m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (m) {
     let [, d, mo, y] = m;
+    if (order === 'mdy') [d, mo] = [mo, d];
     if (+d > 31 || +mo > 12) return null;
     if (y.length === 2) y = (+y > 70 ? '19' : '20') + y;
     return `${y}-${String(+mo).padStart(2, '0')}-${String(+d).padStart(2, '0')}`;

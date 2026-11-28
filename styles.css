@@ -4707,3 +4707,4 @@ html.locked #alarm { z-index: 400; }
 .yr-vs b { color: var(--text); }
 .yr-d.up { color: var(--good, #16a34a); }
 .yr-d.down { color: var(--bad, #dc2626); }
+.linkbtn { background: none; border: 0; padding: 0; margin-left: 2px; color: var(--accent-ink); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
