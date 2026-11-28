@@ -2296,13 +2296,14 @@ let _rdMemo = null, _rdOffset = 0;
 function rediscoverPool() {
   const e = DB.entriesRO(), today = todayStr();
   if (_rdMemo && _rdMemo.e === e && _rdMemo.d === today) return _rdMemo.v;
-  const cut = addDays(today, -RD_MIN_AGE), v = [];
+  const cut = addDays(today, -RD_MIN_AGE), v = [], photoDays = new Set();
+  _media.forEach(r => { if (r.ctx === 'log' && r.kind === 'photo') photoDays.add(r.day); });   // one pass, not one per day
   for (const d in e) {
     if (d > cut || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
     const en = e[d]; if (!en || en.sample) continue;
     if (en.mood != null && en.mood !== '' && +en.mood <= 3) continue;
     const words = yrOwnText(en.journal || en.wentWell || '').split(/\s+/).filter(Boolean).length;
-    if (words >= RD_MIN_WORDS || mediaDayCount(d).p) v.push(d);
+    if (words >= RD_MIN_WORDS || photoDays.has(d)) v.push(d);
   }
   v.sort();
   _rdMemo = { e, d: today, v };
