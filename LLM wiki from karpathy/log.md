@@ -1,3 +1,13 @@
+## 2026-11-28 — Play vitals readable: zero crash/ANR reports; bulk reports still pending
+
+- Kishore ticked the ACCOUNT-level "View app information and download bulk reports" and enabled the
+  Play Developer Reporting API. The API answered within ~2 minutes.
+- New `node daylog-native-backup/play.mjs vitals`: crash rate, ANR rate, crash/ANR report count for the
+  last 28 days. First read (Oct 30 – Nov 27): no rows for any of them, so zero reports (Play also
+  shows no rate when users are too few). errorCountMetricSet needs dimension `reportType`.
+- `play.mjs metrics` (bulk-report CSVs in Cloud Storage) still 403 right after the grant. Google says
+  it can take up to 24 h for a service account to get the bucket. Retry on 2026-11-29.
+
 ## 2026-11-28 — v279 LIVE (Kishore said "deploy")
 
 - `tools/deploy.sh --tag`: all checks green, tag `web-v279` on both remotes, Pages build success,

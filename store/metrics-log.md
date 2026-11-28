@@ -26,3 +26,4 @@ last-28-days view against the 28 days before it.
 | 2026-11-21 | Oct 23 – Nov 19 (28d) | Kishore's Play Console screenshots | 8.6 | 47.1% (+15.3 pp) | 127 (+59%) | 73 (+38%) | 232 | ~82 | 18.2 | 113 | 2.96 (+60%) | 5★ |
 | 2026-11-23 | all-time | Kishore (chat) | | | | | 242 | 84 (installed audience) | | | | |
 | 2026-11-28 | last 28d to Nov 28 | Kishore's Play Console screenshots (Home + app dashboard) | | | 137 (+32%) | 86 (+16%) | | | | 146 monthly active devices (+51%) | | | (also: revenue ₹50.0 in 28d; 67 installs on the Nov 21 release) |
+| 2026-11-28 | Oct 30 – Nov 27 | `play.mjs vitals` (Reporting API, first read) | | | | | | | | | | | crash rate: no rows, ANR rate: no rows, crash/ANR reports: 0 |
