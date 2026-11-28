@@ -876,7 +876,7 @@
       ok('hnote: Save keeps the note on the day, trimmed', en.hnotes && en.hnotes.workout === 'legs, 45 min', en);
       ok('hnote: …without ticking the habit', hBase(en, 'workout') === H_MISS);
       ok('hnote: …says so and closes', !sheetOn() && toasts.includes('📝 Note saved'));
-      ok('hnote: …and is stamped for the sync merge', en.fieldAt && +en.fieldAt.hnotes > 0 && !!en.updatedAt);
+      ok('hnote: …and is stamped for the sync merge, per habit (v281)', en.hnotesAt && +en.hnotesAt.workout > 0 && !(en.fieldAt && en.fieldAt.hnotes) && !!en.updatedAt, en);
       ok('hnote: the Log draft has it, and the chip shows a dot', hnoteGet(draft, 'workout') === 'legs, 45 min' && document.querySelector('#s-today [data-habit="workout"]').classList.contains('has-note'));
       ok('hnote: the chip tells you to hold for a note', /hold for a note/.test(document.querySelector('#s-today [data-habit="reading"]').title));
       hnoteOpen('workout', T);
@@ -1306,6 +1306,25 @@
       [['dp.entries', eSnap], ['dp.habitcfg', hSnap], ['dp.settings', sSnap], ['dp.cfgAt', aSnap]].forEach(([k, v]) => { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); });
       try { reloadCfg(); } catch (e) {}
     }
+  }
+
+  // ---- v281: habit notes merge per habit ----
+  {
+    const now0 = Date.now();
+    const st1 = entryFieldStamp({ hnotes: { workout: 'legs' }, updatedAt: '2026-01-01T00:00:00.000Z' }, { hnotes: { workout: 'legs', reading: 'ch 4' }, updatedAt: new Date().toISOString() });
+    ok('hnotes: a new note is stamped now, an untouched one keeps the old stand-in', +st1.hnotesAt.reading >= now0 && st1.hnotesAt.workout === Date.parse('2026-01-01T00:00:00.000Z') && !(st1.fieldAt || {}).hnotes, st1);
+    const A = { hnotes: { workout: 'legs' }, hnotesAt: { workout: 100 }, updatedAt: '2026-01-02T00:00:00.000Z' };
+    const B = { hnotes: { meditation: 'calm' }, hnotesAt: { meditation: 200 }, updatedAt: '2026-01-01T00:00:00.000Z' };
+    const m1 = mergeHnotes(A, B, {});
+    ok('hnotes: two phones noting two habits keep both', m1.hnotes.workout === 'legs' && m1.hnotes.meditation === 'calm' && m1.hnotesAt.workout === 100 && m1.hnotesAt.meditation === 200, m1);
+    const C = { hnotesAt: { workout: 300 }, updatedAt: '2026-01-03T00:00:00.000Z' };
+    const m2 = mergeHnotes(A, C, {});
+    ok('hnotes: a newer removal removes', !m2.hnotes && m2.hnotesAt.workout === 300, m2);
+    const D = { hnotes: { workout: 'old text' }, fieldAt: { hnotes: 150 }, updatedAt: '2026-01-01T00:00:00.000Z' };
+    const E2 = { hnotes: { workout: 'new text' }, hnotesAt: { workout: 200 }, updatedAt: '2026-01-01T00:00:00.000Z' };
+    ok('hnotes: a copy from before the stamps uses its fieldAt.hnotes', mergeHnotes(D, E2, {}).hnotes.workout === 'new text' && mergeHnotes(E2, D, {}).hnotes.workout === 'new text');
+    const T1 = { hnotes: { workout: 'a' }, hnotesAt: { workout: 50 } }, T2 = { hnotes: { workout: 'b' }, hnotesAt: { workout: 50 } };
+    ok('hnotes: two notes under one stamp pick the same on both phones', mergeHnotes(T1, T2, {}).hnotes.workout === mergeHnotes(T2, T1, {}).hnotes.workout);
   }
 
   // ---- Custom goals ----

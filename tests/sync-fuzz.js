@@ -158,7 +158,7 @@
   /* ---------------- generating a run (pure data, so it can be replayed and shrunk) ---------------- */
   const ACTS = ['work', 'gymt', 'learn', 'travel'];
   const SYNC_OPS = [['pull', 12], ['pullStart', 4], ['pullEnd', 4], ['stale', 3], ['flush', 3], ['offline', 4], ['lag', 3], ['deliver', 3]];
-  const EDIT_OPS = [['mood', 8], ['journal', 7], ['habit', 10], ['task', 10], ['note', 7], ['tl', 15], ['gym', 8], ['cfg', 4]];
+  const EDIT_OPS = [['mood', 8], ['journal', 7], ['habit', 10], ['task', 10], ['note', 7], ['tl', 15], ['gym', 8], ['cfg', 4], ['hnote', 5]];
   const KINDS = SYNC_OPS.concat(EDIT_OPS), KSUM = KINDS.reduce((s, k) => s + k[1], 0);
   function gen(seed) {
     s32 = seed;
@@ -204,6 +204,8 @@
       const x = objOf(e[d]), y = objOf(b.entries[d]);
       MANUAL.forEach(f => { if (JSON.stringify(x[f]) !== JSON.stringify(y[f])) stampIt(truth.field, d + '|' + f, { stamp: +objOf(x.fieldAt)[f] || now, phone: p, val: x[f], has: f in x }); });
       const hx = objOf(x.habits), hy = objOf(y.habits);
+      const nx = objOf(x.hnotes), ny = objOf(y.hnotes);   // v281: habit notes, per habit (hnotesAt)
+      new Set([...Object.keys(nx), ...Object.keys(ny)]).forEach(k => { if (nx[k] !== ny[k]) stampIt(truth.hnote, d + '|' + k, { stamp: +objOf(x.hnotesAt)[k] || now, phone: p, val: nx[k] }); });
       new Set([...Object.keys(hx), ...Object.keys(hy), ...Object.keys(objOf(x.habitsAt))]).forEach(k => {
         if (JSON.stringify(hx[k]) !== JSON.stringify(hy[k]) || +objOf(x.habitsAt)[k] !== +objOf(y.habitsAt)[k]) stampIt(truth.habit, d + '|' + k, { stamp: +objOf(x.habitsAt)[k] || now, phone: p, val: hx[k] });
       });
@@ -334,6 +336,9 @@
       if (r[2] < 0.75) { g.done[k] = !g.done[k]; what = 'gym ' + (g.done[k] ? 'tick ' : 'untick ') + d.slice(5) + ' ' + k; }
       else { g.log[k] = r[3] < 0.2 ? '' : '3x' + (++ver); what = 'gym log ' + d.slice(5) + ' ' + k + '=' + JSON.stringify(g.log[k]); }
       persistGym(true, d, g);
+    } else if (op.k === 'hnote') {   // a note on one habit for one day (v281: merged per habit)
+      const d = at(DAYS, r[0]), k = at(HK, r[1]), txt = r[2] < 0.2 ? '' : 'N' + (++ver);
+      hnoteSave(k, d, txt); what = 'hnote ' + d.slice(5) + ' ' + k + '=' + JSON.stringify(txt);
     } else if (op.k === 'cfg') {   // rename a habit: a settings-like store, saved whole
       const c = clone(habitCfg()), h = at(c, r[0]);
       if (h) { h.label = 'H' + (++ver); saveHabitCfg(c); what = 'habit rename ' + h.key + '=' + h.label; } else what = 'cfg (no habits)';
@@ -445,6 +450,11 @@
       counters.habits++;
       if (JSON.stringify(h) !== JSON.stringify(g.val)) fail('no-loss', d + ' habit ' + k + ' is ' + JSON.stringify(h) + ', the latest change (by ' + g.phone + ' @' + rel(g.stamp) + ') set ' + JSON.stringify(g.val), { key: 'habit:' + key });
     });
+    Object.keys(truth.hnote).forEach(key => {
+      const [d, k] = key.split('|'), g = truth.hnote[key], h = objOf(objOf(e[d]).hnotes)[k];
+      counters.hnote++;
+      if ((h || undefined) !== (g.val || undefined)) fail('no-loss', d + ' note on ' + k + ' is ' + JSON.stringify(h) + ', the latest change (by ' + g.phone + ' @' + rel(g.stamp) + ') set ' + JSON.stringify(g.val), { key: 'hnote:' + key });
+    });
     Object.keys(truth.cfg).forEach(key => {
       const g = truth.cfg[key];
       counters.cfg++;
@@ -493,9 +503,9 @@
     if (cur !== null) { park(); cur = null; }
     Object.keys(phones).forEach(k => delete phones[k]);
     SHEET.state = null; SHEET.hist = []; SHEET.log = []; net.inflight = []; net.sent = 0; toasts = [];
-    truth = { list: { tasks: {}, notes: {} }, tl: {}, field: {}, habit: {}, gym: {}, cfg: {}, saves: {}, vals: {} };
+    truth = { list: { tasks: {}, notes: {} }, tl: {}, field: {}, habit: {}, hnote: {}, gym: {}, cfg: {}, saves: {}, vals: {} };
     machine = new Set(); trace = []; fails = []; ver = 0; killedDays = new Set();
-    counters = { items: 0, blocks: 0, fields: 0, habits: 0, gym: 0, cfg: 0, sums: 0, wo: 0 };
+    counters = { items: 0, blocks: 0, fields: 0, habits: 0, hnote: 0, gym: 0, cfg: 0, sums: 0, wo: 0 };
     T = T0 - 3600 * 1000 * 3;
   }
   function warmup() {
@@ -562,7 +572,7 @@
   /* ---------------- main ---------------- */
   const saved = {};
   const STUB = ['syncTimelog', 'syncEntry', 'syncDocs', 'syncEvents', 'checkNewAwardsSoon', 'saveSheetOpen', 'refreshTimerNotif'];
-  const out = { seeds: 0, ops: 0, pushes: 0, fails: [], known: {}, ms: 0, checked: { items: 0, blocks: 0, fields: 0, habits: 0, gym: 0, cfg: 0, sums: 0, wo: 0 } };
+  const out = { seeds: 0, ops: 0, pushes: 0, fails: [], known: {}, ms: 0, checked: { items: 0, blocks: 0, fields: 0, habits: 0, hnote: 0, gym: 0, cfg: 0, sums: 0, wo: 0 } };
   const t0 = RealDate.now();
   try {
     saved.Date = window.Date; saved.fetch = window.fetch; saved.toast = window.toast;

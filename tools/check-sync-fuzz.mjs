@@ -148,7 +148,7 @@ if (out.fails.length) {
 
 const c = out.checked;
 console.log(`sync fuzz: ${out.seeds} runs (seeds ${SEED}–${SEED + out.seeds - 1}), ${out.ops} operations, ${out.pushes} pushes; every invariant held${knownIds.length ? " apart from the known ones below" : ""} (${secs}s)`);
-console.log(`   checked: ${c.items} list items, ${c.blocks} time blocks, ${c.fields} day fields, ${c.habits} habits, ${c.gym} gym keys, ${c.cfg || 0} habit-list saves, ${c.sums} time summaries, ${c.wo} gym counts`);
+console.log(`   checked: ${c.items} list items, ${c.blocks} time blocks, ${c.fields} day fields, ${c.habits} habits, ${c.hnote || 0} habit notes, ${c.gym} gym keys, ${c.cfg || 0} habit-list saves, ${c.sums} time summaries, ${c.wo} gym counts`);
 knownLine();
 if (TRACE && out.last) console.log(`   trace of the last run:\n     ${out.last.join("\n     ")}`);
 if (noise.length && process.env.SHOW_NOISE) noise.forEach((n) => console.log("     " + n));

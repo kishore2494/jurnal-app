@@ -1617,7 +1617,7 @@ function mergeAuto(a, b, into) {
    phone. And a field the newer copy lacked was filled from the older one but then counted as new
    as the newer copy, beating a later edit on a third phone. updatedAt stays "last edited by
    hand" for everything else that reads it. Habits have habitsAt, ENTRY_AUTO has autoAt. */
-const ENTRY_STAMPED = ['updatedAt', 'habits', 'habitsAt', 'autoAt', 'fieldAt', ...ENTRY_AUTO];
+const ENTRY_STAMPED = ['updatedAt', 'habits', 'habitsAt', 'autoAt', 'fieldAt', 'hnotes', 'hnotesAt', ...ENTRY_AUTO];   // v281: hnotes per habit (hnotesAt)
 function entryFields(...es) {
   const out = new Set();
   es.forEach(e => Object.keys(objOf(e)).forEach(k => { if (!ENTRY_STAMPED.includes(k)) out.add(k); }));
@@ -1641,7 +1641,37 @@ function entryFieldStamp(prev, next) {
     else if (moved && has(next, k)) at[k] = old;
   });
   if (Object.keys(at).length) next.fieldAt = sortedKeys(at); else delete next.fieldAt;
+  // v281: habit notes are stamped per habit, like habitsAt. As one field, the copy saved later won
+  // whole, so a note on "workout" from one phone and one on "meditation" from the other lost one.
+  // Before these stamps the whole field's fieldAt.hnotes (or the day's updatedAt) stood for them.
+  const hp = objOf(prev.hnotes), hn = objOf(next.hnotes), hw = objOf(prev.hnotesAt), hat = {}, legacy = +was.hnotes || old;
+  new Set([...Object.keys(hp), ...Object.keys(hn), ...Object.keys(hw)]).forEach(k => {
+    if (hp[k] !== hn[k]) hat[k] = Math.max(now, (+hw[k] || 0) + 1, legacy + 1);
+    else if (+hw[k]) hat[k] = +hw[k];
+    else if (k in hn) hat[k] = legacy;
+  });
+  if (Object.keys(hat).length) next.hnotesAt = sortedKeys(hat); else delete next.hnotesAt;
   return next;
+}
+/* Habit notes, per habit: the newer stamp wins, a removal included; a tie keeps a note rather than
+   a gap, and two notes under one stamp go to the same one on both phones. A copy from before the
+   stamps has its fieldAt.hnotes (or updatedAt) stand in for every note it holds. */
+function mergeHnotes(a, b, into) {
+  a = objOf(a); b = objOf(b);
+  const na = objOf(a.hnotes), nb = objOf(b.hnotes), ta = objOf(a.hnotesAt), tb = objOf(b.hnotesAt);
+  const legacy = e => +objOf(e.fieldAt).hnotes || Date.parse(e.updatedAt) || 1;
+  const stamp = (e, n, t, k) => +t[k] || (k in n ? legacy(e) : 0);
+  const notes = {}, at = {};
+  new Set([...Object.keys(na), ...Object.keys(nb), ...Object.keys(ta), ...Object.keys(tb)]).forEach(k => {
+    const sa = stamp(a, na, ta, k), sb = stamp(b, nb, tb, k);
+    let win = sb > sa ? nb : sa > sb ? na : null;
+    if (!win) win = (k in na) !== (k in nb) ? (k in na ? na : nb) : (String(na[k]) >= String(nb[k]) ? na : nb);
+    if (win[k]) notes[k] = win[k];
+    const st = Math.max(+ta[k] || 0, +tb[k] || 0); if (st) at[k] = st;
+  });
+  if (Object.keys(notes).length) into.hnotes = sortedKeys(notes); else delete into.hnotes;
+  if (Object.keys(at).length) into.hnotesAt = sortedKeys(at); else delete into.hnotesAt;
+  return into;
 }
 /* Per field, the newer stamp wins, and a newer stamp without the field removes it. A side with no
    stamp for a field it holds (an older app version, a day not saved since the stamps) has its
@@ -1742,6 +1772,7 @@ function applyRemoteState(remote) {
       if (l.habits || r.habits || l.habitsAt || r.habitsAt) Object.assign(merged, mergeHabits(l, r));
       mergeAuto(l, r, merged);
       mergeFields(l, r, merged);
+      if (l.hnotes || r.hnotes || l.hnotesAt || r.hnotesAt) mergeHnotes(l, r, merged);
       const ms = JSON.stringify(merged);
       if (ms !== JSON.stringify(l)) { local[d] = merged; changed = true; }
       if (ms !== JSON.stringify(r) && canonJSON(merged) !== canonJSON(r)) remoteBehind = true;
@@ -3004,6 +3035,7 @@ function hnoteSave(key, day, text) {
   if (t === hnoteGet(en, key)) return false;
   en.hnotes = Object.assign({}, en.hnotes);
   if (t) en.hnotes[key] = t; else delete en.hnotes[key];
+  en.hnotes = sortedKeys(en.hnotes);   // the order a merge gives (mergeHnotes), so a synced day reads the same JSON
   if (!Object.keys(en.hnotes).length) delete en.hnotes;
   saveDraftNow(day, en);
   if (logDate === day) { loadDraft(); try { refreshHabitChip(key); } catch (e) {} }
