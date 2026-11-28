@@ -1,3 +1,21 @@
+## 2026-11-29 — overnight batch: v281 built (NOT deployed)
+
+Kishore went to sleep: "use the tokens… update the system". Everything committed and pushed to origin; nothing
+deployed (needs his "deploy").
+- **Speed:** typing on the Log re-walked the whole history per keystroke (refreshTodayRing → weekStreak parsed
+  every entry). Memoised on the read-only entries: 3.8 → 0.2 ms per keystroke on 3 seeded years (laptop).
+- **Your year** (research pick #1: Wrapped-week timing): six-card year review, Stats + Log offer 1 Dec–10 Jan.
+- **Rediscover** (#3), **Welcome back** (#2, no backfill, no streak change), **Year in pixels ‹ ›**.
+- **Audit of v270–v280** (subagent, 10 findings, 8 reproduced) → fixed 9: habit notes merge per habit
+  (hnotesAt; fuzzer gained a habit-note op, the old merge fails it), cfg stamps max(now, last+1) (clock skew),
+  fmtDate keyed on tz offset, lock asks for the PIN when the clock went back, weekly memo reset on cfg change,
+  CSV: HTML cleaned only for Daylio, thousands separators, one date order per file with a switch, the 1–5 mood
+  spread named with a switch. Left: CSV Undo after a sync does not stick (low; documented), the wrong-PIN wait
+  can be skipped by moving the clock forward (needs a monotonic clock across restarts; documented).
+- Research list (subagent) for later: tag/person pages ("Threads"), life chapters, morning intention, starter
+  mode for new installs — see roadmap.
+- Checks: tests in 4 zones (2193), every release check, strict fuzz 300 seeds; each feature looked at, 360 px.
+
 ## 2026-11-29 — old sheets imported; archived in a private repo
 
 - Kishore imported `daylog-import-old-sheets.csv` on his phone. Expected totals: 396 dates (4 Nov 2024 → 28 Nov

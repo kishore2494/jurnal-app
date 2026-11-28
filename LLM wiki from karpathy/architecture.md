@@ -130,7 +130,8 @@ backup, which is why adding a store means editing that list.
    fintx, finmarks) merge **item by item** (`mergeList`, since v253); settings-like stores
    (`CFG_SYNC`: habitcfg, actcfg, deepcfg, gymcfg, corecfg, daycfg, gymgroups, navcfg, pjnames,
    finbudget, fincats, finset) sync whole, **each by its own change time** (`dp.cfgAt`, since v277):
-   save them through `cfgSave()`, which stamps only while a sync link is set (like `dp.touched`), so
+   save them through `cfgSave()`, which stamps only while a sync link is set (like `dp.touched`) and, since
+   v281, stamps `max(now, last + 1)` so a phone whose clock runs behind still wins with its later edit, so
    a new phone's pre-link defaults never beat the Sheet. Unstamped on both sides, or from an older
    app, falls back to newest-device-wins; entries / gym / timelog merge per record; `awards` and `gapskip`
    **union**, because a stale second phone must never be able to un-earn an award. A new list

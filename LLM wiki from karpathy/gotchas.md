@@ -464,3 +464,12 @@ internal track.
 
 
 - **Date formatting is slow per call** (2026-11-28): `toLocaleDateString(…, opts)` builds a new Intl formatter each time (~30 µs). In anything that runs per row/day, use `fmtDate(d, opts)` (cached `Intl.DateTimeFormat`).
+
+## Caches keyed on the entries object (v279–v281)
+- `weekStreak`, `loggedStreak`, `rediscoverPool`, `habitWeek` (`_wkMemo`) keep answers per `DB.entriesRO()`
+  object (roParse returns the same object while `dp.entries` is unchanged). Anything else they depend on must
+  be in the key or reset elsewhere: today's date, the week start (via `weekStart(todayStr())`), goals and
+  schedules (`reloadCfg` resets `_wkMemo` — in a try, because reloadCfg can run before the `let`). Never mutate
+  the object `entriesRO()` returns.
+- `fmtDate` caches Intl formatters; the key carries `d.getTimezoneOffset()` (a formatter keeps the zone it was
+  built in; after a flight with the app open dates read a day out otherwise).

@@ -314,7 +314,9 @@ Kishore 2026-11-26: "good about the video do it" (idea 3, "Your month as a film"
 ## Habit notes — a note on a habit for one day (v275, 2026-11-28)
 
 - `entry.hnotes = { habitKey: text }` (≤ 300 chars, trimmed; empty deletes the key, an empty map is removed).
-  It is an ordinary day field, so `entryFieldStamp` stamps it (`fieldAt.hnotes`), it syncs inside entries and
+  **Since v281 it is stamped per habit** (`entry.hnotesAt[key]`, written by `entryFieldStamp`, merged by
+  `mergeHnotes` like `mergeHabits`): as one field, the copy saved later won whole, so notes on two habits from
+  two phones lost one. A copy from before v281 has its `fieldAt.hnotes` stand in. It syncs inside entries and
   rides in backups. Not a Sheet "Log" column (Code.gs COLUMNS unchanged).
 - Write: **hold** a habit chip on the Log (550 ms; a move > 10 px or a scroll cancels; the click that ends the
   hold is swallowed so it never ticks; `contextmenu` suppressed) → sheet `#hnote-sheet` (copy-modal) for the
@@ -591,3 +593,28 @@ Kishore asked for "things to do" when the mood is low. All offline; JS in one bl
   Syncs with the day (field-level merge), in backups/import; not a Sheet Log column; not in the CSV.
 - **Open items:** use `lift.did` to order the deck beyond the single best action; a Customize list for
   the user's own actions; a WHATS_NEW line when it ships.
+
+## Your year — a six-card year in review (v281, built 2026-11-29, NOT deployed)
+- Stats ▸ Overview card (`yearCardHTML`, under Month in review) and a Log top card from 1 Dec to 10 Jan
+  (`yrCardY`, nudge kind `year`, dismissed per year in `dp.yrSeen`, per device, not backed up).
+- Deck `#yrdeck` reuses the Month in review classes: Your YYYY (days logged, % of year, longest run inside
+  the year, habits ticked) · Month by month (12 bars of average mood, best/hardest month need 3 rated days) ·
+  Habits (days done) · What you wrote (words, days written, top #tags, best day quoted — `yrOwnText` drops
+  an import's "From my old sheets:" block) · Body and mind · vs last year (only if that year has
+  `YR_MIN_DAYS` = 14 days logged by hand). ‹ › between years (`yrYears`). Computed on open, nothing stored.
+
+## Rediscover (v281, NOT deployed)
+- On this day gains a "Rediscovered" card: a random day 14+ days back with ≥ 8 words of the user's own
+  text or a photo, never mood ≤ 3, never a sample. Pick is seeded by today's date (stable across renders);
+  "↻ another day" bumps `_rdOffset`. The strip shows even with no anniversary hits. Older-year dates show
+  the year. `rediscoverPool` is memoised on the read-only entries object.
+
+## Welcome back (v281, NOT deployed)
+- After 3+ days with nothing logged (and nothing today), the Log's top card (nudge kind `back`) says how long
+  it has been, that there is no need to fill the gap, and "Write about today" scrolls to the journal. No
+  backfill buttons, no streak change (streaks stay as they are, Kishore 2026-11-26). Dismissed per day
+  (`dp.backSeen`, per device).
+
+## Year in pixels ‹ › (v281, NOT deployed)
+- Arrows step between the years that have a mood (`ypYears`, `ypYear`); the count moves under the title
+  when the arrows show.

@@ -177,3 +177,14 @@ Ideas proposed 2026-11-23. **2 (sealed letters) and 3 (month film) built 2026-11
    streak badge would change). A positioning line the store listing can lead with.
 Also asked the same day: three more UI styles, Claude-like (Clay), Nothing-like (Dot), Apple-like (Glass), with
 neutral names and free look-alike fonts; scheduled to build after the weekly usage reset (board AG-82).
+
+## From the 2026-11-29 research (subagent; web-only ideas, ranked)
+Built in v281: ~~Your year~~, ~~Welcome back~~, ~~Rediscover~~. Still open:
+- **Threads — a page per #tag / @person** (M): every mention over the years, monthly frequency, first/last
+  mention, mood and sleep on those days vs others, next-day effect with the existing confidence labels.
+  Evidence: Exist custom tags, Bearable factor-effect report.
+- **Life chapters** (M): named date ranges ("Bangalore job"); History grouped by chapter, Stats filter, a
+  chapter-vs-chapter card. McAdams' life-story method; no competitor has it.
+- **Morning intention, closed in the evening** (S–M): optional, off by default, offered from day 7.
+- **Starter mode for new installs** (M, judgment): lean Log + 3 tabs, modules offered as you keep logging.
+  Kishore's call — it hides breadth.
