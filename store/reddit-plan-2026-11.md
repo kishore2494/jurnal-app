@@ -113,11 +113,12 @@ I'm the developer. Daylog is a free Android app I build on my own, in India.
 
 It puts your day in one place:
 
-- Habits with streaks, a skip option for rest days that keeps the streak alive, and a 0-100 strength score
+- Habits with streaks, schedules (weekdays only, or 3 times a week) so a rest day never breaks a streak, and a 0-100 strength score
 - Mood and energy in one tap, a journal with #tags, and photos or voice notes on any day
 - Screen time read from the phone (needs Usage access), plus sleep and steps from Health Connect
 - Stats that link them, worked out on the phone, like "Heavy screen days cost you -1.2 mood"
-- A home-screen widget, mood buttons on the evening reminder, and eight visual styles
+- A home-screen widget, mood buttons on the evening reminder, eight visual styles and an optional PIN lock
+- Coming from Daylio? It imports Daylio's CSV export, so your old days come with you
 
 No account, no ads, nothing locked. The only purchase is an optional tip. Your entries stay on the phone; one backup file (photos and voice notes included) moves them to a new phone. If you uninstall without a backup, they are gone.
 
