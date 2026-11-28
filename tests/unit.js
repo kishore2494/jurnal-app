@@ -1181,6 +1181,31 @@
     }
   }
 
+  // ---- v281: streak answers are kept until the entries, the day or the week start change ----
+  {
+    const eSnap = localStorage.getItem('dp.entries'), sSnap = localStorage.getItem('dp.settings');
+    try {
+      const t = todayStr(), e0 = {};
+      for (let i = 1; i <= 20; i++) e0[addDays(t, -i)] = { mood: 6, journal: 'x' };
+      DB.saveEntries(e0);
+      const a = weekStreak(), b = weekStreak();
+      ok('v281 weekStreak: a second call returns the kept answer, equal to a fresh walk', a === b && JSON.stringify(a) === JSON.stringify(weekStreakOf(DB.entriesRO())));
+      ok('v281 loggedStreak counts back from yesterday', loggedStreak() === 20, loggedStreak());
+      const e1 = DB.entries(); e1[t] = { mood: 7, journal: 'today' }; DB.saveEntries(e1);
+      ok('v281 loggedStreak: saving today is seen at once', loggedStreak() === 21, loggedStreak());
+      const e2 = DB.entries(); delete e2[addDays(t, -3)]; DB.saveEntries(e2);
+      ok('v281 loggedStreak: a removed day breaks the run at once', loggedStreak() === 3, loggedStreak());
+      ok('v281 weekStreak: matches a fresh walk after the entries change', JSON.stringify(weekStreak()) === JSON.stringify(weekStreakOf(DB.entriesRO())));
+      const st = DB.settings(), w1 = weekStreak().weekStart; st.weekStart = st.weekStart === 0 ? 1 : 0; DB.saveSettings(st);
+      const w2 = weekStreak().weekStart;
+      ok('v281 weekStreak: changing the week start is seen at once', w1 !== w2 && w2 === weekStart(t), [w1, w2]);
+    } finally {
+      if (eSnap == null) localStorage.removeItem('dp.entries'); else localStorage.setItem('dp.entries', eSnap);
+      if (sSnap == null) localStorage.removeItem('dp.settings'); else localStorage.setItem('dp.settings', sSnap);
+      try { reloadCfg(); } catch (e) {}
+    }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));

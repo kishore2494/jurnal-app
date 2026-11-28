@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = 'v280';   // shown in More ▸ About so you can confirm the build on each device
+const APP_VERSION = 'v281';   // shown in More ▸ About so you can confirm the build on each device
 
 /* Corruption-proof localStorage reads: one interrupted write (force-kill mid-save is a
    real Android failure mode) must degrade to defaults, never white-screen the boot. */
@@ -1084,7 +1084,14 @@ function contentDates(ents) {
   return Object.keys(e).filter(d => entryHasContent(e[d])).sort();
 }
 function loggedStreak() {
-  const e = DB.entriesRO(); let n = 0; let cur = todayStr();
+  const e = DB.entriesRO(), today = todayStr();
+  if (_lsMemo && _lsMemo.e === e && _lsMemo.d === today) return _lsMemo.v;
+  const v = loggedStreakOf(e, today);
+  _lsMemo = { e, d: today, v };
+  return v;
+}
+function loggedStreakOf(e, today) {
+  let n = 0; let cur = today;
   // allow today to be unlogged without breaking the streak (count from yesterday)
   if (!entryHasContent(e[cur])) cur = addDays(cur, -1);
   while (entryHasContent(e[cur])) { n++; cur = addDays(cur, -1); }
@@ -1141,8 +1148,23 @@ function weekBuckets(ents) {
    day ever logged on each Log render (4 ms of an 11 ms render with three years of data, measured
    2026-11-28). The same answer as bucketing with weekBuckets; a test holds the two together. */
 function weekDaysLogged(e, w) { let n = 0; for (let i = 0; i < 7; i++) { const en = e[addDays(w, i)]; if (en && entryHasContent(en)) n++; } return n; }
+/* v281: the Log redraws its hero foot on every keystroke (refreshTodayRing), and on a long log the
+   week walk-back plus a full parse of every entry cost ~3 ms a keystroke on a laptop (4–6× that on a
+   phone). Entries only change when the draft autosaves, so the answer is kept until the read-only
+   entries object changes (roParse returns the same object while dp.entries is unchanged), the day
+   rolls over, or the week-start setting moves this week's start. */
+let _wsMemo = null, _lsMemo = null;
 function weekStreak(ents) {
-  const e = ents || DB.entries();
+  if (!ents) {
+    const ro = DB.entriesRO(), tw = weekStart(todayStr());
+    if (_wsMemo && _wsMemo.e === ro && _wsMemo.w === tw) return _wsMemo.v;
+    const v = weekStreakOf(ro);
+    _wsMemo = { e: ro, w: tw, v };
+    return v;
+  }
+  return weekStreakOf(ents);
+}
+function weekStreakOf(e) {
   const thisW = weekStart(todayStr()), cd = weekDaysLogged(e, thisW);
   const cur = { start: thisW, days: cd, ok: cd >= WEEK_MIN };
   let n = 0, w = addDays(thisW, -7);
