@@ -4708,3 +4708,6 @@ html.locked #alarm { z-index: 400; }
 .yr-d.up { color: var(--good, #16a34a); }
 .yr-d.down { color: var(--bad, #dc2626); }
 .linkbtn { background: none; border: 0; padding: 0; margin-left: 2px; color: var(--accent-ink); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.yp-nav { display: inline-flex; gap: 4px; margin-left: auto; }
+.yp-sub { margin: -4px 0 10px; }
+.yp-nav .mr-nav { width: 32px; height: 32px; font-size: 18px; border-radius: 10px; background: var(--bg-input); color: var(--text); }

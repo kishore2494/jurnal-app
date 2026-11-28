@@ -1327,6 +1327,23 @@
     ok('hnotes: two notes under one stamp pick the same on both phones', mergeHnotes(T1, T2, {}).hnotes.workout === mergeHnotes(T2, T1, {}).hnotes.workout);
   }
 
+  // ---- v281: Year in pixels moves between years ----
+  {
+    const eSnap = localStorage.getItem('dp.entries');
+    try {
+      const e = {}; for (let i = 1; i <= 15; i++) e['2024-02-' + String(i).padStart(2, '0')] = { mood: 6 };
+      DB.saveEntries(e); ypYear = null;
+      const cur = new Date().getFullYear();
+      ok('yp: the years with a mood, and this one', JSON.stringify(ypYears()) === JSON.stringify([2024, cur]), ypYears());
+      const host = document.createElement('div'); host.innerHTML = yearPixelsHTML(); document.body.appendChild(host);
+      const back = host.querySelector('[data-yp-year="2024"]');
+      ok('yp: this year offers ‹ to 2024', !!back && /in pixels/.test(host.textContent));
+      back.click();
+      ok('yp: ‹ shows 2024 with its days', /2024 in pixels/.test(host.textContent) && /15 days/.test(host.textContent) && ypYear === 2024, host.textContent.slice(0, 120));
+      host.remove(); ypYear = null;
+    } finally { if (eSnap == null) localStorage.removeItem('dp.entries'); else localStorage.setItem('dp.entries', eSnap); }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));

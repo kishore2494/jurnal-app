@@ -2686,9 +2686,23 @@ function refreshTodayRing() {
 /* ---------- Year in Pixels ----------
    Daylio's most-shared screen, and the reason is simple: a year of your life as one
    picture. 12 columns (months) x 31 rows (days), each pixel your mood that day. */
+/* v281: ‹ › between the years that have a mood, so a long log (or an import of old sheets) can be
+   seen year by year, not only the running one. */
+let ypYear = null;
+function ypYears() {
+  const e = DB.entriesRO(), ys = new Set();
+  for (const d in e) { const en = e[d]; if (en && en.mood != null && en.mood !== '' && /^\d{4}-/.test(d)) ys.add(+d.slice(0, 4)); }
+  ys.add(new Date().getFullYear());
+  return [...ys].sort((a, b) => a - b);
+}
+function ypNavHTML(y) {
+  const ys = ypYears(), i = ys.indexOf(y), prev = i > 0 ? ys[i - 1] : null, next = i >= 0 && i < ys.length - 1 ? ys[i + 1] : null;
+  if (ys.length < 2) return '';
+  return `<span class="yp-nav"><button type="button" class="mr-nav" data-yp-year="${prev || ''}" ${prev ? '' : 'disabled'} aria-label="Earlier year">‹</button><button type="button" class="mr-nav" data-yp-year="${next || ''}" ${next ? '' : 'disabled'} aria-label="Later year">›</button></span>`;
+}
 function yearPixelsHTML(year) {
   const e = DB.entriesRO();
-  const y = year || new Date().getFullYear();
+  const y = year || ypYear || new Date().getFullYear();
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   let logged = 0, sum = 0, rows = '';
   // 31 columns (days) x 12 rows (months) — reads like a calendar and stays compact.
@@ -2712,13 +2726,14 @@ function yearPixelsHTML(year) {
   // a mostly-empty mosaic is a bad first impression; wait until it has something to show
   if (logged < 10) {
     return `<div class="card yp-card">
-      <h2 class="h2-icon">${hicon('calendar')}<span>${y} in pixels</span></h2>
+      <h2 class="h2-icon">${hicon('calendar')}<span>${y} in pixels</span>${ypNavHTML(y)}</h2>
       <div class="hint">Log ${10 - logged} more day${10 - logged === 1 ? '' : 's'} and your whole year appears here as one picture — every day a colour, from your mood.</div>
     </div>`;
   }
   return `<div class="card yp-card">
-    <h2 class="h2-icon">${hicon('calendar')}<span>${y} in pixels</span>
-      <span class="hint" style="margin-left:auto">${logged} days · avg ${avgM}</span></h2>
+    ${(() => { const nav = ypNavHTML(y); return nav
+      ? `<h2 class="h2-icon">${hicon('calendar')}<span>${y} in pixels</span>${nav}</h2><div class="hint yp-sub">${logged} days · avg ${avgM}</div>`
+      : `<h2 class="h2-icon">${hicon('calendar')}<span>${y} in pixels</span><span class="hint" style="margin-left:auto">${logged} days · avg ${avgM}</span></h2>`; })()}
     <div class="yp-grid">${rows}</div>
     <div class="yp-legend"><span class="hint">low</span>
       ${MOOD_SCALE.map(c => `<i style="background:${c}"></i>`).join('')}
@@ -2726,6 +2741,8 @@ function yearPixelsHTML(year) {
   </div>`;
 }
 document.addEventListener('click', (ev) => {
+  const yb = ev.target.closest && ev.target.closest('[data-yp-year]');
+  if (yb && yb.dataset.ypYear) { ypYear = +yb.dataset.ypYear; const card = yb.closest('.yp-card'); if (card) { const t = document.createElement('div'); t.innerHTML = yearPixelsHTML(); card.replaceWith(t.firstElementChild); } buzz(6); return; }
   const p = ev.target.closest && ev.target.closest('[data-yp]');
   if (p) { const d = p.dataset.yp;
     if (!DB.entry(d)) { toast('Nothing logged on ' + prettyDate(d)); return; }
