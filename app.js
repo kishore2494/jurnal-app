@@ -12351,6 +12351,7 @@ const BACKUP_EXCLUDED = [
   'onboarded', 'toured', 'whatsnew',   // one-shot "seen it" flags for THIS install
   'firstSeen', 'insightSeen', 'checkin',   // v269: first open here, first-pattern card seen, day-5 question answered
   'filmSeen',                          // v270: which month's film the Log already offered here
+  'yrSeen',                            // v281: which year's review the Log already offered here
   'notifAsk',                          // the one-time notification ask; permission belongs to this device
   'notifDone',                         // notification presses already handled here (replayed intents are ignored)
   'reviewAsk',                         // Play rating-sheet asks on this install (Google's quota is per device too)
