@@ -1238,6 +1238,8 @@
       ok('yr: Next goes to month by month', /Month by month/.test(deck().textContent) && deck().querySelectorAll('.yr-m').length === 12);
       deck().querySelector('[data-yr-go="2024"]').click();
       ok('yr: the arrow moves to the earlier year, back on card one', /Your 2024/.test(deck().textContent));
+      ok('yr: the deck offers a share card of the year', !!deck().querySelector('[data-yr-share="2024"]'));
+      ok('yr: the share sheet has a My year card', CARD_KINDS.some(c => c.k === 'year'));
       document.getElementById('yr-close').click();
       ok('yr: close hides it', !deck().classList.contains('on'));
       ok('yr: Stats offers the newest year', /Your 20(25|26)/.test(yearCardHTML()) || /Your 2025/.test(yearCardHTML()), yearCardHTML().slice(0, 200));

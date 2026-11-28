@@ -2128,7 +2128,7 @@ const WHATS_NEW = {
     '📖 <b>Chapters of your life</b> — Stats ▸ Chapters: name a stretch (a job, a city, a year at college) and see it whole: days logged, mood and sleep next to your overall average, your top #tags and habits. They sync and back up like everything else.',
     '#️⃣ <b>A page for each #tag</b> — tap a topic in Stats ▸ Your topics: how often it comes up month by month, when you first and last wrote it, your mood and sleep on those days next to the others, and the latest mentions to open.',
     '🔁 <b>Rediscover an older day</b> — On this day now also brings back a random day you wrote about, weeks or years ago (never a low-mood one). Tap ↻ another day for a different one. <b>Year in pixels</b> has ‹ › to see other years.',
-    '📅 <b>Your year, in six cards</b> — Stats ▸ Overview (and the Log, through December): days logged, your longest run, mood month by month, your habits, what you wrote with your best day quoted, and how it compares with the year before. Made on this phone; nothing is sent anywhere.',
+    '📅 <b>Your year, in six cards</b> — Stats ▸ Overview (and the Log, through December): days logged, your longest run, mood month by month, your habits, what you wrote with your best day quoted, and how it compares with the year before, plus a share card with just the numbers. Made on this phone; nothing is sent anywhere.',
     '📥 <b>Spreadsheet import reads every field</b> — Settings ▸ Backup & restore ▸ Import days from a CSV now also fills stress, focus, clarity, motivation, sleep quality, meditation, water, weight, screen time, income, expenses, tasks and gratitude, by column name. It still only fills what is empty.',
     '⚡ <b>Faster with years of entries</b> — History opens about four times faster on a long log, and the Log and the Time screen render in less time too. Nothing about your data changed.',
     '🖼️ <b>Memories on their day</b> — a day\'s page in History now shows the memories dated that day, and Back from one returns to the day. <b>On this day</b> on the Log shows them too, a week, a month or a year on.',
@@ -15332,6 +15332,7 @@ function yrRender() {
       <button type="button" class="btn btn-ghost btn-sm" data-yr-step="-1" ${yrPage === 0 ? 'disabled' : ''}>← Back</button>
       <button type="button" class="btn btn-primary btn-sm" data-yr-step="1" ${yrPage === cards.length - 1 ? 'disabled' : ''}>Next →</button>
     </div>
+    <div class="ss-acts"><button type="button" class="btn btn-ghost" data-yr-share="${r.y}">🖼️ Make a share card</button></div>
     <div class="hint ss-note">Worked out on this phone from your log every time you open it. Nothing is sent or stored.</div>
   </div>`;
 }
@@ -15579,6 +15580,8 @@ document.addEventListener('click', (ev) => {
   const x = t.closest('[data-yr-x]');
   if (x) { try { safeSet('dp.yrSeen', x.dataset.yrX); } catch (e) {} const c = t.closest('.yr-offer'); if (c) c.remove(); buzz(6); return; }
   if (t.id === 'yr-close' || t.id === 'yrdeck') { yrClose(); return; }
+  const ys = t.closest('[data-yr-share]');
+  if (ys) { const y = ys.dataset.yrShare; yrClose(); shareSheetOpen('year', y); buzz(10); return; }
   const go = t.closest('[data-yr-go]');
   if (go && go.dataset.yrGo) { yrY = go.dataset.yrGo; yrPage = 0; yrRender(); buzz(6); return; }
   const pg = t.closest('[data-yr-page]');
@@ -16352,6 +16355,7 @@ function moodColour(v) {
 const CARD_KINDS = [
   { k: 'streak',  label: '🔥 Streak' },
   { k: 'pixels',  label: '🎨 Year' },
+  { k: 'year',    label: '📅 My year' },
   { k: 'habit',   label: '✅ Habits' },
   { k: 'insight', label: '💡 Insight' },
   { k: 'award',   label: '🏆 Award' },
@@ -16535,6 +16539,33 @@ function drawPixels(g, H) {
   cardFooter(g, H);
 }
 
+/* v281: "My 2026" — the Your year deck as one card: average mood month by month, days logged,
+   longest run, habits ticked. Numbers only: no #tags, no quotes, nothing from the journal. */
+function drawYear(g, H, arg) {
+  const y = String(arg || yrY || new Date().getFullYear()), r = yearReview(y);
+  cardChrome(g, H, y);
+  const sh = bodyTop(H);
+  g.textAlign = 'center'; g.fillStyle = CARD_INK; g.font = cardFont(66, 800);
+  g.fillText('My ' + y, CARD_W / 2, sh + CARD_BODY * 0.17);
+  const pad = 110, bw = (CARD_W - pad * 2) / 12, top = sh + CARD_BODY * 0.23, maxH = CARD_BODY * 0.24;
+  r.months.forEach((m, i) => {
+    const h = m.mood == null ? 10 : Math.max(18, m.mood / 10 * maxH);
+    g.fillStyle = m.mood == null ? '#1a2133' : moodColour(Math.round(m.mood));
+    roundRect(g, pad + i * bw + 6, top + maxH - h, bw - 12, h, 10); g.fill();
+    g.fillStyle = CARD_DIM; g.font = cardFont(26, 600); g.textAlign = 'center';
+    g.fillText('JFMAMJJASOND'[i], pad + i * bw + bw / 2, top + maxH + 40);
+  });
+  let yy = top + maxH + 96;
+  g.fillStyle = CARD_DIM; g.font = cardFont(30, 500); g.textAlign = 'center';
+  g.fillText('average mood, month by month', CARD_W / 2, yy);
+  yy = cardHero(g, yy + 262, r.logged, r.logged === 1 ? 'day logged' : 'days logged', CARD_ACCENT);
+  g.fillStyle = CARD_INK; g.font = cardFont(40, 700); g.textAlign = 'center';
+  g.fillText('longest run: ' + r.best + (r.best === 1 ? ' day' : ' days'), CARD_W / 2, yy + 40);
+  g.fillStyle = CARD_DIM; g.font = cardFont(34, 600);
+  g.fillText(r.ticks.toLocaleString() + ' habits ticked', CARD_W / 2, yy + 92);
+  cardFooter(g, H);
+}
+
 function drawHabit(g, H) {
   cardChrome(g, H, 'last 90 days');
   const cfg = habitCfg().filter(h => !h.hidden).slice(0, 6), e = DB.entries();
@@ -16668,7 +16699,7 @@ async function buildCardBlob(kind, ratio, arg) {
   const pset = kind === 'photos' ? await cardPhotoSet() : null;
   _cardQR = kind === 'invite' ? null : q;      // the invite draws its own, bigger one
   try {
-    ({ streak: drawStreak, pixels: drawPixels, habit: drawHabit, insight: drawInsight,
+    ({ streak: drawStreak, pixels: drawPixels, year: (gg, hh) => drawYear(gg, hh, arg), habit: drawHabit, insight: drawInsight,
        award: (gg, hh) => drawAward(gg, hh, arg), invite: (gg, hh) => drawInvite(gg, hh, q),
        photos: (gg, hh) => drawPhotos(gg, hh, pset) }[kind] || drawStreak)(g, H);
   } finally { _cardQR = null; }
