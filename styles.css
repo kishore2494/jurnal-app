@@ -4711,3 +4711,4 @@ html.locked #alarm { z-index: 400; }
 .yp-nav { display: inline-flex; gap: 4px; margin-left: auto; }
 .yp-sub { margin: -4px 0 10px; }
 .yp-nav .mr-nav { width: 32px; height: 32px; font-size: 18px; border-radius: 10px; background: var(--bg-input); color: var(--text); }
+.otd-shuf { margin-left: auto; margin-right: 10px; padding: 8px 4px; border: 0; background: none; font: 600 12.5px/1 var(--font-ui); color: var(--accent-ink); cursor: pointer; }

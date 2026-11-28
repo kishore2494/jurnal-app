@@ -2283,6 +2283,35 @@ function openToday() { loadDraft(); renderToday(); }
 /* ---------- Throwback ("On this day") ----------
    Journey paywalls this and Daylio ships it inline; it's the cheapest retention
    mechanic there is because it makes old entries pay rent. Purely local. */
+/* v281 Rediscover: On this day only looks back a week, a month, 3 months and a year, so most of a
+   long log never comes back. One more card brings back a random older day you wrote about (or took
+   a photo on): people underrate how much they enjoy rediscovering ordinary days (Zhang et al.,
+   Psychological Science 2014). Low-mood days are left out, the pick holds for the day (re-renders
+   do not reshuffle it), and "another" steps to a different one. */
+const RD_MIN_AGE = 14, RD_MIN_WORDS = 8;
+let _rdMemo = null, _rdOffset = 0;
+function rediscoverPool() {
+  const e = DB.entriesRO(), today = todayStr();
+  if (_rdMemo && _rdMemo.e === e && _rdMemo.d === today) return _rdMemo.v;
+  const cut = addDays(today, -RD_MIN_AGE), v = [];
+  for (const d in e) {
+    if (d > cut || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+    const en = e[d]; if (!en || en.sample) continue;
+    if (en.mood != null && en.mood !== '' && +en.mood <= 3) continue;
+    const words = yrOwnText(en.journal || en.wentWell || '').split(/\s+/).filter(Boolean).length;
+    if (words >= RD_MIN_WORDS || mediaDayCount(d).p) v.push(d);
+  }
+  v.sort();
+  _rdMemo = { e, d: today, v };
+  return v;
+}
+function rediscoverDay(skip) {
+  const pool = rediscoverPool().filter(d => !(skip || []).includes(d));
+  if (!pool.length) return null;
+  let h = 7; const k = todayStr() + '|' + _rdOffset;
+  for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+  return pool[h % pool.length];
+}
 function throwbackHTML() {
   if (logDate !== todayStr()) return '';                       // only on today
   if (logSecHidden('onthisday')) return '';
@@ -2295,6 +2324,8 @@ function throwbackHTML() {
   ];
   // A day with only a photo counts too: a picture from a year ago is the best "on this day".
   const hits = marks.filter(m => e[m.d] || mediaDayCount(m.d).p || memsOn(m.d).length);
+  const rd = rediscoverDay(hits.map(m => m.d)), poolN = rediscoverPool().length;
+  if (rd) hits.push({ d: rd, label: 'Rediscovered', rd: true });
   if (!hits.length) return '';
   /* A strip of small cards you swipe through, each tinted by that day's mood, rather than a
      tall card of paragraphs: the past is a glance on the Log, and a tap opens the whole day. */
@@ -2312,7 +2343,7 @@ function throwbackHTML() {
     return `<div class="otd-c${pic ? ' has-pic' : ''}"${mc ? ` style="--oc:${mc}"` : ''}>
       <button type="button" class="otd-open" data-throwback="${m.d}">
         <span class="otd-when">${m.label}</span>
-        <span class="otd-date">${escapeHtml(prettyDate(m.d))}</span>
+        <span class="otd-date">${escapeHtml(m.rd && m.d.slice(0, 4) !== todayStr().slice(0, 4) ? fmtDate(new Date(m.d + 'T00:00:00'), { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : prettyDate(m.d))}</span>
         ${nums.length ? `<span class="otd-nums">${nums.join('')}</span>` : ''}
         ${jr ? `<span class="otd-q">“${escapeHtml(jr.slice(0, 160))}”</span>` : ''}
         ${mems.length ? `<span class="otd-mem">${icon('image', 13)}<span>${escapeHtml(memTitle(mems[0]))}${mems.length > 1 ? ` <i>+${mems.length - 1}</i>` : ''}</span></span>` : ''}
@@ -2321,7 +2352,7 @@ function throwbackHTML() {
     </div>`;
   }).join('');
   return `<div class="otd-strip-wrap${hits.length === 1 ? ' otd-one' : ''}">
-    <div class="otd-head"><span class="otd-title">${icon('history', 15)}On this day</span><a href="#" id="otd-hide">hide</a></div>
+    <div class="otd-head"><span class="otd-title">${icon('history', 15)}On this day</span>${rd && poolN > 1 ? `<button type="button" class="otd-shuf" data-otd-shuffle>↻ another day</button>` : ''}<a href="#" id="otd-hide">hide</a></div>
     <div class="otd-strip">${cards}</div>
   </div>`;
 }
@@ -2330,6 +2361,11 @@ document.addEventListener('click', (ev) => {
     setLogSecHidden('onthisday', true); renderToday();
     undoToast('Hidden. Bring it back any time in Settings ▸ Customize', () => { setLogSecHidden('onthisday', false); if (document.getElementById('s-today').classList.contains('on')) renderToday(); });
     return; }
+  if (ev.target.closest && ev.target.closest('[data-otd-shuffle]')) {
+    _rdOffset++; const w = document.querySelector('.otd-strip-wrap');
+    if (w) { const t = document.createElement('div'); t.innerHTML = throwbackHTML(); if (t.firstElementChild) { w.replaceWith(t.firstElementChild); const s = document.querySelector('.otd-strip'); if (s) s.scrollLeft = s.scrollWidth; } }
+    buzz(6); return;
+  }
   const tb = ev.target.closest && ev.target.closest('[data-throwback]');
   if (tb && !ev.target.closest('[data-mview]')) dayOpen(tb.dataset.throwback);
 });

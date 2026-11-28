@@ -1344,6 +1344,32 @@
     } finally { if (eSnap == null) localStorage.removeItem('dp.entries'); else localStorage.setItem('dp.entries', eSnap); }
   }
 
+  // ---- v281: Rediscover ----
+  {
+    const eSnap = localStorage.getItem('dp.entries'), ldSnap = logDate;
+    try {
+      const t = todayStr(), e = {};
+      e[addDays(t, -40)] = { mood: 7, journal: 'a long walk by the river with an old friend today' };
+      e[addDays(t, -50)] = { mood: 2, journal: 'a very hard day and I do not want to see it again' };
+      e[addDays(t, -60)] = { mood: 6, journal: 'short' };
+      e[addDays(t, -5)] = { mood: 8, journal: 'too recent to be rediscovered by the card here today' };
+      e[addDays(t, -70)] = { mood: 6, journal: 'sample day words words words words words words', sample: true };
+      e[addDays(t, -80)] = { journal: 'no mood but plenty of words written about the whole day' };
+      DB.saveEntries(e); _rdOffset = 0;
+      const pool = rediscoverPool();
+      ok('rd: older days you wrote about; not low-mood, short, recent or sample days', JSON.stringify(pool) === JSON.stringify([addDays(t, -80), addDays(t, -40)]), pool);
+      const p1 = rediscoverDay(), p2 = rediscoverDay();
+      ok('rd: the pick holds for the day', p1 === p2 && pool.includes(p1));
+      const seen = new Set(); for (let i = 0; i < 12; i++) { _rdOffset = i; seen.add(rediscoverDay()); }
+      ok('rd: "another" reaches the other days', seen.size === 2, [...seen]);
+      _rdOffset = 0; logDate = t;
+      const html = throwbackHTML();
+      ok('rd: with nothing a week/month/year ago, the strip still shows a rediscovered day with a shuffle', /Rediscovered/.test(html) && /data-otd-shuffle/.test(html) && /On this day/.test(html), html.slice(0, 160));
+      ok('rd: a rediscovered day from another year shows its year', !/Rediscovered/.test(html) || (rediscoverDay([]).slice(0, 4) === t.slice(0, 4) || new RegExp(rediscoverDay([]).slice(0, 4)).test(html)));
+      ok('rd: a day already on the strip is not picked twice', rediscoverDay([addDays(t, -80), addDays(t, -40)]) === null);
+    } finally { if (eSnap == null) localStorage.removeItem('dp.entries'); else localStorage.setItem('dp.entries', eSnap); logDate = ldSnap; _rdOffset = 0; }
+  }
+
   // ---- Custom goals ----
   const gSnapG = localStorage.getItem('dp.goals'), gSnapE2 = localStorage.getItem('dp.entries');
   ok('goals join BACKUP_KEYS', BACKUP_KEYS.includes('goals'));
