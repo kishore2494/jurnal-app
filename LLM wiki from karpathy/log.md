@@ -1,3 +1,20 @@
+## 2026-11-29 — overnight, part 2: Threads, Life chapters, My year card, second audit
+
+- **Threads** (tap a #tag in Stats ▸ Your topics → its page: days, since last, first/last, 12-month bars, mood /
+  sleep / next-day mood with vs without — 5 days each side, small gaps "about the same" — recent mentions).
+- **Life chapters** (Stats ▸ Chapters; `dp.chapters` id list in LIST_SYNC + BACKUP_KEYS; page: days logged, % of
+  the chapter, mood and sleep vs overall, top tags/habits, words).
+- **My year share card** (numbers only) from the Your year deck.
+- **Second audit (older areas)** → fixed: restored time blocks vs delete records (`timelogRestored`); card opening
+  is a debt (+ idempotent flip of old positive ones in `finCardOpeningFix`); Money CSV Dr/Cr/(brackets), US dates
+  (`csvDateOrder` shared), account-aware counted duplicates; `hnotesAt` in ENTRY_META (my v281 ghost-day bug);
+  You vs you / Calendar count only days with content; History/Calendar habit counts via hVal.
+- **Open, needs Kishore:** (a) linking a Sheet writes `timeSummary` into days that only have timer blocks, and
+  `timeSummary` counts as content, so the streak and awards change with the sync setting. Fix = put
+  `timeSummary` in ENTRY_META (timer-only days stop counting as logged) — his streak may drop, so asked first.
+  (b) ntfy alarms already queued for 3 days are not cancelled when a reminder is turned off/retimed (opt-in
+  feature; ntfy has no cancel by id in the free API we use) — documented.
+
 ## 2026-11-29 — overnight batch: v281 built (NOT deployed)
 
 Kishore went to sleep: "use the tokens… update the system". Everything committed and pushed to origin; nothing

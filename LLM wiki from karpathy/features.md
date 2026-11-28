@@ -618,3 +618,13 @@ Kishore asked for "things to do" when the mood is low. All offline; JS in one bl
 ## Year in pixels ‹ › (v281, NOT deployed)
 - Arrows step between the years that have a mood (`ypYears`, `ypYear`); the count moves under the title
   when the arrows show.
+
+## Threads — a page per #tag (v281, NOT deployed)
+- Stats ▸ Your topics chips open `thOpen(tag)` (was: Search). `tagThread(tag)`: days with the tag (hasTag,
+  case-insensitive), since last, first/last, 12 months, mood/sleep/next-day mood with vs without (TH_MIN = 5
+  each side), recent mentions with the words around the tag. "Search every mention" → Search.
+
+## Life chapters (v281, NOT deployed)
+- Stats ▸ Chapters (shown once there are 30 logged days or a chapter exists). `dp.chapters` =
+  [{ id, name, start, end|'' }] — LIST_SYNC (listSave stamps), BACKUP_KEYS, pushState. Sheet `#chsheet`:
+  form (name, from, to / Still going; end before start refused) and page (`chStats`). Delete has Undo.
