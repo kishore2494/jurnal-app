@@ -15287,7 +15287,7 @@ function yrCards(r, p) {
       ${big(r.words.toLocaleString(), 'words')}
       ${big(r.written, r.written === 1 ? 'day written' : 'days written')}
     </div>
-    ${r.topTags.length ? `<div class="yr-tags">${r.topTags.map(x => `<span>${escapeHtml(x.t)} <em>${x.n}</em></span>`).join('')}</div>` : ''}
+    ${r.topTags.length ? `<div class="yr-tags">${r.topTags.map(x => `<button type="button" data-th-open="${escapeHtml(x.t)}">${escapeHtml(x.t)} <em>${x.n}</em></button>`).join('')}</div>` : ''}
     ${r.quote ? `<blockquote class="yr-quote">“${escapeHtml(r.quote)}”<cite>${prettyDate(r.bestDay)}${r.bestMood != null ? ` · mood ${r.bestMood}/10` : ''}</cite></blockquote>` : ''}` });
   const body = [];
   if (r.mood != null) body.push(big(n1(r.mood), 'avg mood'));
@@ -15391,7 +15391,8 @@ let thTag = null;
 function thOpen(tag) {
   thTag = tag;
   let el = document.getElementById('thsheet');
-  if (!el) { el = document.createElement('div'); el.id = 'thsheet'; el.className = 'sharesheet'; document.body.appendChild(el); }
+  if (!el) { el = document.createElement('div'); el.id = 'thsheet'; el.className = 'sharesheet'; }
+  document.body.appendChild(el);   // last in the body: on top of a year deck or chapter sheet it was opened from
   el.classList.add('on');
   thRender(); buzz(8);
 }
@@ -15511,7 +15512,7 @@ function chRender() {
       <div class="hint">${escapeHtml(chRange(c))} · ${st.span} days</div>
       <div class="mr-grid" style="margin-top:10px">${big(st.logged, st.logged === 1 ? 'day logged' : 'days logged')}${big(Math.round(st.logged / st.span * 100) + '%', 'of the chapter')}</div>
       ${vs('Mood', st.mood, st.moodAll, '')}${vs('Sleep', st.sleep, st.sleepAll, 'h')}
-      ${st.tags.length ? `<div class="yr-tags">${st.tags.map(x => `<span>${escapeHtml(x.t)} <em>${x.n}</em></span>`).join('')}</div>` : ''}
+      ${st.tags.length ? `<div class="yr-tags">${st.tags.map(x => `<button type="button" data-th-open="${escapeHtml(x.t)}">${escapeHtml(x.t)} <em>${x.n}</em></button>`).join('')}</div>` : ''}
       ${st.habits.length ? `<div class="hint mr-note">Most done: ${st.habits.map(x => escapeHtml((x.h.emoji || '') + ' ' + x.h.label) + ' (' + x.n + 'd)').join(', ')}</div>` : ''}
       ${st.words ? `<div class="hint mr-note">${st.words.toLocaleString()} words written.</div>` : ''}
     </div>
